@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { DataSource } from 'typeorm';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { Role } from '../auth/rbac/role.enum';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTenantDto } from './dto/create-tenant.dto';
 
 export interface ProvisionResult {
@@ -24,6 +25,7 @@ export class TenantsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly tenantTx: TenantTransactionService,
+    private readonly features: FeatureService,
   ) {}
 
   /** Create a tenant and its first TENANT_ADMIN user. The admin row is written within the new
@@ -47,15 +49,17 @@ export class TenantsService {
     const passwordHash = await argon2.hash(dto.adminPassword);
     let admin: ProvisionResult['admin'];
     try {
-      const rows = (await this.tenantTx.runFor(tenant.id, (manager) =>
-        manager.query(
+      admin = await this.tenantTx.runFor(tenant.id, async (manager) => {
+        const rows = (await manager.query(
           `INSERT INTO users (tenant_id, email, password_hash, is_active, roles)
            VALUES ($1, $2, $3, true, $4) RETURNING id, email`,
           [tenant.id, dto.adminEmail.toLowerCase(), passwordHash, `{${Role.TENANT_ADMIN}}`],
-        ),
-      )) as ProvisionResult['admin'][];
-      if (!rows[0]) throw new Error('User insert returned no row');
-      admin = rows[0];
+        )) as ProvisionResult['admin'][];
+        if (!rows[0]) throw new Error('User insert returned no row');
+        // Seed the tenant's feature entitlements from the chosen plan, in the same transaction.
+        await this.features.applyPlan(manager, tenant.id, dto.plan ?? 'business');
+        return rows[0];
+      });
     } catch (err) {
       // Roll back the orphaned tenant so provisioning is all-or-nothing.
       await this.dataSource.query(`DELETE FROM tenants WHERE id = $1`, [tenant.id]);

@@ -6,6 +6,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { FeaturesModule } from './modules/features/features.module';
 import { ServiceAuthModule } from './modules/service-auth/service-auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
@@ -25,8 +26,12 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     RedisModule,
     TenantModule,
     AuditModule,
+    // AuthModule must precede FeaturesModule so the global JwtAuthGuard runs (and populates the
+    // tenant into RequestContext) BEFORE the FeatureGuard reads it. Global APP_GUARDs execute in
+    // module-registration order.
     AuthModule,
     ServiceAuthModule,
+    FeaturesModule,
     UsersModule,
     TenantsModule,
     HealthModule,

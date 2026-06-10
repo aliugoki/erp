@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import type { PlanTemplate } from '../../features/feature-registry';
 
 export class CreateTenantDto {
   @IsString()
@@ -11,4 +12,9 @@ export class CreateTenantDto {
   @IsString()
   @MinLength(8)
   adminPassword!: string;
+
+  /** Feature plan applied at provisioning (default: business). */
+  @IsOptional()
+  @IsIn(['starter', 'business', 'enterprise'])
+  plan?: PlanTemplate;
 }
