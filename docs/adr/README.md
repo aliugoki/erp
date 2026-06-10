@@ -13,3 +13,5 @@ Format: Context → Decision → Consequences → Status. An ADR is only changed
 | [005](ADR-005-cross-cutting-base.md) | Cross-cutting base entity & scoped repository | Accepted |
 | [006](ADR-006-security-boundaries.md) | Security boundaries | Accepted |
 | [007](ADR-007-observability-and-money.md) | Observability & money representation | Accepted |
+| [008](ADR-008-ui-ux-stack.md) | UI/UX stack (enterprise, open-source, themeable) | Accepted |
+| [009](ADR-009-feature-entitlements.md) | Per-tenant feature entitlements (add/remove modules) | Accepted |

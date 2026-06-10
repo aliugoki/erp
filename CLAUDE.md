@@ -135,6 +135,12 @@ The binding decisions live in [`docs/adr/`](docs/adr/) and are referenced in eac
 - **ADR-005** — Cross-cutting base (`BaseEntity` + tenant-scoped base repository).
 - **ADR-006** — Security boundaries (authN/Z + tenant scoping before any module; signed service auth).
 - **ADR-007** — Observability & money (OTel trace propagation; money as integer minor units).
+- **ADR-008** — UI/UX stack (Next.js + Tailwind + shadcn/ui + next-themes; enterprise, open-source, multi-theme).
+- **ADR-009** — Per-tenant feature entitlements (module registry + entitlements table + `FeatureGuard`; companies add/remove features).
+
+**Two more Nevers (product constraints):** Never add a paid/closed-source dependency — open-source,
+self-hostable tooling only. Never gate a feature in the UI alone — the backend `FeatureGuard` is
+authoritative (ADR-009).
 
 ---
 
