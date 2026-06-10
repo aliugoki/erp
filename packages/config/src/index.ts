@@ -45,6 +45,23 @@ export const envSchema = z.object({
   SERVICE_AUTH_SECRET: z.string().min(16),
   SERVICE_AUTH_TTL: z.string().default('5m'),
 
+  // Outbox relay (Phase 4): poll the outbox and publish pending events. Disabled in tests.
+  OUTBOX_RELAY_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+  OUTBOX_POLL_INTERVAL_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 2000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  OUTBOX_BATCH_SIZE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 100 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 
