@@ -30,7 +30,17 @@ export default tseslint.config(
         __dirname: 'readonly',
         __filename: 'readonly',
         exports: 'writable',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly',
       },
+    },
+    rules: {
+      // CommonJS scripts (e.g. the load-test harness) legitimately use require().
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-var-requires': 'off',
     },
   },
   {

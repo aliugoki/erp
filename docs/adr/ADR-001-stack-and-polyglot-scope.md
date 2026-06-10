@@ -29,3 +29,21 @@ Monorepo: **pnpm workspaces**. Shared contracts live in `packages/shared`; env/c
 ## Decision gate (chunk 4.4)
 
 > Publish ~10k `inventory.low_stock` events under load. If BullMQ sustains the target rate within SLO → **stay NestJS**, record the numbers here. Only on failure → open a follow-up chunk to port the specific hot handler to Go. Do **not** introduce Go speculatively.
+
+### Result (measured 2026-06-10, `apps/api/test/load-reactions.cjs 10000`)
+
+| Metric | Value |
+|---|---|
+| Events | 10,000 |
+| Processed (all, idempotent) | 10,000 |
+| Publish throughput | ~30,000 events/sec |
+| **End-to-end throughput** (publish → RabbitMQ → idempotent consumer → per-event tenant tx + DB insert) | **~1,130 events/sec** (10k in 8.85s) |
+
+Environment: single in-process NestJS consumer (prefetch 100), Postgres via PgBouncer, local Docker
+infra. The bottleneck is the per-event tenant transaction (`set_config` + effect insert + dedupe
+insert + commit), not the broker — publishing alone is ~27× faster.
+
+**Decision: STAY NestJS. Go is NOT introduced.** ERP reaction events (low-stock, invoice-paid,
+deal-closed) are low-frequency relative to ~1,130/sec sustained on a single consumer; horizontal
+scale (more consumer instances; `FOR UPDATE SKIP LOCKED` / queue prefetch already make this safe) and
+optional batched inserts give ample headroom before any Go port would be evidence-justified.

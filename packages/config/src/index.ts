@@ -62,6 +62,13 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 100 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Event reaction handlers (Phase 4.4): register the worker consumers. Disabled in tests.
+  WORKER_REACTIONS_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 
