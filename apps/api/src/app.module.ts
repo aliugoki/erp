@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HrModule } from './modules/hr/hr.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
+import { EventBusModule } from './modules/eventbus/event-bus.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
@@ -37,6 +38,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     AuthModule,
     ServiceAuthModule,
     FeaturesModule,
+    EventBusModule,
     OutboxModule,
     UsersModule,
     TenantsModule,

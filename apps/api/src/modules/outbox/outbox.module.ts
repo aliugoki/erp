@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import type { AppConfig } from '@metaxperts/config';
 import { OutboxService } from './outbox.service';
-import { LoggingPublisher, PUBLISHER } from './relay/publisher';
+import { PUBLISHER } from './relay/publisher';
 import { OutboxRelay, RELAY_DATA_SOURCE } from './relay/outbox-relay.service';
 import { OutboxRelayScheduler } from './relay/outbox-relay.scheduler';
+import { RabbitMqPublisher } from '../eventbus/rabbitmq.publisher';
 
 /**
  * Outbox + relay (ADR-004). `OutboxService` writes events inside business transactions; the relay
@@ -17,7 +18,8 @@ import { OutboxRelayScheduler } from './relay/outbox-relay.scheduler';
 @Module({
   providers: [
     OutboxService,
-    { provide: PUBLISHER, useClass: LoggingPublisher },
+    // The relay publishes through the RabbitMQ EventBus (provided globally by EventBusModule).
+    { provide: PUBLISHER, useExisting: RabbitMqPublisher },
     {
       provide: RELAY_DATA_SOURCE,
       inject: [ConfigService],

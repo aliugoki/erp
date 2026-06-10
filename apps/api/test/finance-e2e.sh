@@ -65,8 +65,8 @@ check "invoice total == subtotal+tax (170000)" "$(echo "$INV" | jget data.total.
 check "invoice subtotal == 150000" "$(echo "$INV" | jget data.subtotal.amountMinor)" "150000"
 check "list ?status=DRAFT -> 1" "$(curl -s "$B/finance/invoices?status=DRAFT" -H "Authorization: Bearer $MGR" | jlen)" "1"
 check "pay invoice -> 200" "$(code -XPATCH "$B/finance/invoices/$INVID/pay" -H "Authorization: Bearer $MGR")" "200"
-OUTBOX=$(ownerq "SELECT type FROM outbox_event WHERE tenant_id='$T1' AND type='finance.invoice_paid' AND published_at IS NULL ORDER BY occurred_at DESC LIMIT 1")
-check "finance.invoice_paid written to OUTBOX (pending)" "$OUTBOX" "finance.invoice_paid"
+OUTBOX=$(ownerq "SELECT type FROM outbox_event WHERE tenant_id='$T1' AND type='finance.invoice_paid.v1' AND published_at IS NULL ORDER BY occurred_at DESC LIMIT 1")
+check "finance.invoice_paid written to OUTBOX (pending)" "$OUTBOX" "finance.invoice_paid.v1"
 check "invoice now PAID" "$(curl -s "$B/finance/invoices/$INVID" -H "Authorization: Bearer $MGR" | jget data.status)" "PAID"
 
 echo "== tenant isolation =="

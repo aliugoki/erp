@@ -58,18 +58,18 @@ PID=$(post "$MGR" inventory/products '{"sku":"WIDGET-1","name":"Widget","minStoc
 echo "== IN 15 -> on_hand 15 (no low-stock) =="
 check "IN movement -> 201" "$(code -XPOST "$B/inventory/movements" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"productId\":\"$PID\",\"warehouseId\":\"$WH\",\"type\":\"IN\",\"quantity\":15}")" "201"
 check "on_hand == 15" "$(curl -s "$B/inventory/products/$PID" -H "Authorization: Bearer $MGR" | jget data.onHand)" "15"
-check "no low_stock event yet" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock'")" "0"
+check "no low_stock event yet" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock.v1'")" "0"
 
 echo "== ATOMICITY: oversell OUT 100 -> 422, and NOTHING persists =="
 check "OUT 100 (oversell) -> 422" "$(code -XPOST "$B/inventory/movements" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"productId\":\"$PID\",\"type\":\"OUT\",\"quantity\":100}")" "422"
 check "on_hand STILL 15 (rolled back)" "$(curl -s "$B/inventory/products/$PID" -H "Authorization: Bearer $MGR" | jget data.onHand)" "15"
-check "NO low_stock outbox row (event rolled back with movement)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock'")" "0"
+check "NO low_stock outbox row (event rolled back with movement)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock.v1'")" "0"
 check "no movement row for the failed OUT" "$(ownerq "SELECT count(*) FROM inventory_stock_movement WHERE tenant_id='$T1' AND type='OUT'")" "0"
 
 echo "== low-stock emit: OUT 8 -> on_hand 7 -> outbox event =="
 check "OUT 8 -> 201" "$(code -XPOST "$B/inventory/movements" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"productId\":\"$PID\",\"type\":\"OUT\",\"quantity\":8}")" "201"
 check "on_hand == 7" "$(curl -s "$B/inventory/products/$PID" -H "Authorization: Bearer $MGR" | jget data.onHand)" "7"
-check "low_stock event written (pending)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock' AND published_at IS NULL")" "1"
+check "low_stock event written (pending)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='inventory.low_stock.v1' AND published_at IS NULL")" "1"
 
 echo "== low-stock query =="
 check "GET products/low-stock -> 1" "$(curl -s "$B/inventory/products/low-stock" -H "Authorization: Bearer $MGR" | jlen)" "1"

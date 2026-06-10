@@ -112,3 +112,6 @@ export interface BaseEvent<TPayload = unknown> {
   /** The event-specific payload. */
   payload: TPayload;
 }
+
+// Versioned event contracts.
+export * from './events';

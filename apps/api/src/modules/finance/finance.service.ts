@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { type SuccessEnvelope, paginationMeta } from '@metaxperts/shared';
+import { EVENT_TYPES, type SuccessEnvelope, paginationMeta } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { normalizePagination } from '../hr/hr.util';
@@ -190,7 +190,7 @@ export class FinanceService {
       if (!inv) throw new NotFoundException('Invoice not found');
       if (inv.status !== 'PAID') {
         await m.query(`UPDATE finance_invoice SET status='PAID', paid_at=now(), updated_at=now() WHERE id=$1`, [id]);
-        await this.outbox.write(m, 'finance.invoice_paid', {
+        await this.outbox.write(m, EVENT_TYPES.FINANCE_INVOICE_PAID, {
           invoiceId: inv.id,
           number: inv.number,
           clientId: inv.client_id,

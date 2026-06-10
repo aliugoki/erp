@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { EVENT_TYPES } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type {
@@ -139,7 +140,7 @@ export class CrmService {
       await m.query(`UPDATE crm_deal SET stage=$1, updated_at=now() WHERE id=$2`, [stage, id]);
 
       if (isWonTransition(deal.stage as string, stage)) {
-        await this.outbox.write(m, 'crm.deal_closed', {
+        await this.outbox.write(m, EVENT_TYPES.CRM_DEAL_CLOSED, {
           dealId: deal.id,
           title: deal.title,
           clientId: deal.client_id,

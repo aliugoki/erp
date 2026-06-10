@@ -25,6 +25,7 @@
     "@nestjs/platform-express": "^10.4.15",
     "@nestjs/terminus": "^10.2.3",
     "@nestjs/typeorm": "^10.0.2",
+    "amqplib": "^0.10.5",
     "argon2": "^0.41.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -39,6 +40,7 @@
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.5",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/pg": "^8.11.10",

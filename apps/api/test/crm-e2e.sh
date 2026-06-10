@@ -77,10 +77,10 @@ check "CLOSED_WON total == 0 (empty stage)" "$(echo "$PIPE" | stagetotal CLOSED_
 
 echo "== close a deal -> crm.deal_closed outbox (once) =="
 check "move Deal C -> CLOSED_WON -> 200" "$(code -XPATCH "$B/crm/deals/$D3/stage" -H "Authorization: Bearer $REP" -H 'Content-Type: application/json' -d '{"stage":"CLOSED_WON"}')" "200"
-check "crm.deal_closed written to OUTBOX (pending)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='crm.deal_closed' AND published_at IS NULL")" "1"
+check "crm.deal_closed written to OUTBOX (pending)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='crm.deal_closed.v1' AND published_at IS NULL")" "1"
 echo "  -- re-applying CLOSED_WON must NOT emit again --"
 code -XPATCH "$B/crm/deals/$D3/stage" -H "Authorization: Bearer $REP" -H 'Content-Type: application/json' -d '{"stage":"CLOSED_WON"}' >/dev/null
-check "still exactly 1 deal_closed event (idempotent transition)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='crm.deal_closed'")" "1"
+check "still exactly 1 deal_closed event (idempotent transition)" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T1' AND type='crm.deal_closed.v1'")" "1"
 
 echo "== pipeline reflects the win =="
 check "CLOSED_WON total == 1000000 after close" "$(curl -s "$B/crm/deals/pipeline" -H "Authorization: Bearer $REP" | stagetotal CLOSED_WON)" "1000000"

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { EVENT_TYPES } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { CreateMovementDto, CreateProductDto, CreateWarehouseDto } from './dto/inventory.dto';
@@ -136,7 +137,7 @@ export class InventoryService {
       // transaction — movement + this outbox row — rolls back together (ADR-004 atomicity).
       const lowStock = isLowStockTransition(current, next, minStock);
       if (lowStock) {
-        await this.outbox.write(m, 'inventory.low_stock', {
+        await this.outbox.write(m, EVENT_TYPES.INVENTORY_LOW_STOCK, {
           productId: dto.productId,
           onHand: next,
           minStock,
