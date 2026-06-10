@@ -14,6 +14,7 @@ import { HrModule } from './modules/hr/hr.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { CrmModule } from './modules/crm/crm.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -42,6 +43,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     HrModule,
     FinanceModule,
     InventoryModule,
+    CrmModule,
     HealthModule,
   ],
 })
