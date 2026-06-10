@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+.next/
+apps/web/.next/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Env & secrets (never commit real secrets — see .env.example)
+.env
+.env.*
+!.env.example
+
+# Python (apps/ml)
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Tooling caches
+.turbo/
+.eslintcache

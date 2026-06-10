@@ -1,0 +1,5 @@
+{
+  "//": "Whole-repo aggregator for editors and `tsc -b`. Packages register here as project references as they are created (Chunk 1.1+). The per-package `typecheck` scripts are what the gate runs (`pnpm -r --if-present typecheck`); this file lets `tsc -b` build the whole graph at once.",
+  "files": [],
+  "references": []
+}

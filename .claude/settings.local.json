@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm -v)",
+      "Bash(corepack -v)",
+      "Bash(git --version)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)"
+    ]
+  }
+}
