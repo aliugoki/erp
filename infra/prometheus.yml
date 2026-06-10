@@ -1,0 +1,15 @@
+# Prometheus — local dev scrape config (Chunk 1.2).
+# Scrapes itself and the OTel collector's own metrics. The api/worker /metrics endpoints
+# (RED + USE custom metrics) are added and scraped in Phase 8.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]

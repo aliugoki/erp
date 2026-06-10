@@ -1,0 +1,161 @@
+# MetaXperts ERP — local infrastructure (Chunk 1.2).
+#
+# Inside the `erp` network services talk on standard ports (postgres:5432, redis:6379, ...).
+# Host-published ports are chosen to avoid collisions with services already running on this host
+# (5432/6379/9000/9001 were occupied). Apps on the host reach the DB THROUGH PgBouncer at :6432.
+name: metaxperts-erp
+
+networks:
+  erp:
+    name: erp
+
+volumes:
+  pgdata:
+  redisdata:
+  rabbitmqdata:
+  miniodata:
+  prometheusdata:
+  grafanadata:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: metaxperts
+      POSTGRES_PASSWORD: metaxperts
+      POSTGRES_DB: metaxperts
+    command: ["postgres", "-c", "max_connections=200"]
+    ports:
+      - "55432:5432" # direct (admin/migrations); apps use PgBouncer instead
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metaxperts -d metaxperts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: metaxperts
+      DB_PASSWORD: metaxperts
+      DB_NAME: metaxperts
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      AUTH_TYPE: scram-sha-256
+      LISTEN_PORT: "5432"
+    ports:
+      - "6432:5432" # <- apps connect here (transaction pool mode)
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: metaxperts
+      RABBITMQ_DEFAULT_PASS: metaxperts
+    ports:
+      - "5672:5672"   # amqp
+      - "15672:15672" # management UI
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: metaxperts
+      MINIO_ROOT_PASSWORD: metaxperts123
+    ports:
+      - "9100:9000" # S3 API
+      - "9101:9001" # console
+    volumes:
+      - miniodata:/data
+    networks: [erp]
+    # minio runs on a distroless image (no shell/curl) — health is probed from the host in the gate.
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.154.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks: [erp]
+    # distroless image — health is probed from the host in the gate.
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "3003:3000" # host 3003 (3000 is taken on this host)
+    volumes:
+      - grafanadata:/var/lib/grafana
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

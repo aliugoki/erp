@@ -37,3 +37,7 @@ venv/
 # Tooling caches
 .turbo/
 .eslintcache
+
+# Claude Code runtime state (keep settings.json + agents/, ignore transient state)
+.claude/scheduled_tasks.lock
+.claude/*.lock
