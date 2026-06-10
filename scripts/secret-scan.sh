@@ -44,6 +44,12 @@ if any(low.endswith(s) for s in (".example", ".sample", ".dist", ".lock", "lock.
    or "/.env.example" in low or low.endswith(".env.example"):
     sys.exit(0)
 
+# Gitignored local env files legitimately hold dev secrets and are never committed — skip them.
+import os
+base = os.path.basename(low)
+if base == ".env" or (base.startswith(".env.") and not base.endswith(".example")):
+    sys.exit(0)
+
 PLACEHOLDERS = ("replace_me", "changeme", "change_me", "your_", "yourkey", "example",
                 "placeholder", "dummy", "xxxx", "<", "{{", "redacted", "test_", "sample",
                 "fake", "todo", "n/a", "none")

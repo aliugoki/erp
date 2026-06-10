@@ -32,6 +32,15 @@ export const envSchema = z.object({
   // RabbitMQ — event broker.
   RABBITMQ_URL: z.string().startsWith('amqp://').default('amqp://localhost:5672'),
 
+  // Auth (Phase 2). Access tokens are short-lived JWTs; refresh tokens are opaque + rotated.
+  JWT_ACCESS_SECRET: z.string().min(16),
+  JWT_ACCESS_TTL: z.string().default('15m'),
+  JWT_REFRESH_TTL_SECONDS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 60 * 60 * 24 * 7 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 
