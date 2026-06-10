@@ -30,6 +30,7 @@ services:
       - "55432:5432" # direct (admin/migrations); apps use PgBouncer instead
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro # role bootstrap on fresh data dir
     networks: [erp]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U metaxperts -d metaxperts"]
@@ -44,10 +45,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # PgBouncer connects to Postgres as the NON-superuser app role, so every app query through the
+      # pooler is subject to RLS (ADR-002). Migrations/DDL bypass PgBouncer and connect direct as the
+      # owner. app_user is created by infra/postgres/init/01-roles.sql.
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_USER: metaxperts
-      DB_PASSWORD: metaxperts
+      DB_USER: app_user
+      DB_PASSWORD: app_pass
       DB_NAME: metaxperts
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "200"

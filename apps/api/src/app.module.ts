@@ -3,6 +3,7 @@ import { ConfigModule } from './config/config.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './common/redis/redis.module';
+import { TenantModule } from './common/tenant/tenant.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -12,7 +13,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
  * request so requestId/tenantId/userId flow through logs, RLS, and errors.
  */
 @Module({
-  imports: [ConfigModule, LoggerModule, DatabaseModule, RedisModule, HealthModule],
+  imports: [ConfigModule, LoggerModule, DatabaseModule, RedisModule, TenantModule, HealthModule],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
