@@ -9,6 +9,7 @@ export interface RequestStore {
   requestId: string;
   tenantId?: string;
   userId?: string;
+  ip?: string;
 }
 
 const als = new AsyncLocalStorage<RequestStore>();
@@ -35,5 +36,8 @@ export const RequestContext = {
   },
   userId(): string | undefined {
     return als.getStore()?.userId;
+  },
+  ip(): string | undefined {
+    return als.getStore()?.ip;
   },
 };

@@ -8,7 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
-    "test:e2e": "bash test/auth-e2e.sh && bash test/rbac-e2e.sh && bash test/tenant-isolation-e2e.sh",
+    "test:e2e": "bash test/auth-e2e.sh && bash test/rbac-e2e.sh && bash test/tenant-isolation-e2e.sh && bash test/audit-service-auth-e2e.sh",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/database/data-source.ts",
     "migration:create": "typeorm-ts-node-commonjs migration:create",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
@@ -40,7 +40,9 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/pg": "^8.11.10",
+    "jsonwebtoken": "^9.0.2",
     "pino-pretty": "^13.0.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0"

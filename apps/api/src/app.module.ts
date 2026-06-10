@@ -5,6 +5,8 @@ import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './common/redis/redis.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { ServiceAuthModule } from './modules/service-auth/service-auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HealthModule } from './health/health.module';
@@ -22,7 +24,9 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     DatabaseModule,
     RedisModule,
     TenantModule,
+    AuditModule,
     AuthModule,
+    ServiceAuthModule,
     UsersModule,
     TenantsModule,
     HealthModule,

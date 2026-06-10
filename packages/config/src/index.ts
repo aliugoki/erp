@@ -41,6 +41,10 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 60 * 60 * 24 * 7 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Service-to-service auth (API ↔ ML / worker): short-lived signed token on internal endpoints.
+  SERVICE_AUTH_SECRET: z.string().min(16),
+  SERVICE_AUTH_TTL: z.string().default('5m'),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

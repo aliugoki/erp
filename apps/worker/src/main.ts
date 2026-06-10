@@ -9,7 +9,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(WorkerModule);
   app.enableShutdownHooks();
 
-  await app.listen(config.WORKER_PORT);
+  await app.listen(config.WORKER_PORT, '0.0.0.0');
   console.log(`[worker] listening on http://localhost:${config.WORKER_PORT} (env: ${config.NODE_ENV})`);
 }
 

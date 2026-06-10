@@ -29,7 +29,8 @@ async function bootstrap(): Promise<void> {
 
   const config = app.get<ConfigService<AppConfig, true>>(ConfigService);
   const port = config.get('API_PORT', { infer: true });
-  await app.listen(port);
+  // Bind IPv4 explicitly (standard for containers; avoids colliding with IPv6-loopback listeners).
+  await app.listen(port, '0.0.0.0');
 
   app.get(Logger).log(`API listening on http://localhost:${port} (${config.get('NODE_ENV', { infer: true })})`);
 }
