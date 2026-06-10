@@ -13,6 +13,7 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { HrModule } from './modules/hr/hr.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -40,6 +41,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     TenantsModule,
     HrModule,
     FinanceModule,
+    InventoryModule,
     HealthModule,
   ],
 })
