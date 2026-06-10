@@ -11,6 +11,8 @@ import { ServiceAuthModule } from './modules/service-auth/service-auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { HrModule } from './modules/hr/hr.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -33,9 +35,11 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     AuthModule,
     ServiceAuthModule,
     FeaturesModule,
+    OutboxModule,
     UsersModule,
     TenantsModule,
     HrModule,
+    FinanceModule,
     HealthModule,
   ],
 })

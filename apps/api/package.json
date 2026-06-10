@@ -8,7 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
-    "test:e2e": "bash test/auth-e2e.sh && bash test/rbac-e2e.sh && bash test/tenant-isolation-e2e.sh && bash test/audit-service-auth-e2e.sh && bash test/features-e2e.sh && bash test/hr-e2e.sh",
+    "test:e2e": "bash test/auth-e2e.sh && bash test/rbac-e2e.sh && bash test/tenant-isolation-e2e.sh && bash test/audit-service-auth-e2e.sh && bash test/features-e2e.sh && bash test/hr-e2e.sh && bash test/finance-e2e.sh",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/database/data-source.ts",
     "migration:create": "typeorm-ts-node-commonjs migration:create",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
