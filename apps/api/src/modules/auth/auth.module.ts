@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from '../users/entities/user.entity';
 import { AccountController } from '../identity/account.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -17,7 +15,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
  * bare; secrets/TTLs are passed per-sign from config.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), JwtModule.register({})],
+  imports: [JwtModule.register({})],
   controllers: [AuthController, AccountController],
   providers: [
     AuthService,

@@ -46,20 +46,29 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token');
     }
 
+    let payload: AccessTokenPayload;
     try {
-      const payload = this.jwt.verify<AccessTokenPayload>(header.slice(7), {
+      payload = this.jwt.verify<AccessTokenPayload>(header.slice(7), {
         secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
       });
-      const user: AuthenticatedUser = {
-        userId: payload.sub,
-        tenantId: payload.tenantId,
-        roles: toRoles(payload.roles),
-      };
-      req.user = user;
-      RequestContext.set({ userId: user.userId, tenantId: user.tenantId });
-      return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+
+    // Every principal is bound to exactly one tenant; reject tokens that carry none (ADR-002).
+    if (!payload.tenantId) {
+      throw new UnauthorizedException('Token is not bound to a tenant');
+    }
+
+    const user: AuthenticatedUser = {
+      userId: payload.sub,
+      tenantId: payload.tenantId,
+      roles: toRoles(payload.roles),
+    };
+    req.user = user;
+    // Seed RequestContext so services' TenantTransactionService runs queries with this tenant's
+    // app.tenant_id GUC (the per-request RLS enforcement for business data).
+    RequestContext.set({ userId: user.userId, tenantId: user.tenantId });
+    return true;
   }
 }
