@@ -77,6 +77,11 @@ export class EventBusService implements OnApplicationBootstrap, OnModuleDestroy 
     return this.channel;
   }
 
+  /** The live channel (connecting if needed) — for consumers that build their own retry/DLQ topology. */
+  getChannel(): Promise<amqp.Channel> {
+    return this.ensureChannel();
+  }
+
   /** Publish a domain event to its domain exchange, keyed by the full event type. */
   async publish(event: BaseEvent): Promise<void> {
     const channel = await this.ensureChannel();
