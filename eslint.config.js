@@ -18,6 +18,22 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // CommonJS config files (e.g. apps/web/next.config.js) — give them Node globals so `module`,
+    // `require`, etc. are defined. (The root eslint.config.js itself is ESM and excluded here.)
+    files: ['apps/web/**/*.js', '**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'writable',
+        require: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        exports: 'writable',
+      },
+    },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',

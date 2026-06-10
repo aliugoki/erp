@@ -1,0 +1,9 @@
+{
+  "name": "@app/ml",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "python3 -m compileall -q app",
+    "typecheck": "python3 -m compileall -q app"
+  }
+}
