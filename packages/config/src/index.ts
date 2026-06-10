@@ -22,6 +22,9 @@ export const envSchema = z.object({
 
   // Database — apps connect THROUGH PgBouncer (transaction pool mode), not directly to Postgres.
   DATABASE_URL: z.string().url().or(z.string().startsWith('postgresql://')),
+  // Migrations connect DIRECTLY to Postgres (DDL + a stable session; bypass the pooler).
+  // Falls back to DATABASE_URL if unset.
+  MIGRATION_DATABASE_URL: z.string().startsWith('postgresql://').optional(),
 
   // Redis — cache, BullMQ queues, refresh-token store.
   REDIS_URL: z.string().startsWith('redis://').default('redis://localhost:6379'),

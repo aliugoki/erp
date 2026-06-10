@@ -1,15 +1,36 @@
 import { Controller, Get } from '@nestjs/common';
-import type { SuccessEnvelope } from '@metaxperts/shared';
+import {
+  HealthCheck,
+  HealthCheckService,
+  TypeOrmHealthIndicator,
+} from '@nestjs/terminus';
+import { RedisHealthIndicator } from './redis.health';
 
 /**
- * Liveness endpoint. Returns the success envelope shape directly for now; the global response
- * interceptor that auto-wraps every response in `{ data, meta }` arrives with the kernel (Chunk 1.3),
- * along with `/health/ready` (DB + Redis readiness).
+ * Health endpoints (public allowlist).
+ * - `GET /health`        liveness — process is up; no dependency checks.
+ * - `GET /health/ready`  readiness — checks Postgres (via PgBouncer) + Redis; 200 only when both are
+ *                        reachable, 503 (RFC 7807) otherwise. Used by orchestrators to gate traffic.
  */
 @Controller('health')
 export class HealthController {
+  constructor(
+    private readonly health: HealthCheckService,
+    private readonly db: TypeOrmHealthIndicator,
+    private readonly redis: RedisHealthIndicator,
+  ) {}
+
   @Get()
-  health(): SuccessEnvelope<{ status: 'ok' }> {
-    return { data: { status: 'ok' } };
+  liveness(): { status: 'ok' } {
+    return { status: 'ok' };
+  }
+
+  @Get('ready')
+  @HealthCheck()
+  readiness() {
+    return this.health.check([
+      () => this.db.pingCheck('database', { timeout: 3000 }),
+      () => this.redis.isHealthy('redis'),
+    ]);
   }
 }

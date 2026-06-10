@@ -1,17 +1,37 @@
 import 'reflect-metadata';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { loadConfig } from '@metaxperts/config';
+import { Logger } from 'nestjs-pino';
+import type { AppConfig } from '@metaxperts/config';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap(): Promise<void> {
-  // Fail fast on bad/missing env (the full ConfigModule + Joi/zod validation lands in the kernel).
-  const config = loadConfig();
+  // Bad/missing env throws during ConfigModule init here → the app refuses to boot (fail fast).
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  const app = await NestFactory.create(AppModule);
+  // Route Nest's own logs through pino (structured JSON).
+  app.useLogger(app.get(Logger));
+  app.flushLogs();
+
+  // Reject unknown fields; coerce/validate DTOs.
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+  );
+  // { data, meta } success envelope + RFC 7807 problem+json errors.
+  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Drain in-flight work on SIGTERM/SIGINT before exit.
   app.enableShutdownHooks();
 
-  await app.listen(config.API_PORT);
-  console.log(`[api] listening on http://localhost:${config.API_PORT} (env: ${config.NODE_ENV})`);
+  const config = app.get<ConfigService<AppConfig, true>>(ConfigService);
+  const port = config.get('API_PORT', { infer: true });
+  await app.listen(port);
+
+  app.get(Logger).log(`API listening on http://localhost:${port} (${config.get('NODE_ENV', { infer: true })})`);
 }
 
 void bootstrap();
