@@ -19,6 +19,7 @@ interface AuthUserRow {
   tenant_id: string;
   password_hash: string;
   is_active: boolean;
+  roles: string[];
 }
 
 @Injectable()
@@ -52,24 +53,38 @@ export class AuthService {
       manager.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]),
     );
 
-    return this.issueTokens(user.id, user.tenant_id);
+    return this.issueTokens(user.id, user.tenant_id, user.roles ?? []);
   }
 
-  /** Rotate a refresh token (with reuse detection) and mint a fresh access token. */
+  /** Rotate a refresh token (with reuse detection) and mint a fresh access token. Roles are reloaded
+   * from the DB so a role change or deactivation takes effect on the next refresh, not in 7 days. */
   async refresh(refreshToken: string): Promise<TokenPair> {
+    let record: { userId: string; tenantId: string; familyId: string };
+    let nextToken: string;
     try {
-      const { record, next } = await this.refreshTokens.rotate(refreshToken);
-      const accessToken = this.signAccess(record.userId, record.tenantId);
-      return {
-        accessToken,
-        refreshToken: next.token,
-        tokenType: 'Bearer',
-        expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),
-      };
+      const rotated = await this.refreshTokens.rotate(refreshToken);
+      record = rotated.record;
+      nextToken = rotated.next.token;
     } catch (err) {
       if (err instanceof RefreshError) throw new UnauthorizedException(err.message);
       throw err;
     }
+
+    const rows = (await this.tenantTx.runFor(record.tenantId, (manager) =>
+      manager.query('SELECT roles, is_active FROM users WHERE id = $1', [record.userId]),
+    )) as Array<{ roles: string[]; is_active: boolean }>;
+    const current = rows[0];
+    if (!current || !current.is_active) {
+      await this.refreshTokens.revokeByToken(nextToken);
+      throw new UnauthorizedException('Account is no longer active');
+    }
+
+    return {
+      accessToken: this.signAccess(record.userId, record.tenantId, current.roles ?? []),
+      refreshToken: nextToken,
+      tokenType: 'Bearer',
+      expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),
+    };
   }
 
   /** Revoke the refresh token's family (logout). Idempotent. */
@@ -77,19 +92,19 @@ export class AuthService {
     await this.refreshTokens.revokeByToken(refreshToken);
   }
 
-  private async issueTokens(userId: string, tenantId: string): Promise<TokenPair> {
+  private async issueTokens(userId: string, tenantId: string, roles: string[]): Promise<TokenPair> {
     const { token } = await this.refreshTokens.issue(userId, tenantId);
     return {
-      accessToken: this.signAccess(userId, tenantId),
+      accessToken: this.signAccess(userId, tenantId, roles),
       refreshToken: token,
       tokenType: 'Bearer',
       expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),
     };
   }
 
-  private signAccess(userId: string, tenantId: string): string {
+  private signAccess(userId: string, tenantId: string, roles: string[]): string {
     return this.jwt.sign(
-      { sub: userId, tenantId },
+      { sub: userId, tenantId, roles },
       {
         secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
         expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),

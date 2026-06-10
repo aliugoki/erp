@@ -1,5 +1,6 @@
 import { Column, Entity } from 'typeorm';
 import { BaseEntity } from '../../../common/database/base.entity';
+import { Role } from '../../auth/rbac/role.enum';
 
 /**
  * Application user. Tenant-scoped (RLS) like all business data, but email is globally unique so
@@ -16,6 +17,12 @@ export class User extends BaseEntity {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
+
+  @Column({ type: 'text', array: true, default: () => "'{}'" })
+  roles!: Role[];
+
+  @Column({ name: 'employee_id', type: 'uuid', nullable: true })
+  employeeId!: string | null;
 
   @Column({ name: 'last_login_at', type: 'timestamptz', nullable: true })
   lastLoginAt!: Date | null;

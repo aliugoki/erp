@@ -4,6 +4,7 @@ import {
   HealthCheckService,
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { Public } from '../modules/auth/decorators/public.decorator';
 import { RedisHealthIndicator } from './redis.health';
 
 /**
@@ -12,6 +13,7 @@ import { RedisHealthIndicator } from './redis.health';
  * - `GET /health/ready`  readiness — checks Postgres (via PgBouncer) + Redis; 200 only when both are
  *                        reachable, 503 (RFC 7807) otherwise. Used by orchestrators to gate traffic.
  */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(
