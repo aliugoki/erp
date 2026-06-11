@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+import { trace } from '@opentelemetry/api';
 import type { AppConfig } from '@metaxperts/config';
 import { RequestContext } from '../request-context/request-context';
 
@@ -23,10 +24,13 @@ import { RequestContext } from '../request-context/request-context';
           },
           customProps: () => {
             const ctx = RequestContext.get();
+            // Correlate logs with the active OpenTelemetry trace (ADR-007).
+            const traceId = trace.getActiveSpan()?.spanContext().traceId;
             return {
               requestId: ctx?.requestId,
               tenantId: ctx?.tenantId,
               userId: ctx?.userId,
+              traceId,
             };
           },
           transport:

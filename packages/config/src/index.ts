@@ -196,6 +196,14 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 10 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Distributed tracing (Phase 8.1): start the OpenTelemetry SDK + export to the otel-collector.
+  // Off by default (tests/local without a collector); enable in deployed envs.
+  OTEL_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

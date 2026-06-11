@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ROOT_CONTEXT, context, propagation } from '@opentelemetry/api';
 import type { DataSource } from 'typeorm';
 import { type OutboxEvent, PUBLISHER, type Publisher } from './publisher';
 
@@ -18,6 +19,7 @@ interface OutboxRow {
   type: string;
   payload: unknown;
   occurred_at: Date;
+  trace_context: string | null;
 }
 
 /**
@@ -40,7 +42,7 @@ export class OutboxRelay {
   async processBatch(limit = 100): Promise<BatchResult> {
     return this.dataSource.transaction(async (m) => {
       const rows = (await m.query(
-        `SELECT id, tenant_id, type, payload, occurred_at
+        `SELECT id, tenant_id, type, payload, occurred_at, trace_context
          FROM outbox_event
          WHERE published_at IS NULL
          ORDER BY occurred_at
@@ -59,8 +61,13 @@ export class OutboxRelay {
           payload: row.payload,
           occurredAt: row.occurred_at,
         };
+        // Restore the originating request's trace context (Phase 8.1) so the publish span — and the
+        // downstream consume span (amqplib propagates it in the message headers) — join one trace.
+        const ctx = row.trace_context
+          ? propagation.extract(ROOT_CONTEXT, { traceparent: row.trace_context })
+          : context.active();
         try {
-          await this.publisher.publish(event);
+          await context.with(ctx, () => this.publisher.publish(event));
           await m.query(`UPDATE outbox_event SET published_at = now() WHERE id = $1`, [row.id]);
           published++;
         } catch (err) {

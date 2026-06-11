@@ -14,7 +14,9 @@ processors:
 
 exporters:
   debug:
-    verbosity: basic
+    # detailed so received spans (service.name, span names, trace ids) are visible in the collector
+    # log — used by the tracing gate to confirm one connected trace reached the collector (Phase 8.1).
+    verbosity: detailed
 
 extensions:
   health_check:
