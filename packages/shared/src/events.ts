@@ -61,4 +61,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'notifications'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'notifications', 'orders'] as const;

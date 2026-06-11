@@ -23,6 +23,7 @@ import { ReportingModule } from './modules/reporting/reporting.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { AiModule } from './modules/ai/ai.module';
 import { IdempotencyModule } from './modules/idempotency/idempotency.module';
+import { OrdersModule } from './modules/orders/orders.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -60,6 +61,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     RealtimeModule,
     AiModule,
     IdempotencyModule,
+    OrdersModule,
     HealthModule,
   ],
 })
