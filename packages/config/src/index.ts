@@ -102,6 +102,35 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // API → ML bridge (Phase 6.5). Resilient HTTP client to apps/ml: timeout + retry + circuit breaker
+  // + Redis forecast cache, so ML being down degrades gracefully instead of cascading 500s.
+  ML_BASE_URL: z.string().url().default('http://localhost:8000'),
+  ML_HTTP_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 4000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  ML_RETRY_ATTEMPTS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 2 : Number(v)))
+    .pipe(z.number().int().nonnegative()),
+  ML_BREAKER_THRESHOLD: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 5 : Number(v)))
+    .pipe(z.number().int().positive()),
+  ML_BREAKER_COOLDOWN_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  ML_FORECAST_CACHE_TTL_S: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 3600 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

@@ -21,6 +21,7 @@ import { CrmModule } from './modules/crm/crm.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { AiModule } from './modules/ai/ai.module';
 import { HealthModule } from './health/health.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 
@@ -56,6 +57,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     NotificationsModule,
     ReportingModule,
     RealtimeModule,
+    AiModule,
     HealthModule,
   ],
 })

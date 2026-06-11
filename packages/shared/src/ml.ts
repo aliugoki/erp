@@ -27,13 +27,16 @@ export interface MlForecastRequest {
   horizon?: number;
 }
 
-/** Precomputed (or on-demand) demand forecast. `source`: 'cache' = served from the read model. */
+/**
+ * Precomputed (or on-demand) demand forecast. The ML response also carries its own `source`
+ * ('cache'|'on-demand') at runtime, but the resilient API bridge attaches its own `source`
+ * ('live'|'cache'|'degraded'), so it is intentionally not part of this typed contract.
+ */
 export interface MlForecastResponse {
   productId: string;
   warehouseId?: string | null;
   horizon: number;
   model: string;
-  source: 'cache' | 'on-demand';
   historyPoints: number;
   dates: string[];
   predicted: number[];
