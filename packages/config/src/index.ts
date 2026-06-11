@@ -130,6 +130,46 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => (v === undefined || v === '' ? 3600 : Number(v)))
     .pipe(z.number().int().positive()),
+  // Bulkhead: max concurrent in-flight ML calls (Phase 7.1) so a slow ML can't starve the API.
+  ML_MAX_CONCURRENCY: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10 : Number(v)))
+    .pipe(z.number().int().positive()),
+
+  // Broker publish resilience (Phase 7.1): bound the relay's publish + a breaker on the broker.
+  BROKER_PUBLISH_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 3000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  BROKER_BREAKER_THRESHOLD: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 5 : Number(v)))
+    .pipe(z.number().int().positive()),
+  BROKER_BREAKER_COOLDOWN_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10000 : Number(v)))
+    .pipe(z.number().int().positive()),
+
+  // Postgres per-connection safety limits (Phase 7.1): no query/lock/idle-txn waits unbounded.
+  DB_STATEMENT_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  DB_LOCK_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 5000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  DB_IDLE_TX_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 15000 : Number(v)))
+    .pipe(z.number().int().positive()),
 
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),

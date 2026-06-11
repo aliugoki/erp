@@ -8,8 +8,8 @@ import type {
   MlInvoiceExtractResponse,
 } from '@metaxperts/shared';
 import { REDIS_CLIENT } from '../../common/redis/redis.module';
+import { Bulkhead, CircuitBreaker } from '../../common/resilience';
 import { ServiceTokenService } from '../service-auth/service-token.service';
-import { CircuitBreaker } from './circuit-breaker';
 
 /** Every bridge response carries whether it came live, from cache, or as a typed degraded fallback. */
 export type Source = 'live' | 'cache' | 'degraded';
@@ -26,6 +26,7 @@ export type Degradable<T> = T & { degraded: boolean; source: Source };
 export class MlService {
   private readonly logger = new Logger(MlService.name);
   private readonly breaker: CircuitBreaker;
+  private readonly bulkhead: Bulkhead;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly retryAttempts: number;
@@ -44,6 +45,13 @@ export class MlService {
       name: 'ml',
       threshold: config.get('ML_BREAKER_THRESHOLD', { infer: true }),
       cooldownMs: config.get('ML_BREAKER_COOLDOWN_MS', { infer: true }),
+    });
+    // Bulkhead OUTSIDE the breaker: an overload rejection (BulkheadFull) must not count as a
+    // dependency failure that trips the breaker.
+    this.bulkhead = new Bulkhead({
+      name: 'ml',
+      maxConcurrent: config.get('ML_MAX_CONCURRENCY', { infer: true }),
+      maxQueue: config.get('ML_MAX_CONCURRENCY', { infer: true }),
     });
   }
 
@@ -112,28 +120,32 @@ export class MlService {
   // ── Transport: breaker → retry → timed fetch ──────────────────────────────
 
   private postJson<T>(path: string, body: unknown): Promise<T> {
-    return this.breaker.exec(() =>
-      this.withRetry(() =>
-        this.fetchJson<T>(path, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-service-token': this.serviceToken.issue() },
-          body: JSON.stringify(body),
-        }),
+    return this.bulkhead.run(() =>
+      this.breaker.exec(() =>
+        this.withRetry(() =>
+          this.fetchJson<T>(path, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-service-token': this.serviceToken.issue() },
+            body: JSON.stringify(body),
+          }),
+        ),
       ),
     );
   }
 
   private postMultipart<T>(path: string, file: { buffer: Buffer; originalname: string; mimetype: string }): Promise<T> {
-    return this.breaker.exec(() =>
-      this.withRetry(() => {
-        const form = new FormData();
-        form.append('file', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
-        return this.fetchJson<T>(path, {
-          method: 'POST',
-          headers: { 'x-service-token': this.serviceToken.issue() }, // fetch sets the multipart boundary
-          body: form,
-        });
-      }),
+    return this.bulkhead.run(() =>
+      this.breaker.exec(() =>
+        this.withRetry(() => {
+          const form = new FormData();
+          form.append('file', new Blob([file.buffer], { type: file.mimetype }), file.originalname);
+          return this.fetchJson<T>(path, {
+            method: 'POST',
+            headers: { 'x-service-token': this.serviceToken.issue() }, // fetch sets the multipart boundary
+            body: form,
+          });
+        }),
+      ),
     );
   }
 
