@@ -36,9 +36,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="ambient flex flex-1 flex-col overflow-hidden">
         <Topbar title={titleFor(pathname)} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="relative z-10 flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

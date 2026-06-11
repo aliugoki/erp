@@ -32,10 +32,21 @@ const config: Config = {
       borderRadius: { lg: 'var(--radius)', md: 'calc(var(--radius) - 2px)', sm: 'calc(var(--radius) - 4px)' },
       fontFamily: { sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'] },
       keyframes: {
-        'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },
         'fade-in': { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
+        'fade-up': { from: { opacity: '0', transform: 'translateY(10px)' }, to: { opacity: '1', transform: 'none' } },
+        'scale-in': { from: { opacity: '0', transform: 'scale(0.96)' }, to: { opacity: '1', transform: 'scale(1)' } },
+        'glow-pulse': { '0%,100%': { opacity: '0.55' }, '50%': { opacity: '1' } },
       },
-      animation: { 'fade-in': 'fade-in 0.2s ease-out' },
+      animation: {
+        'fade-in': 'fade-in 0.2s ease-out',
+        'fade-up': 'fade-up 0.4s cubic-bezier(0.22,1,0.36,1) both',
+        'scale-in': 'scale-in 0.15s ease-out',
+        'glow-pulse': 'glow-pulse 3s ease-in-out infinite',
+      },
+      boxShadow: {
+        glow: '0 0 32px -8px hsl(var(--glow) / 0.5)',
+        'glow-lg': '0 0 48px -8px hsl(var(--glow) / 0.55)',
+      },
     },
   },
   plugins: [require('tailwindcss-animate')],

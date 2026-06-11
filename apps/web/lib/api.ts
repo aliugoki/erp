@@ -70,6 +70,36 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return (json.data ?? (json as T)) as T;
 }
 
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+export interface Paginated<T> {
+  data: T[];
+  meta: { pagination: Pagination };
+}
+
+/** Fetch a list endpoint preserving the `{ data, meta }` envelope (for pagination). */
+export async function apiList<T>(path: string): Promise<Paginated<T>> {
+  const tokens = getTokens();
+  let res = await raw(path, { method: 'GET' }, tokens?.accessToken);
+  if (res.status === 401 && tokens?.refreshToken) {
+    const r = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: tokens.refreshToken }) });
+    if (r.ok) {
+      const refreshed = (await r.json()).data as TokenPair;
+      setTokens(refreshed);
+      res = await raw(path, { method: 'GET' }, refreshed.accessToken);
+    } else {
+      clearTokens();
+      throw new ApiError(401, 'Session expired');
+    }
+  }
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return (await res.json()) as Paginated<T>;
+}
+
 export const apiGet = <T>(path: string) => apiFetch<T>(path);
 export const apiPost = <T>(path: string, body?: unknown) =>
   apiFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });

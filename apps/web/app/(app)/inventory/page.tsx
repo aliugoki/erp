@@ -1,4 +1,95 @@
-import { ModulePlaceholder } from '@/components/module-placeholder';
-export default function Page() {
-  return <ModulePlaceholder name="Inventory" note="Products, warehouses, stock movements and low-stock alerts — the API is live (GET /inventory/products); the screens are next." />;
+'use client';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Package, PackageSearch } from 'lucide-react';
+import { apiGet } from '@/lib/api';
+import type { Product } from '@/lib/types';
+import { cn, formatMoney } from '@/lib/utils';
+import { PageHeader } from '@/components/page-header';
+import { EmptyState } from '@/components/empty-state';
+import { StatCard } from '@/components/stat-card';
+import { NewProductDialog } from '@/components/inventory/new-product-dialog';
+import { MovementDialog } from '@/components/inventory/movement-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+export default function InventoryPage() {
+  const [moving, setMoving] = useState<Product | null>(null);
+  const { data: products, isLoading } = useQuery({ queryKey: ['products'], queryFn: () => apiGet<Product[]>('/inventory/products') });
+
+  const list = products ?? [];
+  const lowStock = list.filter((p) => p.onHand < p.minStock);
+  const stockValue = list.reduce((sum, p) => sum + p.onHand * p.costPrice.amountMinor, 0);
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
+      <PageHeader title="Inventory" description="Products and stock levels." action={<NewProductDialog />} />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Package} label="Products" value={list.length} delayMs={0} />
+        <StatCard icon={AlertTriangle} label="Low stock" value={lowStock.length} accent={lowStock.length ? 'warning' : 'success'} delayMs={60} />
+        <StatCard icon={PackageSearch} label="Stock value (cost)" value={Math.round(stockValue / 100)} format={(v) => `PKR ${v.toLocaleString()}`} delayMs={120} />
+      </div>
+
+      <Card className="overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Product</TableHead>
+              <TableHead>On hand</TableHead>
+              <TableHead>Sell price</TableHead>
+              <TableHead className="text-right">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading
+              ? Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell />
+                  </TableRow>
+                ))
+              : list.map((p) => {
+                  const low = p.onHand < p.minStock;
+                  return (
+                    <TableRow key={p.id} className={cn(low && 'bg-warning/5')}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          {low ? <span className="size-2 shrink-0 animate-glow-pulse rounded-full bg-warning shadow-[0_0_10px_hsl(var(--warning))]" /> : <span className="size-2 shrink-0 rounded-full bg-success/60" />}
+                          <div>
+                            <p className="font-medium">{p.name}</p>
+                            <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="tabular-nums">{p.onHand}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">min {p.minStock}</span>
+                        {low ? <Badge variant="warning" className="ml-2">Low</Badge> : null}
+                      </TableCell>
+                      <TableCell className="tabular-nums">{formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => setMoving(p)}>Move stock</Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+          </TableBody>
+        </Table>
+
+        {!isLoading && list.length === 0 ? (
+          <div className="p-4">
+            <EmptyState icon={Package} title="No products" description="Add your first product to track stock." action={<NewProductDialog />} />
+          </div>
+        ) : null}
+      </Card>
+
+      <MovementDialog product={moving} onClose={() => setMoving(null)} />
+    </div>
+  );
 }

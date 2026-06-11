@@ -15,7 +15,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 export function Topbar({ title }: { title: string }) {
   const { user, logout } = useAuth();
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-background px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/60 glass px-6">
       <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
       <div className="flex items-center gap-1">
         <ThemeSwitcher />

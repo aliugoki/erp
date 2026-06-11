@@ -37,13 +37,23 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <div className="absolute right-4 top-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-background to-muted p-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 size-[36rem] -translate-x-1/2 rounded-full opacity-60 blur-3xl"
+        style={{ background: 'radial-gradient(circle, hsl(var(--glow)/0.35), transparent 70%)' }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-40 -right-20 size-[28rem] rounded-full opacity-40 blur-3xl"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary)/0.25), transparent 70%)' }}
+      />
+      <div className="absolute right-4 top-4 z-10">
         <ThemeSwitcher />
       </div>
-      <Card className="w-full max-w-md animate-fade-in">
+      <Card className="elevated glass relative z-10 w-full max-w-md animate-scale-in">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow">
             <Boxes className="size-6" />
           </div>
           <div>
