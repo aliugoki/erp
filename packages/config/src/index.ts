@@ -204,6 +204,15 @@ export const envSchema = z.object({
     .transform((v) => v === 'true' || v === '1')
     .pipe(z.boolean()),
 
+  // Metrics (Phase 8.2): how often the operational gauges (outbox lag, DLQ depth, …) are refreshed,
+  // and the RabbitMQ management API for queue depth.
+  METRICS_COLLECT_INTERVAL_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10_000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  RABBITMQ_MGMT_URL: z.string().url().default('http://localhost:15672'),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

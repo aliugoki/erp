@@ -1,0 +1,60 @@
+{
+  "uid": "metaxperts-erp",
+  "title": "MetaXperts ERP — Overview",
+  "tags": ["metaxperts"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "HTTP request rate (req/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "sum(rate(http_requests_total[1m])) by (route)", "legendFormat": "{{route}}" } ]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "HTTP p95 latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[5m])) by (le, route))", "legendFormat": "{{route}}" } ]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Outbox lag (unpublished)",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "metaxperts_outbox_lag" } ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "DLQ depth",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } } },
+      "targets": [ { "expr": "metaxperts_dlq_depth" } ]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Active tenants",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "metaxperts_active_tenants" } ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Circuit breaker state (0 closed,1 half,2 open)",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "metaxperts_breaker_state", "legendFormat": "{{breaker}}" } ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Broker queue depth",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [ { "expr": "metaxperts_queue_depth" } ]
+    }
+  ],
+  "templating": {
+    "list": [
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus", "current": { "text": "Prometheus", "value": "Prometheus" }, "hide": 0 }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+# Alert rules (Chunk 8.2). Fire on the failure modes the resilience work guards against.
+groups:
+  - name: metaxperts-erp
+    rules:
+      - alert: DLQNotEmpty
+        expr: metaxperts_dlq_depth > 0
+        for: 0s
+        labels: { severity: warning }
+        annotations:
+          summary: "Dead-letter queue has parked events"
+          description: "{{ $value }} event(s) in the DLQ — a consumer is failing repeatedly."
+
+      - alert: OutboxLagHigh
+        expr: metaxperts_outbox_lag > 100
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Outbox relay is falling behind"
+          description: "{{ $value }} unpublished outbox events — the relay or broker may be stuck."
+
+      - alert: CircuitBreakerOpen
+        expr: metaxperts_breaker_state >= 2
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "Circuit breaker {{ $labels.breaker }} is OPEN"
+          description: "The {{ $labels.breaker }} dependency is failing; calls are short-circuiting."
+
+      - alert: ApiDown
+        expr: up{job="metaxperts-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "API is not scrapeable"
+          description: "Prometheus cannot scrape the API /metrics endpoint."

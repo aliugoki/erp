@@ -27,12 +27,21 @@ export interface CircuitBreakerOptions {
   now?: () => number;
 }
 
+/**
+ * Process-wide registry of live breakers (Phase 8.2) so the metrics collector can export
+ * `breaker_state` for each without explicit DI wiring. Real (non-test) breakers self-register.
+ */
+export const breakerRegistry = new Map<string, () => BreakerState>();
+
 export class CircuitBreaker {
   private state: BreakerState = 'CLOSED';
   private failures = 0;
   private openedAt = 0;
 
-  constructor(private readonly opts: CircuitBreakerOptions) {}
+  constructor(private readonly opts: CircuitBreakerOptions) {
+    // Self-register for metrics, except deterministic-clock breakers used in unit tests.
+    if (!opts.now) breakerRegistry.set(opts.name, () => this.currentState);
+  }
 
   get currentState(): BreakerState {
     return this.opts.now ? this.peek() : this.state;

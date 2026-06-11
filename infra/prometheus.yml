@@ -1,9 +1,11 @@
-# Prometheus — local dev scrape config (Chunk 1.2).
-# Scrapes itself and the OTel collector's own metrics. The api/worker /metrics endpoints
-# (RED + USE custom metrics) are added and scraped in Phase 8.
+# Prometheus — local dev scrape config. Scrapes itself, the OTel collector, and the API's /metrics
+# (RED + USE custom metrics, Chunk 8.2). Alert rules live in prometheus-alerts.yml.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
 
 scrape_configs:
   - job_name: prometheus
@@ -13,3 +15,8 @@ scrape_configs:
   - job_name: otel-collector
     static_configs:
       - targets: ["otel-collector:8888"]
+
+  # The API runs on the host; reach it via the docker host-gateway (extra_hosts in compose).
+  - job_name: metaxperts-api
+    static_configs:
+      - targets: ["host.docker.internal:3300"]

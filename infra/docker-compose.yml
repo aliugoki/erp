@@ -137,10 +137,13 @@ services:
       - "--storage.tsdb.path=/prometheus"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
       - prometheusdata:/prometheus
     ports:
       - "9090:9090"
     networks: [erp]
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # so Prometheus can scrape the host-run API on :3300
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
       interval: 10s
@@ -159,6 +162,8 @@ services:
       - "3003:3000" # host 3003 (3000 is taken on this host)
     volumes:
       - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro # datasource + dashboard providers (8.2)
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro # dashboard JSON
     networks: [erp]
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
