@@ -20,3 +20,11 @@ pandas==2.2.3
 statsmodels==0.14.4
 # Anomaly detection (Chunk 6.3): Isolation Forest.
 scikit-learn==1.6.0
+# Invoice OCR (Chunk 6.4): PDF text extraction + OCR for scanned images.
+pdfplumber==0.11.4
+pytesseract==0.3.13
+Pillow==10.4.0
+# Semantic search (Chunk 6.4): ONNX sentence embeddings (BAAI/bge-small-en-v1.5, 384-dim) — the
+# self-hostable, lightweight equivalent of sentence-transformers (no torch); vectors stored in pgvector.
+fastembed==0.4.2
+python-multipart==0.0.20

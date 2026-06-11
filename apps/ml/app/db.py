@@ -126,6 +126,39 @@ def fetch_transaction_amounts(
         return [(r[0], int(r[1]), r[2].isoformat() if r[2] else "") for r in cur.fetchall()]
 
 
+def upsert_embedding(tenant_id: str, module: str, ref_id: str, content: str, vector_literal: str) -> None:
+    """Store (or replace) a document's embedding for a tenant+module+ref."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ml_embedding (tenant_id, module, ref_id, content, embedding)
+            VALUES (%(t)s, %(m)s, %(r)s, %(c)s, %(v)s::vector)
+            ON CONFLICT (tenant_id, module, ref_id)
+            DO UPDATE SET content = EXCLUDED.content, embedding = EXCLUDED.embedding, updated_at = now()
+            """,
+            {"t": tenant_id, "m": module, "r": ref_id, "c": content, "v": vector_literal},
+        )
+        conn.commit()
+
+
+def search_embeddings(
+    tenant_id: str, module: str, query_vector: str, k: int
+) -> list[tuple[str, str, float]]:
+    """Top-k (ref_id, content, cosine-similarity score), tenant + module scoped."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ref_id::text, content, 1 - (embedding <=> %(q)s::vector) AS score
+            FROM ml_embedding
+            WHERE tenant_id = %(t)s AND module = %(m)s AND deleted_at IS NULL
+            ORDER BY embedding <=> %(q)s::vector
+            LIMIT %(k)s
+            """,
+            {"t": tenant_id, "m": module, "q": query_vector, "k": k},
+        )
+        return [(r[0], r[1], float(r[2])) for r in cur.fetchall()]
+
+
 def get_forecast(tenant_id: str, product_id: str, warehouse_id: str) -> dict | None:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(

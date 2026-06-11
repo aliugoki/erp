@@ -7,10 +7,10 @@ search) arrive in Chunks 6.2–6.4.
 """
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, File, Form, UploadFile
 
 from . import __version__
-from . import db, forecast_service
+from . import db, embedding, forecast_service, ocr
 from .anomaly import detect_anomalies
 from .auth import require_service_token
 from .config import get_settings
@@ -21,10 +21,19 @@ from .contracts import (
     ForecastRequest,
     ForecastResponse,
     HealthResponse,
+    IndexRequest,
+    IndexResponse,
+    InvoiceExtractResponse,
+    InvoiceLineItem,
     PingResponse,
     RefreshResponse,
+    SearchHit,
+    SearchRequest,
+    SearchResponse,
 )
 from .logging import configure_logging, get_logger
+
+DEFAULT_TOP_K = 10
 
 
 def _init_tracing(app: FastAPI) -> None:
@@ -108,6 +117,40 @@ def create_app() -> FastAPI:
         anomalies = sum(1 for it in items if it.isAnomaly)
         log.info("ml_anomaly_scan", tenant=req.tenantId, count=len(items), anomalies=anomalies)
         return AnomalyResponse(count=len(items), anomalies=anomalies, items=items)
+
+    @app.post("/ml/extract/invoice", response_model=InvoiceExtractResponse)
+    async def extract_invoice(
+        file: UploadFile = File(...), _claims: dict = Depends(require_service_token)
+    ) -> InvoiceExtractResponse:
+        data = await file.read()
+        result = ocr.extract_invoice(data, file.content_type, file.filename)
+        log.info("ml_invoice_extracted", vendor=result.vendor, items=len(result.lineItems))
+        return InvoiceExtractResponse(
+            vendor=result.vendor,
+            date=result.date,
+            total=result.total,
+            taxAmount=result.taxAmount,
+            lineItems=[InvoiceLineItem(**vars(li)) for li in result.lineItems],
+        )
+
+    @app.post("/ml/search/index", response_model=IndexResponse)
+    def search_index(req: IndexRequest, _claims: dict = Depends(require_service_token)) -> IndexResponse:
+        vec = embedding.to_pgvector(embedding.embed_one(req.content))
+        db.upsert_embedding(req.tenantId, req.module, req.refId, req.content, vec)
+        log.info("ml_indexed", tenant=req.tenantId, module=req.module, ref=req.refId)
+        return IndexResponse(indexed=True, refId=req.refId)
+
+    @app.post("/ml/search", response_model=SearchResponse)
+    def search(req: SearchRequest, _claims: dict = Depends(require_service_token)) -> SearchResponse:
+        k = req.topK or DEFAULT_TOP_K
+        qvec = embedding.to_pgvector(embedding.embed_one(req.query))
+        rows = db.search_embeddings(req.tenantId, req.module, qvec, k)
+        log.info("ml_search", tenant=req.tenantId, module=req.module, hits=len(rows))
+        return SearchResponse(
+            query=req.query,
+            module=req.module,
+            hits=[SearchHit(refId=r, content=c, score=round(s, 4)) for r, c, s in rows],
+        )
 
     log.info("ml_started", version=__version__, env=settings.env)
     return app

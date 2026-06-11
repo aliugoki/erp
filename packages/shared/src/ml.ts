@@ -62,3 +62,46 @@ export interface MlAnomalyResponse {
   anomalies: number;
   items: MlAnomalyItem[];
 }
+
+/** `POST /ml/extract/invoice` (multipart file) → extracted invoice fields. */
+export interface MlInvoiceLineItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface MlInvoiceExtractResponse {
+  vendor: string | null;
+  date: string | null;
+  total: number | null;
+  taxAmount: number | null;
+  lineItems: MlInvoiceLineItem[];
+}
+
+/** `POST /ml/search/index` — embed + store a document's text in the vector store. */
+export interface MlIndexRequest {
+  tenantId: string;
+  module: string;
+  refId: string;
+  content: string;
+}
+
+/** `POST /ml/search` — semantic search over a tenant+module's embeddings (pgvector, top-k). */
+export interface MlSearchRequest {
+  tenantId: string;
+  module: string;
+  query: string;
+  topK?: number;
+}
+
+export interface MlSearchHit {
+  refId: string;
+  content: string;
+  score: number;
+}
+
+export interface MlSearchResponse {
+  query: string;
+  module: string;
+  hits: MlSearchHit[];
+}

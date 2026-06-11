@@ -19,7 +19,9 @@ volumes:
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector image = official Postgres 16 + the `vector` extension (Chunk 6.4 semantic search).
+    # Same PG16 major, so recreating the container keeps the existing `pgdata` volume's data.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: metaxperts

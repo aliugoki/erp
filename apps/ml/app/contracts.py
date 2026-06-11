@@ -65,3 +65,48 @@ class AnomalyResponse(BaseModel):
     count: int
     anomalies: int
     items: list[AnomalyItem]
+
+
+class InvoiceLineItem(BaseModel):
+    description: str
+    quantity: int
+    unitPrice: float
+
+
+class InvoiceExtractResponse(BaseModel):
+    vendor: str | None = None
+    date: str | None = None
+    total: float | None = None
+    taxAmount: float | None = None
+    lineItems: list[InvoiceLineItem] = []
+
+
+class IndexRequest(BaseModel):
+    tenantId: str
+    module: str
+    refId: str
+    content: str
+
+
+class IndexResponse(BaseModel):
+    indexed: bool
+    refId: str
+
+
+class SearchRequest(BaseModel):
+    tenantId: str
+    module: str
+    query: str
+    topK: int | None = None
+
+
+class SearchHit(BaseModel):
+    refId: str
+    content: str
+    score: float
+
+
+class SearchResponse(BaseModel):
+    query: str
+    module: str
+    hits: list[SearchHit]
