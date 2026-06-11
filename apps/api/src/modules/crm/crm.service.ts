@@ -131,7 +131,7 @@ export class CrmService {
   async updateStage(id: string, stage: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, client_id, title, value_minor, currency, stage FROM crm_deal WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        `SELECT id, client_id, title, value_minor, currency, stage, assigned_to FROM crm_deal WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
         [id],
       )) as Array<Record<string, unknown>>;
       const deal = rows[0];
@@ -146,6 +146,7 @@ export class CrmService {
           clientId: deal.client_id,
           valueMinor: Number(deal.value_minor),
           currency: deal.currency,
+          assignedTo: (deal.assigned_to as string | null) ?? null,
         });
       }
       return { id: deal.id, stage };

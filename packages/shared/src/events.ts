@@ -31,6 +31,8 @@ export interface CrmDealClosedV1 {
   clientId: string;
   valueMinor: number;
   currency: string;
+  /** User the deal is assigned to, if any — the notification recipient (additive, optional). */
+  assignedTo?: string | null;
 }
 
 /** Canonical event type strings. */

@@ -69,6 +69,26 @@ export const envSchema = z.object({
     .transform((v) => v === 'true' || v === '1')
     .pipe(z.boolean()),
 
+  // Notifications (Phase 5.1). The consumer that turns domain events into in-app notifications.
+  // Disabled in tests (the unit spec drives the service directly).
+  NOTIFICATIONS_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+  // Email side-channel: best-effort, retried via a BullMQ queue. Off by default → in-app only,
+  // so a missing/down SMTP server never blocks the durable in-app notification.
+  NOTIFICATIONS_EMAIL_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: portFromString(1025),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('MetaXperts ERP <no-reply@metaxperts.local>'),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 
