@@ -89,6 +89,19 @@ export const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default('MetaXperts ERP <no-reply@metaxperts.local>'),
 
+  // Reporting (Phase 5.2): periodically recompute the read-model tables. Disabled in tests, which
+  // refresh on demand via POST /reports/refresh for determinism.
+  REPORTING_REFRESH_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+  REPORTING_REFRESH_INTERVAL_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

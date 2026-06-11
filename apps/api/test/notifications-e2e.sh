@@ -33,6 +33,10 @@ DELETE FROM tenants WHERE slug IN ('notify-co','notify-two');
 INSERT INTO users (tenant_id,email,password_hash,is_active,roles) VALUES ('$TENANT_A','notifysa@acme.test','$HASH',true,'{SUPER_ADMIN}');
 SQL
 
+# Purge any stray crm.deal_closed.v1 messages other suites (e.g. eventbus.spec) published to the
+# durable crm exchange and captured by this consumer's durable queue — keeps the run deterministic.
+docker compose -f infra/docker-compose.yml exec -T rabbitmq rabbitmqctl purge_queue c.notify-deal-closed >/dev/null 2>&1 || true
+
 PORT=3400; for p in 3400 3401 3402 3403; do (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null && exec 3>&- 3<&- || { PORT=$p; break; }; done
 # Enable the relay + notifications consumer; fast poll so the pipeline completes quickly. Email off.
 API_PORT=$PORT OUTBOX_RELAY_ENABLED=true OUTBOX_POLL_INTERVAL_MS=500 NOTIFICATIONS_ENABLED=true \

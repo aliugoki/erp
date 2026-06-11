@@ -3,7 +3,7 @@ import type { EntityManager } from 'typeorm';
 import { type BaseEvent, domainOf } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { EventBusService } from '../eventbus/event-bus.service';
-import { DlqService } from './dlq.service';
+import { type DlqEntry, DlqService } from './dlq.service';
 
 export type EventHandler = (event: BaseEvent, manager: EntityManager) => Promise<void>;
 
@@ -59,6 +59,19 @@ export class IdempotentConsumer {
     });
   }
 
+  /**
+   * Park a message in the DLQ, swallowing any failure. The DLQ insert can itself fail on a truly
+   * poison message (e.g. a non-uuid tenant id from a stray/foreign publisher); a failed park must NOT
+   * crash the consumer — we log and drop, so the queue can't wedge on one bad message.
+   */
+  private async safePark(consumer: string, tenantId: string, entry: DlqEntry): Promise<void> {
+    try {
+      await this.dlq.park(tenantId, entry);
+    } catch (err) {
+      this.logger.error(`DLQ park failed for "${consumer}" (tenant=${tenantId}); dropping message: ${(err as Error).message}`);
+    }
+  }
+
   /** Subscribe a consumer with the full idempotency + retry + DLQ machinery. */
   async register(opts: ConsumerOptions): Promise<void> {
     const { eventType, consumer, handler, maxAttempts = 3, baseDelayMs = 100, prefetch = 10 } = opts;
@@ -92,10 +105,12 @@ export class IdempotentConsumer {
         // Poison: cannot be parsed -> park immediately, never loop.
         const tenant = headerTenant;
         const raw = msg.content.toString();
-        void (tenant
-          ? this.dlq.park(tenant, { consumer, eventId: null, eventType, payload: raw, originalEvent: raw, reason: 'malformed payload', attempts: attempt })
-          : Promise.resolve(this.logger.warn('dropping poison message with no tenant header'))
-        ).finally(() => ch.ack(msg));
+        if (tenant) {
+          void this.safePark(consumer, tenant, { consumer, eventId: null, eventType, payload: raw, originalEvent: raw, reason: 'malformed payload', attempts: attempt }).finally(() => ch.ack(msg));
+        } else {
+          this.logger.warn('dropping poison message with no tenant header');
+          ch.ack(msg);
+        }
         return;
       }
 
@@ -104,17 +119,15 @@ export class IdempotentConsumer {
         .catch((err) => {
           const next = attempt + 1;
           if (next >= maxAttempts) {
-            void this.dlq
-              .park(event.tenantId, {
-                consumer,
-                eventId: event.id,
-                eventType: event.type,
-                payload: event.payload,
-                originalEvent: event,
-                reason: (err as Error).message,
-                attempts: next,
-              })
-              .finally(() => ch.ack(msg));
+            void this.safePark(consumer, event.tenantId, {
+              consumer,
+              eventId: event.id,
+              eventType: event.type,
+              payload: event.payload,
+              originalEvent: event,
+              reason: (err as Error).message,
+              attempts: next,
+            }).finally(() => ch.ack(msg));
           } else {
             ch.publish(retryEx, 'r', msg.content, {
               persistent: true,
