@@ -36,6 +36,7 @@ export default tseslint.config(
         __filename: 'readonly',
         exports: 'writable',
         console: 'readonly',
+        fetch: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',
         clearTimeout: 'readonly',

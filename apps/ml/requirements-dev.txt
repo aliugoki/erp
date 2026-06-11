@@ -1,0 +1,4 @@
+# Test-only deps (not shipped in the runtime image). Hard-pinned.
+-r requirements.txt
+pytest==8.3.4
+httpx==0.28.1

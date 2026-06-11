@@ -1,5 +1,14 @@
-# Hard-pinned for reproducibility (ADR-001). Heavy ML deps are added in Phase 6.
+# Hard-pinned for reproducibility (ADR-001). Runtime deps for the ML service skeleton (Chunk 6.1).
+# Heavy model libs (Prophet/sklearn/sentence-transformers/pytesseract) are added per-feature in 6.2+.
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
+# Service-to-service auth (verify the API's signed x-service-token; ADR-006).
+PyJWT==2.10.1
+# Structured JSON logging.
+structlog==24.4.0
+# OpenTelemetry — traces exported to the OTel Collector (best-effort).
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp-proto-grpc==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0

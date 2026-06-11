@@ -115,3 +115,6 @@ export interface BaseEvent<TPayload = unknown> {
 
 // Versioned event contracts.
 export * from './events';
+
+// API ↔ ML service contracts.
+export * from './ml';
