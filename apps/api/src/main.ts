@@ -3,6 +3,9 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
+import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import type { AppConfig } from '@metaxperts/config';
 import { AppModule } from './app.module';
@@ -11,14 +14,27 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 async function bootstrap(): Promise<void> {
   // Bad/missing env throws during ConfigModule init here → the app refuses to boot (fail fast).
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // bodyParser:false so we can set explicit payload size limits below (Phase 8.3).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, bodyParser: false });
 
   // Route Nest's own logs through pino (structured JSON).
   app.useLogger(app.get(Logger));
   app.flushLogs();
 
-  // CORS for the web app (dev: reflect origin; Phase 8.3 locks this to prod origins).
-  app.enableCors({ origin: true, credentials: true });
+  const config = app.get<ConfigService<AppConfig, true>>(ConfigService);
+
+  // Security headers (Phase 8.3): HSTS, X-Frame-Options (deny), X-Content-Type-Options, etc. CSP is
+  // disabled — this is a JSON API (no HTML), and the Next.js web app sets its own CSP.
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-site' } }));
+
+  // Bounded request payloads → 413 on oversize (Phase 8.3).
+  const maxBody = config.get('MAX_BODY_SIZE', { infer: true });
+  app.use(json({ limit: maxBody }));
+  app.use(urlencoded({ extended: true, limit: maxBody }));
+
+  // CORS locked to the configured origins (Phase 8.3); empty list reflects the origin (dev only).
+  const origins = config.get('CORS_ORIGINS', { infer: true }).split(',').map((o) => o.trim()).filter(Boolean);
+  app.enableCors({ origin: origins.length ? origins : true, credentials: true });
 
   // Reject unknown fields; coerce/validate DTOs.
   app.useGlobalPipes(
@@ -31,7 +47,6 @@ async function bootstrap(): Promise<void> {
   // Drain in-flight work on SIGTERM/SIGINT before exit.
   app.enableShutdownHooks();
 
-  const config = app.get<ConfigService<AppConfig, true>>(ConfigService);
   const port = config.get('API_PORT', { infer: true });
   // Bind IPv4 explicitly (standard for containers; avoids colliding with IPv6-loopback listeners).
   await app.listen(port, '0.0.0.0');

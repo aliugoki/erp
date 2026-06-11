@@ -1,0 +1,47 @@
+name: Security scan
+
+# Dependency + container scanning (Chunk 8.3). Fails the build on critical vulnerabilities.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Fail the build on CRITICAL advisories in PRODUCTION dependencies (dev-only tooling such as the
+      # vitest UI server — which we never run — is reported separately but doesn't block).
+      - run: pnpm audit --prod --audit-level critical
+      - run: pnpm audit --audit-level critical || echo "::warning::dev-dependency critical advisories present (non-blocking)"
+
+  image-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ML image
+        run: docker build -t metaxperts-ml:scan apps/ml
+      - name: Trivy scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: metaxperts-ml:scan
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  python-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pip-audit
+      - run: pip-audit -r apps/ml/requirements.txt || true # report; don't block on unfixed upstream

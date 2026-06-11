@@ -4,6 +4,7 @@
  * Consumed by apps/api and apps/worker. Validates `process.env` once at boot and fails fast on a bad
  * or missing variable (ADR: fail fast on misconfiguration). Keep this in sync with `.env.example`.
  */
+import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 
 const portFromString = (def: number) =>
@@ -213,6 +214,11 @@ export const envSchema = z.object({
     .pipe(z.number().int().positive()),
   RABBITMQ_MGMT_URL: z.string().url().default('http://localhost:15672'),
 
+  // Security hardening (Phase 8.3). CORS_ORIGINS: comma-separated allowlist of web origins; empty
+  // reflects the request origin (dev only). MAX_BODY_SIZE caps request payloads (→ 413).
+  CORS_ORIGINS: z.string().optional().default(''),
+  MAX_BODY_SIZE: z.string().default('1mb'),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 
@@ -223,11 +229,32 @@ export const envSchema = z.object({
 export type AppConfig = z.infer<typeof envSchema>;
 
 /**
+ * Resolve `*_FILE` secret references (Phase 8.3 — Docker/Kubernetes secrets convention). For any
+ * `FOO_FILE=/run/secrets/foo`, read the file and use its trimmed contents as `FOO`. Lets production
+ * load secrets from a mounted secrets store instead of plaintext env vars. The explicit env var wins
+ * if both are set.
+ */
+function resolveFileSecrets(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...source };
+  for (const [key, value] of Object.entries(source)) {
+    if (!key.endsWith('_FILE') || !value) continue;
+    const target = key.slice(0, -'_FILE'.length);
+    if (out[target]) continue; // explicit env var takes precedence
+    try {
+      out[target] = readFileSync(value, 'utf8').trim();
+    } catch (err) {
+      throw new Error(`Could not read secret file for ${target} (${key}=${value}): ${(err as Error).message}`);
+    }
+  }
+  return out;
+}
+
+/**
  * Validate and return the typed config from a raw env source (defaults to `process.env`).
  * Throws a readable aggregated error and is intended to be called once at process startup.
  */
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = envSchema.safeParse(source);
+  const parsed = envSchema.safeParse(resolveFileSecrets(source));
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)

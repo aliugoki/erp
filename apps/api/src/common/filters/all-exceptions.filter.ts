@@ -48,8 +48,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      // Unexpected — log full detail server-side, expose nothing.
-      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
+      // Some framework errors (e.g. body-parser PayloadTooLargeError / malformed JSON) carry their
+      // own 4xx status — honor it rather than masking it as a 500.
+      const e = exception as Error & { status?: number; statusCode?: number };
+      const own = e.status ?? e.statusCode;
+      if (typeof own === 'number' && own >= 400 && own < 500) {
+        status = own;
+        detail = own === HttpStatus.PAYLOAD_TOO_LARGE ? 'Request payload too large' : exception.message;
+      } else {
+        // Unexpected — log full detail server-side, expose nothing.
+        this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
+      }
     }
 
     const problem: Problem = {
