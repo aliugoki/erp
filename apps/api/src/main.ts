@@ -16,6 +16,9 @@ async function bootstrap(): Promise<void> {
   app.useLogger(app.get(Logger));
   app.flushLogs();
 
+  // CORS for the web app (dev: reflect origin; Phase 8.3 locks this to prod origins).
+  app.enableCors({ origin: true, credentials: true });
+
   // Reject unknown fields; coerce/validate DTOs.
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

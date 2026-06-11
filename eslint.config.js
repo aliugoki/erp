@@ -18,6 +18,11 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Config files (e.g. tailwind.config.ts) idiomatically require() plugins.
+    files: ['**/*.config.ts', '**/*.config.mjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     // CommonJS config files (e.g. apps/web/next.config.js) — give them Node globals so `module`,
     // `require`, etc. are defined. (The root eslint.config.js itself is ESM and excluded here.)
     files: ['apps/web/**/*.js', '**/*.cjs'],
