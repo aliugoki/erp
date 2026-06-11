@@ -29,6 +29,20 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str | None = None
     otel_service_name: str = "metaxperts-ml"
 
+    # Postgres — the ML service reads stock movements and writes forecasts as a trusted backend
+    # (a privileged connection; tenant scoping is enforced by explicit tenant_id filters, since the
+    # caller — the API bridge — is itself authenticated and passes the tenant). Falls back to
+    # DATABASE_URL. Forecast features (6.2+) require it; the skeleton endpoints do not.
+    ml_database_url: str | None = None
+    database_url: str | None = None
+
+    # Forecasting (6.2): minimum history points before ARIMA is attempted; default serve horizon.
+    forecast_min_points: int = 8
+    forecast_default_horizon: int = 14
+
+    def effective_database_url(self) -> str | None:
+        return self.ml_database_url or self.database_url
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -18,3 +18,29 @@ class PingResponse(BaseModel):
 
     pong: bool
     caller: str
+
+
+class ForecastRequest(BaseModel):
+    """The API bridge supplies the tenant (it is authenticated and tenant-scopes on its side)."""
+
+    tenantId: str
+    productId: str
+    warehouseId: str | None = None
+    horizon: int | None = None
+
+
+class ForecastResponse(BaseModel):
+    productId: str
+    warehouseId: str | None = None
+    horizon: int
+    model: str
+    source: str  # 'cache' (precomputed) or 'on-demand' (fitted now)
+    historyPoints: int
+    dates: list[str]
+    predicted: list[float]
+    lower: list[float]
+    upper: list[float]
+
+
+class RefreshResponse(BaseModel):
+    refreshed: int

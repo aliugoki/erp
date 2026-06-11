@@ -10,9 +10,16 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 
 from . import __version__
+from . import db, forecast_service
 from .auth import require_service_token
 from .config import get_settings
-from .contracts import HealthResponse, PingResponse
+from .contracts import (
+    ForecastRequest,
+    ForecastResponse,
+    HealthResponse,
+    PingResponse,
+    RefreshResponse,
+)
 from .logging import configure_logging, get_logger
 
 
@@ -55,6 +62,27 @@ def create_app() -> FastAPI:
         caller = str(claims.get("svc", "unknown"))
         log.info("ml_ping", caller=caller)
         return PingResponse(pong=True, caller=caller)
+
+    @app.post("/ml/forecast/demand", response_model=ForecastResponse)
+    def forecast_demand_endpoint(
+        req: ForecastRequest, _claims: dict = Depends(require_service_token)
+    ) -> ForecastResponse:
+        horizon = req.horizon or settings.forecast_default_horizon
+        warehouse = req.warehouseId or db.SENTINEL_WAREHOUSE
+        result = forecast_service.serve(req.tenantId, req.productId, warehouse, horizon)
+        log.info("ml_forecast_served", product=req.productId, source=result["source"], model=result["model"])
+        return ForecastResponse(
+            productId=req.productId,
+            warehouseId=req.warehouseId,
+            horizon=horizon,
+            **result,
+        )
+
+    @app.post("/ml/forecast/refresh", response_model=RefreshResponse)
+    def forecast_refresh(_claims: dict = Depends(require_service_token)) -> RefreshResponse:
+        n = forecast_service.refresh_all()
+        log.info("ml_forecast_refreshed", count=n)
+        return RefreshResponse(refreshed=n)
 
     log.info("ml_started", version=__version__, env=settings.env)
     return app

@@ -18,3 +18,25 @@ export interface MlPingResponse {
   pong: boolean;
   caller: string;
 }
+
+/** `POST /ml/forecast/demand` request. The API bridge fills `tenantId` from the authenticated user. */
+export interface MlForecastRequest {
+  tenantId: string;
+  productId: string;
+  warehouseId?: string | null;
+  horizon?: number;
+}
+
+/** Precomputed (or on-demand) demand forecast. `source`: 'cache' = served from the read model. */
+export interface MlForecastResponse {
+  productId: string;
+  warehouseId?: string | null;
+  horizon: number;
+  model: string;
+  source: 'cache' | 'on-demand';
+  historyPoints: number;
+  dates: string[];
+  predicted: number[];
+  lower: number[];
+  upper: number[];
+}

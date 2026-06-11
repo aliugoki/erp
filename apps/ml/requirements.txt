@@ -12,3 +12,9 @@ structlog==24.4.0
 opentelemetry-sdk==1.29.0
 opentelemetry-exporter-otlp-proto-grpc==1.29.0
 opentelemetry-instrumentation-fastapi==0.50b0
+# Postgres access (read stock movements, write forecasts).
+psycopg[binary]==3.2.3
+# Forecasting (Chunk 6.2): ARIMA via statsmodels, with a naive fallback.
+numpy==2.2.1
+pandas==2.2.3
+statsmodels==0.14.4
