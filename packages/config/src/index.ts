@@ -171,6 +171,31 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 15000 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Rate limiting (Phase 7.4): per-tenant (authenticated) / per-IP (anonymous) request limits.
+  THROTTLE_TTL_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
+    .pipe(z.number().int().positive()),
+  THROTTLE_LIMIT: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 300 : Number(v)))
+    .pipe(z.number().int().positive()),
+  // Graceful shutdown (Phase 7.4): how long /health/ready reports draining (503) before the server
+  // stops accepting, so a load balancer can pull the instance with zero in-flight loss.
+  SHUTDOWN_DRAIN_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 0 : Number(v)))
+    .pipe(z.number().int().nonnegative()),
+  // Backpressure (Phase 7.4): per-consumer prefetch / concurrency cap.
+  CONSUMER_PREFETCH: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 10 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Money default (ADR-007).
   DEFAULT_CURRENCY: z.string().length(3).default('PKR'),
 

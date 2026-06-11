@@ -74,7 +74,9 @@ export class IdempotentConsumer {
 
   /** Subscribe a consumer with the full idempotency + retry + DLQ machinery. */
   async register(opts: ConsumerOptions): Promise<void> {
-    const { eventType, consumer, handler, maxAttempts = 3, baseDelayMs = 100, prefetch = 10 } = opts;
+    // prefetch caps unacked messages per consumer = backpressure (Phase 7.4); env-tunable.
+    const defaultPrefetch = Number(process.env.CONSUMER_PREFETCH) || 10;
+    const { eventType, consumer, handler, maxAttempts = 3, baseDelayMs = 100, prefetch = defaultPrefetch } = opts;
     const ch = await this.bus.getChannel();
     const domain = domainOf(eventType);
     const mainQ = `c.${consumer}`;
