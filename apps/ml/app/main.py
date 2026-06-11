@@ -11,9 +11,13 @@ from fastapi import Depends, FastAPI
 
 from . import __version__
 from . import db, forecast_service
+from .anomaly import detect_anomalies
 from .auth import require_service_token
 from .config import get_settings
 from .contracts import (
+    AnomalyItem,
+    AnomalyRequest,
+    AnomalyResponse,
     ForecastRequest,
     ForecastResponse,
     HealthResponse,
@@ -83,6 +87,27 @@ def create_app() -> FastAPI:
         n = forecast_service.refresh_all()
         log.info("ml_forecast_refreshed", count=n)
         return RefreshResponse(refreshed=n)
+
+    @app.post("/ml/anomaly/transactions", response_model=AnomalyResponse)
+    def anomaly_transactions(
+        req: AnomalyRequest, _claims: dict = Depends(require_service_token)
+    ) -> AnomalyResponse:
+        rows = db.fetch_transaction_amounts(req.tenantId, req.dateFrom, req.dateTo)
+        verdicts = detect_anomalies([amount for _id, amount, _on in rows])
+        items = [
+            AnomalyItem(
+                transactionId=tid,
+                amountMinor=amount,
+                occurredOn=occurred,
+                score=v.score,
+                isAnomaly=v.is_anomaly,
+                reason=v.reason,
+            )
+            for (tid, amount, occurred), v in zip(rows, verdicts)
+        ]
+        anomalies = sum(1 for it in items if it.isAnomaly)
+        log.info("ml_anomaly_scan", tenant=req.tenantId, count=len(items), anomalies=anomalies)
+        return AnomalyResponse(count=len(items), anomalies=anomalies, items=items)
 
     log.info("ml_started", version=__version__, env=settings.env)
     return app

@@ -105,6 +105,27 @@ def upsert_forecast(
         conn.commit()
 
 
+def fetch_transaction_amounts(
+    tenant_id: str, date_from: str | None, date_to: str | None
+) -> list[tuple[str, int, str]]:
+    """(transaction_id, amount_minor, occurred_on) — amount = total debits per transaction."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT t.id::text, COALESCE(SUM(je.debit_minor), 0)::bigint AS amount, t.occurred_on
+            FROM finance_transaction t
+            JOIN finance_journal_entry je ON je.transaction_id = t.id AND je.deleted_at IS NULL
+            WHERE t.tenant_id = %(t)s AND t.deleted_at IS NULL
+              AND (%(f)s::date IS NULL OR t.occurred_on >= %(f)s::date)
+              AND (%(to)s::date IS NULL OR t.occurred_on <= %(to)s::date)
+            GROUP BY t.id, t.occurred_on
+            ORDER BY t.occurred_on
+            """,
+            {"t": tenant_id, "f": date_from, "to": date_to},
+        )
+        return [(r[0], int(r[1]), r[2].isoformat() if r[2] else "") for r in cur.fetchall()]
+
+
 def get_forecast(tenant_id: str, product_id: str, warehouse_id: str) -> dict | None:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(

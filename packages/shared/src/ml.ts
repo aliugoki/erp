@@ -40,3 +40,25 @@ export interface MlForecastResponse {
   lower: number[];
   upper: number[];
 }
+
+/** `POST /ml/anomaly/transactions` — flag outlier finance transactions over a date range. */
+export interface MlAnomalyRequest {
+  tenantId: string;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}
+
+export interface MlAnomalyItem {
+  transactionId: string;
+  amountMinor: number;
+  occurredOn: string;
+  score: number;
+  isAnomaly: boolean;
+  reason: string;
+}
+
+export interface MlAnomalyResponse {
+  count: number;
+  anomalies: number;
+  items: MlAnomalyItem[];
+}

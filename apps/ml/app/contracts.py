@@ -44,3 +44,24 @@ class ForecastResponse(BaseModel):
 
 class RefreshResponse(BaseModel):
     refreshed: int
+
+
+class AnomalyRequest(BaseModel):
+    tenantId: str
+    dateFrom: str | None = None
+    dateTo: str | None = None
+
+
+class AnomalyItem(BaseModel):
+    transactionId: str
+    amountMinor: int
+    occurredOn: str
+    score: float
+    isAnomaly: bool
+    reason: str
+
+
+class AnomalyResponse(BaseModel):
+    count: int
+    anomalies: int
+    items: list[AnomalyItem]

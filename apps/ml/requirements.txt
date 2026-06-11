@@ -18,3 +18,5 @@ psycopg[binary]==3.2.3
 numpy==2.2.1
 pandas==2.2.3
 statsmodels==0.14.4
+# Anomaly detection (Chunk 6.3): Isolation Forest.
+scikit-learn==1.6.0
