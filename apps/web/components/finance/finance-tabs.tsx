@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, CalendarRange, FileText, Landmark, ListChecks, ListTree, NotebookPen, PieChart, Receipt, Repeat } from 'lucide-react';
+import { BookOpen, CalendarRange, Coins, FileText, Landmark, ListChecks, ListTree, NotebookPen, PieChart, Receipt, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -15,6 +15,7 @@ const TABS = [
   { href: '/finance/reconciliation', label: 'Reconciliation', icon: ListChecks, exact: false },
   { href: '/finance/reports', label: 'Reports', icon: PieChart, exact: false },
   { href: '/finance/periods', label: 'Periods', icon: CalendarRange, exact: false },
+  { href: '/finance/currencies', label: 'Currencies', icon: Coins, exact: false },
 ];
 
 /** Sub-navigation across the finance sub-pages (invoices, COA, journal, ledger, statements). */

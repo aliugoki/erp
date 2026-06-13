@@ -18,16 +18,19 @@ import {
   AsOfQueryDto,
   BudgetQueryDto,
   CashBookQueryDto,
+  ConvertQueryDto,
   CreateAccountDto,
   CreateBillDto,
   CreateBillPaymentDto,
   CreateCostCenterDto,
+  CreateCurrencyDto,
   CreateInvoiceDto,
   CreatePeriodDto,
   CreateRecurringDto,
   CreateTransactionDto,
   CreateVendorDto,
   SetBudgetDto,
+  SetRateDto,
   LedgerQueryDto,
   ListBillsQueryDto,
   ListInvoicesQueryDto,
@@ -278,6 +281,36 @@ export class FinanceController {
   @Get('reports/budget-vs-actual')
   budgetVsActual(@Query() query: BudgetQueryDto) {
     return this.finance.budgetVsActual(query);
+  }
+
+  // Multi-currency
+  @Get('currencies')
+  listCurrencies() {
+    return this.finance.listCurrencies();
+  }
+
+  @Post('currencies')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createCurrency(@Body() dto: CreateCurrencyDto) {
+    return this.finance.createCurrency(dto);
+  }
+
+  @Get('exchange-rates')
+  listRates() {
+    return this.finance.listRates();
+  }
+
+  @Post('exchange-rates')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  setRate(@Body() dto: SetRateDto) {
+    return this.finance.setRate(dto);
+  }
+
+  @Get('convert')
+  convert(@Query() query: ConvertQueryDto) {
+    return this.finance.convert(query);
   }
 
   // Invoices

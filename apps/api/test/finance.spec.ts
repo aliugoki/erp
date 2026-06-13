@@ -12,7 +12,9 @@ import {
   assertBalanced,
   assertVoucherType,
   cashFlowSection,
+  convertViaBase,
   frequencyInterval,
+  rateToMicro,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -137,6 +139,17 @@ describe('account normal-balance semantics', () => {
     expect(() => assertVoucherType('CPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).toThrow(VoucherValidationError);
     // JV has no cash/bank constraint.
     expect(() => assertVoucherType('JV', [other, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+  });
+
+  it('convertViaBase converts through the base currency (integer minor units)', () => {
+    const usd = rateToMicro(278.5); // 1 USD = 278.5 PKR
+    const base = rateToMicro(1);
+    // 100.00 USD -> PKR = 27,850.00
+    expect(convertViaBase(10_000, usd, base)).toBe(2_785_000);
+    // 27,850.00 PKR -> USD = 100.00
+    expect(convertViaBase(2_785_000, base, usd)).toBe(10_000);
+    // same currency is a no-op
+    expect(convertViaBase(12_345, usd, usd)).toBe(12_345);
   });
 
   it('frequencyInterval maps schedule to a Postgres interval', () => {

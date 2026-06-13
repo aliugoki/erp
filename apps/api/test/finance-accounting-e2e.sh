@@ -190,6 +190,14 @@ check "re-running close finds nothing to close" "$(curl -s -XPOST "$B/finance/ye
 # Close the year period so the period-lock section below still sees no OPEN period covering today.
 curl -s -o /dev/null -XPATCH "$B/finance/periods/$CY" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
 
+echo "== multi-currency =="
+post "$MGR" finance/currencies '{"code":"PKR","name":"Pak Rupee","symbol":"Rs","isBase":true}' >/dev/null
+post "$MGR" finance/currencies '{"code":"USD","name":"US Dollar","symbol":"$"}' >/dev/null
+post "$MGR" finance/exchange-rates '{"currencyCode":"USD","rate":278.5}' >/dev/null
+check "USD 10000 minor -> PKR = 2785000" "$(get "$MGR" "finance/convert?amountMinor=10000&from=USD&to=PKR" | jget data.result.amountMinor)" "2785000"
+check "PKR 2785000 -> USD = 10000" "$(get "$MGR" "finance/convert?amountMinor=2785000&from=PKR&to=USD" | jget data.result.amountMinor)" "10000"
+check "second base currency rejected -> 400" "$(code -XPOST "$B/finance/currencies" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"code":"EUR","name":"Euro","isBase":true}')" "400"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

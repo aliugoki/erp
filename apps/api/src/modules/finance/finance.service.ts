@@ -11,12 +11,15 @@ import { normalizePagination } from '../hr/hr.util';
 import type {
   AsOfQueryDto,
   CashBookQueryDto,
+  ConvertQueryDto,
   CreateAccountDto,
   BudgetQueryDto,
   CreateBillDto,
   CreateBillPaymentDto,
   CreateCostCenterDto,
+  CreateCurrencyDto,
   CreateInvoiceDto,
+  SetRateDto,
   CreatePeriodDto,
   CreateRecurringDto,
   CreateTransactionDto,
@@ -42,11 +45,15 @@ import {
   type VoucherType,
   VoucherValidationError,
   type Frequency,
+  RATE_SCALE,
   agingBucket,
   assertBalanced,
   assertVoucherType,
   cashFlowSection,
+  convertViaBase,
   frequencyInterval,
+  microToRate,
+  rateToMicro,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -1124,6 +1131,97 @@ export class FinanceService {
     return { generated: generated.length, vouchers: generated, skipped };
   }
 
+  // ── Multi-currency (currencies, exchange rates, conversion) ──────────────────
+  async createCurrency(dto: CreateCurrencyDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO currency (tenant_id, code, name, symbol, is_base)
+           VALUES (current_setting('app.tenant_id')::uuid, upper($1), $2, $3, $4)
+           RETURNING id, code, name, symbol, is_base, active`,
+          [dto.code, dto.name, dto.symbol ?? null, dto.isBase ?? false],
+        )) as Row[];
+        return mapCurrency(rows[0]!);
+      } catch (err) {
+        if (isUnique(err)) {
+          const e = err as { constraint?: string };
+          if (e.constraint === 'uq_currency_one_base') throw new BadRequestException('A base currency already exists');
+          throw new BadRequestException(`Currency "${dto.code}" already exists`);
+        }
+        throw err;
+      }
+    });
+  }
+
+  async listCurrencies() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, code, name, symbol, is_base, active FROM currency WHERE deleted_at IS NULL ORDER BY is_base DESC, code`,
+      )) as Row[];
+      return rows.map(mapCurrency);
+    });
+  }
+
+  async setRate(dto: SetRateDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO exchange_rate (tenant_id, currency_code, rate_micro, as_of)
+         VALUES (current_setting('app.tenant_id')::uuid, upper($1), $2, COALESCE($3::date, current_date))
+         RETURNING id, currency_code, rate_micro, as_of::text AS as_of`,
+        [dto.currencyCode, rateToMicro(dto.rate), dto.asOf ?? null],
+      )) as Row[];
+      return mapRate(rows[0]!);
+    });
+  }
+
+  async listRates() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, currency_code, rate_micro, as_of::text AS as_of FROM exchange_rate
+          WHERE deleted_at IS NULL ORDER BY currency_code, as_of DESC`,
+      )) as Row[];
+      return rows.map(mapRate);
+    });
+  }
+
+  /** Latest base-rate (×1e6) for a currency at a date; base currency = 1e6. Throws if no rate. */
+  private async rateMicroAt(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    code: string,
+    asOf?: string,
+  ): Promise<number> {
+    const cur = (await m.query(
+      `SELECT is_base FROM currency WHERE lower(code)=lower($1) AND deleted_at IS NULL`,
+      [code],
+    )) as Array<{ is_base: boolean }>;
+    if (cur[0]?.is_base) return RATE_SCALE;
+    const r = (await m.query(
+      `SELECT rate_micro FROM exchange_rate
+        WHERE lower(currency_code)=lower($1) AND deleted_at IS NULL AND ($2::date IS NULL OR as_of <= $2::date)
+        ORDER BY as_of DESC, created_at DESC LIMIT 1`,
+      [code, asOf ?? null],
+    )) as Array<{ rate_micro: string }>;
+    if (!r[0]) throw new BadRequestException(`No exchange rate for ${code.toUpperCase()}`);
+    return Number(r[0].rate_micro);
+  }
+
+  async convert(query: ConvertQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const fromMicro = await this.rateMicroAt(m, query.from, query.asOf);
+      const toMicro = await this.rateMicroAt(m, query.to, query.asOf);
+      const resultMinor = convertViaBase(query.amountMinor, fromMicro, toMicro);
+      return {
+        from: query.from.toUpperCase(),
+        to: query.to.toUpperCase(),
+        asOf: query.asOf ?? null,
+        amount: { amountMinor: query.amountMinor, currency: query.from.toUpperCase() },
+        result: { amountMinor: resultMinor, currency: query.to.toUpperCase() },
+        fromRate: microToRate(fromMicro),
+        toRate: microToRate(toMicro),
+      };
+    });
+  }
+
   // ── Accounts Payable (vendors / bills / payments) ────────────────────────────
   async createVendor(dto: CreateVendorDto) {
     return this.tenantTx.run(async (m) => {
@@ -1389,6 +1487,14 @@ function mapAccount(r: Row) {
     accountNumber: r.account_number ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
   };
+}
+
+function mapCurrency(r: Row) {
+  return { id: r.id, code: r.code, name: r.name, symbol: r.symbol ?? null, isBase: r.is_base, active: r.active };
+}
+
+function mapRate(r: Row) {
+  return { id: r.id, currencyCode: r.currency_code, rate: microToRate(Number(r.rate_micro)), asOf: r.as_of };
 }
 
 function mapRecurring(r: Row) {

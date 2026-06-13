@@ -6,7 +6,9 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Length,
@@ -92,6 +94,28 @@ export class JournalEntryDto {
 export class CreateCostCenterDto {
   @IsString() @MinLength(1) code!: string;
   @IsString() @MinLength(1) name!: string;
+}
+
+export class CreateCurrencyDto {
+  @IsString() @Length(3, 3) code!: string;
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsString() symbol?: string;
+  /** Mark this the tenant's base currency (rate 1.0). At most one base allowed. */
+  @IsOptional() @IsBoolean() isBase?: boolean;
+}
+
+export class SetRateDto {
+  @IsString() @Length(3, 3) currencyCode!: string;
+  /** How many BASE units one unit of this currency is worth (e.g. 278.5 for USD→PKR). */
+  @IsNumber() @IsPositive() rate!: number;
+  @IsOptional() @IsISO8601() asOf?: string;
+}
+
+export class ConvertQueryDto {
+  @Type(() => Number) @IsInt() amountMinor!: number;
+  @IsString() @Length(3, 3) from!: string;
+  @IsString() @Length(3, 3) to!: string;
+  @IsOptional() @IsISO8601() asOf?: string;
 }
 
 export class SetBudgetDto {

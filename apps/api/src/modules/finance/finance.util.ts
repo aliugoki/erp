@@ -73,6 +73,23 @@ export function formatVoucherNo(type: VoucherType, n: number): string {
   return `${type}-${String(n).padStart(6, '0')}`;
 }
 
+// ── Multi-currency ────────────────────────────────────────────────────────────────────────────
+
+/** Exchange rates are stored as integer micro-units (rate × 1e6) to avoid floats. */
+export const RATE_SCALE = 1_000_000;
+export const rateToMicro = (rate: number): number => Math.round(rate * RATE_SCALE);
+export const microToRate = (micro: number): number => micro / RATE_SCALE;
+
+/**
+ * Convert a minor amount between two currencies via the base currency.
+ * `rate_micro` = how many BASE units one unit of that currency is worth (× 1e6); base currency = 1e6.
+ *   baseMinor = amount × fromRate ; result = baseMinor ÷ toRate
+ */
+export function convertViaBase(amountMinor: number, fromRateMicro: number, toRateMicro: number): number {
+  const baseMinor = Math.round((amountMinor * fromRateMicro) / RATE_SCALE);
+  return Math.round((baseMinor * RATE_SCALE) / toRateMicro);
+}
+
 /** Recurring-voucher schedule frequencies and their Postgres interval. */
 export const FREQUENCIES = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'] as const;
 export type Frequency = (typeof FREQUENCIES)[number];

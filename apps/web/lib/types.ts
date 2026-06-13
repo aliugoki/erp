@@ -108,6 +108,30 @@ export interface BudgetVsActual {
 }
 
 export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
+export interface Currency {
+  id: string;
+  code: string;
+  name: string;
+  symbol: string | null;
+  isBase: boolean;
+  active: boolean;
+}
+export interface ExchangeRate {
+  id: string;
+  currencyCode: string;
+  rate: number;
+  asOf: string;
+}
+export interface ConvertResult {
+  from: string;
+  to: string;
+  asOf: string | null;
+  amount: Money;
+  result: Money;
+  fromRate: number;
+  toRate: number;
+}
+
 export type Frequency = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
 
 export interface Recurring {
