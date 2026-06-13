@@ -3,7 +3,8 @@ import { type FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { Account } from '@/lib/types';
+import type { Account, VoucherType } from '@/lib/types';
+import { VOUCHER_TYPES } from '@/lib/finance';
 import { cn, formatMoney } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ const toMinor = (v: string) => Math.round((Number(v) || 0) * 100);
 export function NewJournalDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [voucherType, setVoucherType] = useState<VoucherType>('JV');
   const [description, setDescription] = useState('');
   const [reference, setReference] = useState('');
   const [lines, setLines] = useState<Line[]>([emptyLine(), emptyLine()]);
@@ -65,6 +67,7 @@ export function NewJournalDialog() {
     mutationFn: () =>
       apiPost('/finance/transactions', {
         description,
+        voucherType,
         ...(reference ? { reference } : {}),
         entries: lines.map((l) => ({
           accountId: l.accountId,
@@ -77,6 +80,7 @@ export function NewJournalDialog() {
       qc.invalidateQueries({ queryKey: ['ledger'] });
       qc.invalidateQueries({ queryKey: ['reports'] });
       setOpen(false);
+      setVoucherType('JV');
       setDescription('');
       setReference('');
       setLines([emptyLine(), emptyLine()]);
@@ -102,15 +106,26 @@ export function NewJournalDialog() {
           <DialogDescription>Double-entry: total debits must equal total credits.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-[12rem_1fr] gap-3">
+            <div className="space-y-2">
+              <Label>Voucher type</Label>
+              <Select value={voucherType} onValueChange={(v) => setVoucherType(v as VoucherType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VOUCHER_TYPES.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>{v.value} — {v.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="d">Description</Label>
               <Input id="d" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Cash sale" required />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="r">Reference</Label>
-              <Input id="r" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="JV-1001 (optional)" />
-            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="r">Reference</Label>
+            <Input id="r" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Cheque / slip no (optional)" />
           </div>
 
           <div className="space-y-2">

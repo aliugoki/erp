@@ -62,7 +62,10 @@ export default function ChartOfAccountsPage() {
                       </span>
                     </TableCell>
                     <TableCell><Badge variant={TYPE_VARIANT[a.type]}>{a.type}</Badge></TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground">{a.isGroup ? 'Group' : 'Postable'}</TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      <span className="mr-2 rounded bg-muted px-1.5 py-0.5 font-mono">L{a.level ?? 1}</span>
+                      {a.isGroup ? 'Group' : 'Postable'}
+                    </TableCell>
                   </TableRow>
                 ))}
           </TableBody>

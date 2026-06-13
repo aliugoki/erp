@@ -77,6 +77,24 @@ echo "== balance sheet =="
 check "balance sheet balances (A = L + E + NI)" "$(get "$MGR" finance/statements/balance-sheet | jget data.balanced)" "True"
 check "total assets = 70000" "$(get "$MGR" finance/statements/balance-sheet | jget data.totals.assetsMinor)" "70000"
 
+echo "== 4-level chart of accounts cap + type inheritance =="
+G1=$(post "$MGR" finance/accounts '{"code":"9","name":"Head","type":"ASSET","isGroup":true}' | jget data.id)
+G2=$(post "$MGR" finance/accounts "{\"code\":\"9-1\",\"name\":\"Control\",\"parentId\":\"$G1\",\"isGroup\":true}" | jget data.id)
+G3=$(post "$MGR" finance/accounts "{\"code\":\"9-1-1\",\"name\":\"Subsidiary\",\"parentId\":\"$G2\",\"isGroup\":true}" | jget data.id)
+G4=$(post "$MGR" finance/accounts "{\"code\":\"9-1-1-1\",\"name\":\"Detail Group\",\"parentId\":\"$G3\",\"isGroup\":true}" | jget data.id)
+check "child inherits parent type (no type sent)" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['type'] for a in json.load(sys.stdin)['data'] if a['code']=='9-1'))")" "ASSET"
+check "level-4 group has level 4" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['level'] for a in json.load(sys.stdin)['data'] if a['code']=='9-1-1-1'))")" "4"
+check "5th level rejected (max 4) -> 422" "$(code -XPOST "$B/finance/accounts" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"code\":\"9-1-1-1-1\",\"name\":\"too deep\",\"parentId\":\"$G4\"}")" "422"
+
+echo "== voucher types & numbering =="
+V1=$(post "$MGR" finance/transactions "{\"description\":\"Bank receipt\",\"voucherType\":\"BRV\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":1000},{\"accountId\":\"$REV\",\"creditMinor\":1000}]}" | jget data.voucherNo)
+check "first BRV -> BRV-000001" "$V1" "BRV-000001"
+V2=$(post "$MGR" finance/transactions "{\"description\":\"Bank receipt 2\",\"voucherType\":\"BRV\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":2000},{\"accountId\":\"$REV\",\"creditMinor\":2000}]}" | jget data.voucherNo)
+check "second BRV -> BRV-000002 (per-type sequence)" "$V2" "BRV-000002"
+VC=$(post "$MGR" finance/transactions "{\"description\":\"Cash payment\",\"voucherType\":\"CPV\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":500},{\"accountId\":\"$CASH\",\"creditMinor\":500}]}" | jget data.voucherNo)
+check "first CPV -> CPV-000001 (independent sequence)" "$VC" "CPV-000001"
+check "filter voucherType=BRV lists 2" "$(get "$MGR" "finance/transactions?voucherType=BRV" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']))")" "2"
+
 echo ""
 echo "RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

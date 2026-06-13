@@ -18,14 +18,17 @@ import {
 export class CreateAccountDto {
   @IsString() @MinLength(1) code!: string;
   @IsString() @MinLength(1) name!: string;
-  @IsIn(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']) type!: string;
-  /** Parent (must be a group account) for a multi-level chart of accounts. Root account if omitted. */
+  /** Required for a root (level-1) account; inherited from the parent otherwise. */
+  @IsOptional() @IsIn(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']) type?: string;
+  /** Parent (must be a group account) for the multi-level chart of accounts. Root account if omitted.
+   *  The tree is capped at 4 levels (Main head → Control → Subsidiary → Detail). */
   @IsOptional() @IsUUID() parentId?: string;
   /** Group (header) accounts organise the tree and cannot be posted to; leaves are postable. */
   @IsOptional() @IsBoolean() isGroup?: boolean;
 }
 
 export class ListTransactionsQueryDto {
+  @IsOptional() @IsIn(['BRV', 'BPV', 'CPV', 'CRV', 'JV']) voucherType?: string;
   @IsOptional() @IsISO8601() from?: string;
   @IsOptional() @IsISO8601() to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
@@ -57,6 +60,8 @@ export class JournalEntryDto {
 
 export class CreateTransactionDto {
   @IsString() @MinLength(1) description!: string;
+  /** Voucher type — BRV/BPV/CPV/CRV/JV. Defaults to JV (general journal voucher). */
+  @IsOptional() @IsIn(['BRV', 'BPV', 'CPV', 'CRV', 'JV']) voucherType?: string;
   @IsOptional() @IsISO8601() occurredOn?: string;
   @IsOptional() @IsString() reference?: string;
   @IsArray()

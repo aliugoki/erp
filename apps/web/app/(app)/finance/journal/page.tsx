@@ -4,23 +4,30 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 import { apiList } from '@/lib/api';
 import type { JournalTxn } from '@/lib/types';
+import { VOUCHER_TYPES } from '@/lib/finance';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
 import { NewJournalDialog } from '@/components/finance/new-journal-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function JournalPage() {
   const [page, setPage] = useState(1);
+  const [vtype, setVtype] = useState('ALL');
   const pageSize = 10;
 
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (vtype !== 'ALL') params.set('voucherType', vtype);
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['transactions', page],
-    queryFn: () => apiList<JournalTxn>(`/finance/transactions?page=${page}&pageSize=${pageSize}`),
+    queryKey: ['transactions', vtype, page],
+    queryFn: () => apiList<JournalTxn>(`/finance/transactions?${params.toString()}`),
     placeholderData: keepPreviousData,
   });
 
@@ -34,12 +41,22 @@ export default function JournalPage() {
       <FinanceTabs />
 
       <Card className="overflow-hidden">
+        <div className="flex items-center gap-3 border-b p-4">
+          <Select value={vtype} onValueChange={(v) => { setVtype(v); setPage(1); }}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All voucher types</SelectItem>
+              {VOUCHER_TYPES.map((v) => <SelectItem key={v.value} value={v.value}>{v.value} — {v.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Voucher #</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead>Reference</TableHead>
               <TableHead className="text-center">Lines</TableHead>
               <TableHead className="text-right">Amount</TableHead>
             </TableRow>
@@ -49,17 +66,19 @@ export default function JournalPage() {
               ? Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="mx-auto h-4 w-6" /></TableCell>
                     <TableCell><Skeleton className="ml-auto h-4 w-24" /></TableCell>
                   </TableRow>
                 ))
               : rows.map((t) => (
                   <TableRow key={t.id}>
+                    <TableCell className="font-mono text-xs">{t.voucherNo ?? '—'}</TableCell>
+                    <TableCell><Badge variant="secondary">{t.voucherType}</Badge></TableCell>
                     <TableCell className="tabular-nums text-muted-foreground">{String(t.occurredOn).slice(0, 10)}</TableCell>
                     <TableCell className="font-medium">{t.description}</TableCell>
-                    <TableCell className="text-muted-foreground">{t.reference ?? '—'}</TableCell>
                     <TableCell className="text-center tabular-nums">{t.lineCount}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(t.total.amountMinor, t.total.currency)}</TableCell>
                   </TableRow>

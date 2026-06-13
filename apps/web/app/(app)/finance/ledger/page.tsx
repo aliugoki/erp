@@ -54,6 +54,7 @@ export default function LedgerPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
+                <TableHead>Voucher</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Debit</TableHead>
                 <TableHead className="text-right">Credit</TableHead>
@@ -62,13 +63,14 @@ export default function LedgerPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
               ) : (ledger?.lines.length ?? 0) === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No postings for this account.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No postings for this account.</TableCell></TableRow>
               ) : (
                 ledger!.lines.map((l, i) => (
                   <TableRow key={`${l.transactionId}-${i}`}>
                     <TableCell className="tabular-nums text-muted-foreground">{String(l.occurredOn).slice(0, 10)}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{l.voucherNo ?? '—'}</TableCell>
                     <TableCell>{l.description}</TableCell>
                     <TableCell className="text-right tabular-nums">{l.debit.amountMinor ? formatMoney(l.debit.amountMinor, l.debit.currency) : '—'}</TableCell>
                     <TableCell className="text-right tabular-nums">{l.credit.amountMinor ? formatMoney(l.credit.amountMinor, l.credit.currency) : '—'}</TableCell>

@@ -4,12 +4,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_ACCOUNT_LEVELS,
   UnbalancedTransactionError,
+  VOUCHER_TYPES,
   assertBalanced,
   computeInvoiceTotals,
+  formatVoucherNo,
   normalBalance,
   signedBalanceMinor,
   trialColumns,
+  voucherLabel,
 } from '../src/modules/finance/finance.util';
 
 describe('assertBalanced (double-entry invariant)', () => {
@@ -99,6 +103,18 @@ describe('account normal-balance semantics', () => {
     expect(trialColumns(70000)).toEqual({ debitMinor: 70000, creditMinor: 0 });
     expect(trialColumns(-40000)).toEqual({ debitMinor: 0, creditMinor: 40000 });
     expect(trialColumns(0)).toEqual({ debitMinor: 0, creditMinor: 0 });
+  });
+
+  it('exposes the five voucher types and a 4-level cap', () => {
+    expect([...VOUCHER_TYPES]).toEqual(['BRV', 'BPV', 'CPV', 'CRV', 'JV']);
+    expect(MAX_ACCOUNT_LEVELS).toBe(4);
+    expect(voucherLabel('BRV')).toBe('Bank Receipt Voucher');
+    expect(voucherLabel('CPV')).toBe('Cash Payment Voucher');
+  });
+
+  it('formatVoucherNo zero-pads to a per-type running number', () => {
+    expect(formatVoucherNo('BRV', 1)).toBe('BRV-000001');
+    expect(formatVoucherNo('JV', 4242)).toBe('JV-004242');
   });
 
   it('a balanced ledger trial-balances to equal debit and credit totals', () => {

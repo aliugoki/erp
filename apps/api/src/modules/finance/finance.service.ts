@@ -20,9 +20,12 @@ import type {
 } from './dto/finance.dto';
 import {
   type AccountType,
+  MAX_ACCOUNT_LEVELS,
   UnbalancedTransactionError,
+  type VoucherType,
   assertBalanced,
   computeInvoiceTotals,
+  formatVoucherNo,
   normalBalance,
   signedBalanceMinor,
   trialColumns,
@@ -37,25 +40,36 @@ export class FinanceService {
     private readonly outbox: OutboxService,
   ) {}
 
-  // ── Chart of accounts (hierarchical) ─────────────────────────────────────────
+  // ── Chart of accounts (hierarchical, max 4 levels) ───────────────────────────
   async createAccount(dto: CreateAccountDto) {
     return this.tenantTx.run(async (m) => {
+      let level = 1;
+      let type = dto.type;
       if (dto.parentId) {
         const parent = (await m.query(
-          `SELECT is_group FROM finance_account WHERE id=$1 AND deleted_at IS NULL`,
+          `SELECT type, is_group, level FROM finance_account WHERE id=$1 AND deleted_at IS NULL`,
           [dto.parentId],
-        )) as Array<{ is_group: boolean }>;
+        )) as Array<{ type: string; is_group: boolean; level: number }>;
         if (!parent[0]) throw new BadRequestException('Parent account not found in this tenant');
         if (!parent[0].is_group) {
           throw new UnprocessableEntityException('Parent must be a group account');
         }
+        level = Number(parent[0].level) + 1;
+        if (level > MAX_ACCOUNT_LEVELS) {
+          throw new UnprocessableEntityException(`The chart of accounts is limited to ${MAX_ACCOUNT_LEVELS} levels`);
+        }
+        // Sub-accounts inherit their parent's type so a branch stays type-consistent.
+        type = parent[0].type;
+      } else if (!type) {
+        throw new BadRequestException('A root (level-1) account requires a type');
       }
+      const isGroup = dto.isGroup ?? false;
       try {
         const rows = (await m.query(
-          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5)
-           RETURNING id, code, name, type, parent_id, is_group`,
-          [dto.code, dto.name, dto.type, dto.parentId ?? null, dto.isGroup ?? false],
+          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
+           RETURNING id, code, name, type, parent_id, is_group, level`,
+          [dto.code, dto.name, type, dto.parentId ?? null, isGroup, level],
         )) as Row[];
         return mapAccount(rows[0]!);
       } catch (err) {
@@ -109,11 +123,23 @@ export class FinanceService {
         throw new UnprocessableEntityException('Cannot post to a group account — choose a leaf account');
       }
 
+      // Allocate the next per-tenant, per-type voucher number atomically.
+      const voucherType = (dto.voucherType ?? 'JV') as VoucherType;
+      const seq = (await m.query(
+        `INSERT INTO finance_voucher_seq (tenant_id, voucher_type, last_no)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, 1)
+         ON CONFLICT (tenant_id, voucher_type)
+           DO UPDATE SET last_no = finance_voucher_seq.last_no + 1
+         RETURNING last_no`,
+        [voucherType],
+      )) as Array<{ last_no: string }>;
+      const voucherNo = formatVoucherNo(voucherType, Number(seq[0]!.last_no));
+
       const txRows = (await m.query(
-        `INSERT INTO finance_transaction (tenant_id, description, occurred_on, reference)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, COALESCE($2::date, current_date), $3)
-         RETURNING id, description, occurred_on, reference`,
-        [dto.description, dto.occurredOn ?? null, dto.reference ?? null],
+        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reference)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, COALESCE($4::date, current_date), $5)
+         RETURNING id, description, voucher_type, voucher_no, occurred_on, reference`,
+        [dto.description, voucherType, voucherNo, dto.occurredOn ?? null, dto.reference ?? null],
       )) as Row[];
       const txn = txRows[0]!;
       try {
@@ -131,6 +157,8 @@ export class FinanceService {
       return {
         id: txn.id,
         description: txn.description,
+        voucherType: txn.voucher_type,
+        voucherNo: txn.voucher_no,
         occurredOn: txn.occurred_on,
         reference: txn.reference,
         totalDebitMinor: totals.debit,
@@ -143,7 +171,7 @@ export class FinanceService {
   async getTransaction(id: string) {
     return this.tenantTx.run(async (m) => {
       const tx = (await m.query(
-        `SELECT id, description, occurred_on, reference FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT id, description, voucher_type, voucher_no, occurred_on, reference FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
         [id],
       )) as Row[];
       if (!tx[0]) throw new NotFoundException('Transaction not found');
@@ -160,12 +188,13 @@ export class FinanceService {
     const { page, pageSize, limit, offset } = normalizePagination(query.page, query.pageSize);
     const conditions = ['t.deleted_at IS NULL'];
     const params: unknown[] = [];
+    if (query.voucherType) conditions.push(`t.voucher_type = $${params.push(query.voucherType)}`);
     if (query.from) conditions.push(`t.occurred_on >= $${params.push(query.from)}`);
     if (query.to) conditions.push(`t.occurred_on <= $${params.push(query.to)}`);
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT t.id, t.description, t.occurred_on, t.reference,
+        `SELECT t.id, t.description, t.voucher_type, t.voucher_no, t.occurred_on, t.reference,
                 COALESCE(SUM(je.debit_minor), 0)::bigint AS total_debit_minor,
                 COUNT(je.id)::int AS line_count
            FROM finance_transaction t
@@ -184,6 +213,8 @@ export class FinanceService {
         data: rows.map((r) => ({
           id: r.id,
           description: r.description,
+          voucherType: r.voucher_type,
+          voucherNo: r.voucher_no ?? null,
           occurredOn: r.occurred_on,
           reference: r.reference ?? null,
           lineCount: Number(r.line_count),
@@ -226,6 +257,7 @@ export class FinanceService {
       if (query.to) conditions.push(`t.occurred_on <= $${params.push(query.to)}`);
       const lineRows = (await m.query(
         `SELECT t.id AS transaction_id, t.occurred_on, t.description, t.reference,
+                t.voucher_type, t.voucher_no,
                 je.debit_minor, je.credit_minor,
                 SUM(je.debit_minor - je.credit_minor)
                   OVER (ORDER BY t.occurred_on, t.created_at, je.created_at
@@ -246,6 +278,8 @@ export class FinanceService {
           transactionId: r.transaction_id,
           occurredOn: r.occurred_on,
           description: r.description,
+          voucherType: r.voucher_type,
+          voucherNo: r.voucher_no ?? null,
           reference: r.reference ?? null,
           debit: money(r.debit_minor),
           credit: money(r.credit_minor),

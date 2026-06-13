@@ -48,6 +48,31 @@ export function assertBalanced(entries: JournalEntryInput[]): { debit: number; c
   return { debit, credit };
 }
 
+// ── Chart-of-accounts depth & voucher types ──────────────────────────────────────────────────────
+
+/** The classic 4-level chart of accounts: Main head → Control → Subsidiary → Detail. */
+export const MAX_ACCOUNT_LEVELS = 4;
+
+/** Voucher (transaction) types. BRV/CRV bring money in; BPV/CPV pay money out; JV is general. */
+export const VOUCHER_TYPES = ['BRV', 'BPV', 'CPV', 'CRV', 'JV'] as const;
+export type VoucherType = (typeof VOUCHER_TYPES)[number];
+
+const VOUCHER_LABELS: Record<VoucherType, string> = {
+  BRV: 'Bank Receipt Voucher',
+  BPV: 'Bank Payment Voucher',
+  CPV: 'Cash Payment Voucher',
+  CRV: 'Cash Receipt Voucher',
+  JV: 'Journal Voucher',
+};
+export function voucherLabel(t: VoucherType): string {
+  return VOUCHER_LABELS[t];
+}
+
+/** Format a per-type running number as a zero-padded voucher number, e.g. (BRV, 42) -> "BRV-000042". */
+export function formatVoucherNo(type: VoucherType, n: number): string {
+  return `${type}-${String(n).padStart(6, '0')}`;
+}
+
 // ── Account-type accounting semantics (pure; used by GL / trial balance / statements) ────────────
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';

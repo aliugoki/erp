@@ -40,9 +40,13 @@ export interface Account {
   level?: number;
 }
 
+export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
+
 export interface JournalTxn {
   id: string;
   description: string;
+  voucherType: VoucherType;
+  voucherNo: string | null;
   occurredOn: string;
   reference: string | null;
   lineCount: number;
@@ -53,6 +57,8 @@ export interface LedgerLine {
   transactionId: string;
   occurredOn: string;
   description: string;
+  voucherType: VoucherType;
+  voucherNo: string | null;
   reference: string | null;
   debit: Money;
   credit: Money;

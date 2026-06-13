@@ -29,7 +29,11 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
   const [f, setF] = useState({ code: '', name: '', type: 'ASSET' as AccountType, parentId: 'NONE', isGroup: false });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
 
-  const groups = accounts.filter((a) => a.isGroup);
+  // Only groups below the 4th level can be parents (a child must fit within 4 levels).
+  const groups = accounts.filter((a) => a.isGroup && (a.level ?? 1) < 4);
+  const parent = groups.find((g) => g.id === f.parentId);
+  const level = parent ? (parent.level ?? 1) + 1 : 1;
+  const effectiveType = parent ? parent.type : f.type;
 
   const create = useMutation({
     mutationFn: () =>
@@ -79,25 +83,29 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={f.type} onValueChange={(v) => set('type', v as AccountType)}>
+              <Label>Parent (group)</Label>
+              <Select value={f.parentId} onValueChange={(v) => set('parentId', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">— None (level-1 head) —</SelectItem>
+                  {groups.map((g) => <SelectItem key={g.id} value={g.id}>{'— '.repeat((g.level ?? 1) - 1)}{g.code} · {g.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Type {parent ? <span className="text-xs text-muted-foreground">(inherited)</span> : null}</Label>
+              <Select value={effectiveType} onValueChange={(v) => set('type', v as AccountType)} disabled={Boolean(parent)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Parent (group)</Label>
-              <Select value={f.parentId} onValueChange={(v) => set('parentId', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NONE">— None (root) —</SelectItem>
-                  {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.code} · {g.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            This will be a <span className="font-medium">level-{level}</span> account
+            {level === 4 ? ' (detail — postable).' : ' (mark it a group to nest children under it).'}
+          </p>
           <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
             <div>
               <Label htmlFor="isGroup">Group account</Label>
