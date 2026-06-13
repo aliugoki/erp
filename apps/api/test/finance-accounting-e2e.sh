@@ -160,6 +160,15 @@ post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"Bran
 check "cost-center P&L shows BR1 revenue = 5000" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(next((c['revenue']['amountMinor'] for c in d if c['code']=='BR1'),0))")" "5000"
 check "untagged income rolls up to Unassigned" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(any(c['name']=='Unassigned' for c in d))")" "True"
 
+echo "== recurring vouchers (before any period exists) =="
+REC=$(post "$MGR" finance/recurring "{\"description\":\"Monthly rent\",\"voucherType\":\"JV\",\"frequency\":\"MONTHLY\",\"nextRunDate\":\"2026-06-01\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":25000},{\"accountId\":\"$CASH\",\"creditMinor\":25000}]}" | jget data.id)
+[ -n "$REC" ] && echo "  ✅ recurring template created" && pass=$((pass+1)) || { echo "  ❌ recurring create failed"; fail=$((fail+1)); }
+RV=$(curl -s -XPOST "$B/finance/recurring/$REC/run" -H "Authorization: Bearer $MGR" | jget data.voucherNo)
+[ -n "$RV" ] && echo "  ✅ run generated voucher $RV" && pass=$((pass+1)) || { echo "  ❌ recurring run failed"; fail=$((fail+1)); }
+check "next run advanced (no longer 2026-06-01)" "$(get "$MGR" finance/recurring | python3 -c "import sys,json;print(next(r['nextRunDate'][:10] for r in json.load(sys.stdin)['data'] if r['id']=='$REC')!='2026-06-01')")" "True"
+post "$MGR" finance/recurring "{\"description\":\"Weekly fee\",\"frequency\":\"WEEKLY\",\"nextRunDate\":\"2026-06-05\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":1000},{\"accountId\":\"$CASH\",\"creditMinor\":1000}]}" >/dev/null
+check "run-due generates at least one" "$(curl -s -XPOST "$B/finance/recurring/run-due" -H "Authorization: Bearer $MGR" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['generated']>=1)")" "True"
+
 echo "== budget vs actual =="
 BP=$(post "$MGR" finance/periods '{"name":"Budget Month","startDate":"2026-06-01","endDate":"2026-06-30"}' | jget data.id)
 BREV=$(post "$MGR" finance/accounts '{"code":"4999","name":"Budgeted Sales","type":"REVENUE"}' | jget data.id)

@@ -18,6 +18,7 @@ import type {
   CreateCostCenterDto,
   CreateInvoiceDto,
   CreatePeriodDto,
+  CreateRecurringDto,
   CreateTransactionDto,
   CreateVendorDto,
   SetBudgetDto,
@@ -40,10 +41,12 @@ import {
   UnbalancedTransactionError,
   type VoucherType,
   VoucherValidationError,
+  type Frequency,
   agingBucket,
   assertBalanced,
   assertVoucherType,
   cashFlowSection,
+  frequencyInterval,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -1031,6 +1034,96 @@ export class FinanceService {
     return { posted: true, voucherNo: txn.voucherNo ?? null, netIncomeMinor, closedAccounts: entries.length - 1 };
   }
 
+  // ── Recurring vouchers ───────────────────────────────────────────────────────
+  async createRecurring(dto: CreateRecurringDto) {
+    try {
+      assertBalanced(dto.entries);
+    } catch (err) {
+      if (err instanceof UnbalancedTransactionError) throw new UnprocessableEntityException(err.message);
+      throw err;
+    }
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO recurring_voucher (tenant_id, description, voucher_type, frequency, next_run_date, end_date, entries)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6::jsonb)
+         RETURNING id, description, voucher_type, frequency, next_run_date::text AS next_run_date, end_date::text AS end_date, active, entries`,
+        [dto.description, dto.voucherType ?? 'JV', dto.frequency, dto.nextRunDate, dto.endDate ?? null, JSON.stringify(dto.entries)],
+      )) as Row[];
+      return mapRecurring(rows[0]!);
+    });
+  }
+
+  async listRecurring() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, description, voucher_type, frequency, next_run_date::text AS next_run_date, end_date::text AS end_date, active, entries
+           FROM recurring_voucher WHERE deleted_at IS NULL ORDER BY active DESC, next_run_date`,
+      )) as Row[];
+      return rows.map(mapRecurring);
+    });
+  }
+
+  /** Generate one voucher from a recurring template and advance its schedule. */
+  async runRecurring(id: string) {
+    const tpl = await this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, description, voucher_type, frequency, next_run_date::text AS next_run_date, end_date, active, entries
+           FROM recurring_voucher WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      return rows[0];
+    });
+    if (!tpl) throw new NotFoundException('Recurring voucher not found');
+    if (!tpl.active) throw new UnprocessableEntityException('Recurring voucher is not active');
+
+    const entries = (tpl.entries as Array<{ accountId: string; debitMinor?: number; creditMinor?: number; costCenterId?: string }>);
+    const occurredOn = String(tpl.next_run_date).slice(0, 10); // next_run_date is selected ::text (YYYY-MM-DD)
+    const txn = (await this.createTransaction({
+      description: tpl.description as string,
+      voucherType: tpl.voucher_type as string,
+      occurredOn,
+      entries,
+    } as CreateTransactionDto)) as { voucherNo?: string };
+
+    const interval = frequencyInterval(tpl.frequency as Frequency);
+    const updated = await this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `UPDATE recurring_voucher
+            SET next_run_date = (next_run_date + $2::interval)::date,
+                active = CASE WHEN end_date IS NOT NULL AND (next_run_date + $2::interval)::date > end_date THEN false ELSE active END,
+                updated_at = now()
+          WHERE id=$1
+          RETURNING next_run_date::text AS next_run_date, active`,
+        [id, interval],
+      )) as Row[];
+      return rows[0]!;
+    });
+    return { voucherNo: txn.voucherNo ?? null, occurredOn, nextRunDate: updated.next_run_date, active: updated.active };
+  }
+
+  /** Generate vouchers for every active template whose next run is due (≤ today). */
+  async runDue() {
+    const due = await this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id FROM recurring_voucher
+          WHERE deleted_at IS NULL AND active = true AND next_run_date <= current_date
+            AND (end_date IS NULL OR next_run_date <= end_date)`,
+      )) as Array<{ id: string }>;
+      return rows.map((r) => r.id);
+    });
+    const generated: Array<{ id: string; voucherNo: string | null }> = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+    for (const id of due) {
+      try {
+        const r = await this.runRecurring(id);
+        generated.push({ id, voucherNo: r.voucherNo });
+      } catch (err) {
+        skipped.push({ id, reason: err instanceof Error ? err.message : 'error' });
+      }
+    }
+    return { generated: generated.length, vouchers: generated, skipped };
+  }
+
   // ── Accounts Payable (vendors / bills / payments) ────────────────────────────
   async createVendor(dto: CreateVendorDto) {
     return this.tenantTx.run(async (m) => {
@@ -1295,6 +1388,19 @@ function mapAccount(r: Row) {
     bankName: r.bank_name ?? null,
     accountNumber: r.account_number ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
+  };
+}
+
+function mapRecurring(r: Row) {
+  return {
+    id: r.id,
+    description: r.description,
+    voucherType: r.voucher_type,
+    frequency: r.frequency,
+    nextRunDate: r.next_run_date,
+    endDate: r.end_date ?? null,
+    active: r.active,
+    entries: r.entries,
   };
 }
 

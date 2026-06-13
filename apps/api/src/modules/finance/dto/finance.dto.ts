@@ -110,6 +110,19 @@ export class YearEndCloseDto {
   @IsUUID() retainedEarningsAccountId!: string;
 }
 
+export class CreateRecurringDto {
+  @IsString() @MinLength(1) description!: string;
+  @IsOptional() @IsIn(['BRV', 'BPV', 'CPV', 'CRV', 'JV']) voucherType?: string;
+  @IsIn(['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) frequency!: string;
+  @IsISO8601() nextRunDate!: string;
+  @IsOptional() @IsISO8601() endDate?: string;
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => JournalEntryDto)
+  entries!: JournalEntryDto[];
+}
+
 export class CreateTransactionDto {
   @IsString() @MinLength(1) description!: string;
   /** Voucher type — BRV/BPV/CPV/CRV/JV. Defaults to JV (general journal voucher). */

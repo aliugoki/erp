@@ -108,6 +108,18 @@ export interface BudgetVsActual {
 }
 
 export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
+export type Frequency = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+
+export interface Recurring {
+  id: string;
+  description: string;
+  voucherType: VoucherType;
+  frequency: Frequency;
+  nextRunDate: string;
+  endDate: string | null;
+  active: boolean;
+  entries: { accountId: string; debitMinor?: number; creditMinor?: number; costCenterId?: string }[];
+}
 
 export interface JournalTxn {
   id: string;

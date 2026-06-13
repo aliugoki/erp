@@ -73,6 +73,14 @@ export function formatVoucherNo(type: VoucherType, n: number): string {
   return `${type}-${String(n).padStart(6, '0')}`;
 }
 
+/** Recurring-voucher schedule frequencies and their Postgres interval. */
+export const FREQUENCIES = ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'] as const;
+export type Frequency = (typeof FREQUENCIES)[number];
+
+export function frequencyInterval(f: Frequency): string {
+  return { WEEKLY: '1 week', MONTHLY: '1 month', QUARTERLY: '3 months', YEARLY: '1 year' }[f];
+}
+
 /** How an account participates in cash/bank books and voucher validation. */
 export type ControlType = 'NONE' | 'CASH' | 'BANK';
 export const CONTROL_TYPES: ControlType[] = ['NONE', 'CASH', 'BANK'];

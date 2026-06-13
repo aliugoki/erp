@@ -12,6 +12,7 @@ import {
   assertBalanced,
   assertVoucherType,
   cashFlowSection,
+  frequencyInterval,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -136,6 +137,13 @@ describe('account normal-balance semantics', () => {
     expect(() => assertVoucherType('CPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).toThrow(VoucherValidationError);
     // JV has no cash/bank constraint.
     expect(() => assertVoucherType('JV', [other, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+  });
+
+  it('frequencyInterval maps schedule to a Postgres interval', () => {
+    expect(frequencyInterval('WEEKLY')).toBe('1 week');
+    expect(frequencyInterval('MONTHLY')).toBe('1 month');
+    expect(frequencyInterval('QUARTERLY')).toBe('3 months');
+    expect(frequencyInterval('YEARLY')).toBe('1 year');
   });
 
   it('cashFlowSection classifies cash movements by counterpart account', () => {

@@ -24,6 +24,7 @@ import {
   CreateCostCenterDto,
   CreateInvoiceDto,
   CreatePeriodDto,
+  CreateRecurringDto,
   CreateTransactionDto,
   CreateVendorDto,
   SetBudgetDto,
@@ -90,6 +91,33 @@ export class FinanceController {
   @HttpCode(HttpStatus.CREATED)
   yearEndClose(@Body() dto: YearEndCloseDto) {
     return this.finance.yearEndClose(dto);
+  }
+
+  // Recurring vouchers
+  @Get('recurring')
+  listRecurring() {
+    return this.finance.listRecurring();
+  }
+
+  @Post('recurring')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createRecurring(@Body() dto: CreateRecurringDto) {
+    return this.finance.createRecurring(dto);
+  }
+
+  @Post('recurring/:id/run')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  runRecurring(@Param('id', ParseUUIDPipe) id: string) {
+    return this.finance.runRecurring(id);
+  }
+
+  @Post('recurring/run-due')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  runDue() {
+    return this.finance.runDue();
   }
 
   // Cash & Bank book
