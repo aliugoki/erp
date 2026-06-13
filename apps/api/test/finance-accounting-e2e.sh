@@ -110,6 +110,29 @@ check "reversing again -> 422 (already reversed)" "$(code -XPOST "$B/finance/tra
 echo "== cash & bank book =="
 check "cash book lists cash + bank accounts" "$(get "$MGR" finance/cash-book | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['accounts']))")" "2"
 
+echo "== maker/checker draft workflow =="
+DRES=$(post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"Draft entry\",\"draft\":true,\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":12345},{\"accountId\":\"$REV\",\"creditMinor\":12345}]}")
+DID=$(echo "$DRES" | jget data.id)
+check "voucher saved as DRAFT" "$(echo "$DRES" | jget data.status)" "DRAFT"
+check "draft is under status=DRAFT" "$(get "$MGR" "finance/transactions?status=DRAFT" | python3 -c "import sys,json;print('$DID' in [t['id'] for t in json.load(sys.stdin)['data']])")" "True"
+check "draft NOT under status=POSTED" "$(get "$MGR" "finance/transactions?status=POSTED" | python3 -c "import sys,json;print('$DID' in [t['id'] for t in json.load(sys.stdin)['data']])")" "False"
+check "post (approve) the draft -> 201" "$(code -XPOST "$B/finance/transactions/$DID/post" -H "Authorization: Bearer $MGR")" "201"
+check "posted draft now under status=POSTED" "$(get "$MGR" "finance/transactions?status=POSTED" | python3 -c "import sys,json;print('$DID' in [t['id'] for t in json.load(sys.stdin)['data']])")" "True"
+D2=$(post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"Draft to discard\",\"draft\":true,\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":1},{\"accountId\":\"$REV\",\"creditMinor\":1}]}" | jget data.id)
+check "discard a draft -> 200" "$(code -XDELETE "$B/finance/transactions/$D2" -H "Authorization: Bearer $MGR")" "200"
+
+echo "== AR aging =="
+post "$MGR" finance/invoices "{\"number\":\"INV-AGE-1\",\"lineItems\":[{\"description\":\"Old sale\",\"quantity\":1,\"unitPriceMinor\":50000}],\"dueDate\":\"2020-01-01\"}" >/dev/null
+check "AR aging total = 50000 (one outstanding invoice)" "$(get "$MGR" finance/ar-aging | jget data.totals.total)" "50000"
+check "overdue invoice falls in the 90+ bucket" "$(get "$MGR" finance/ar-aging | jget data.totals.d90_plus)" "50000"
+
+echo "== bank reconciliation =="
+check "bank book balance = 3000 (two BRVs)" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.bookBalance.amountMinor)" "3000"
+E1=$(get "$MGR" "finance/reconciliation/$BANK" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['entries'][0]['entryId'])")
+curl -s -o /dev/null -XPOST "$B/finance/reconciliation" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"entryIds\":[\"$E1\"],\"reconciled\":true}"
+check "cleared balance = 1000 after clearing one entry" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.clearedBalance.amountMinor)" "1000"
+check "uncleared count = 1" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.unclearedCount)" "1"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

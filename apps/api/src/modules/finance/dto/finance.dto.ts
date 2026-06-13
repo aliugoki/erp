@@ -57,6 +57,7 @@ export class CashBookQueryDto {
 
 export class ListTransactionsQueryDto {
   @IsOptional() @IsIn(['BRV', 'BPV', 'CPV', 'CRV', 'JV']) voucherType?: string;
+  @IsOptional() @IsIn(['DRAFT', 'POSTED']) status?: string;
   @IsOptional() @IsISO8601() from?: string;
   @IsOptional() @IsISO8601() to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
@@ -92,11 +93,23 @@ export class CreateTransactionDto {
   @IsOptional() @IsIn(['BRV', 'BPV', 'CPV', 'CRV', 'JV']) voucherType?: string;
   @IsOptional() @IsISO8601() occurredOn?: string;
   @IsOptional() @IsString() reference?: string;
+  /** Save as a DRAFT (maker) instead of posting immediately. Drafts don't hit the ledger until posted. */
+  @IsOptional() @IsBoolean() draft?: boolean;
   @IsArray()
   @ArrayMinSize(2)
   @ValidateNested({ each: true })
   @Type(() => JournalEntryDto)
   entries!: JournalEntryDto[];
+}
+
+/** Mark/unmark bank or cash postings as cleared on a statement (bank reconciliation). */
+export class ReconcileDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  entryIds!: string[];
+  @IsBoolean() reconciled!: boolean;
+  @IsOptional() @IsISO8601() reconciledAt?: string;
 }
 
 export class InvoiceLineDto {

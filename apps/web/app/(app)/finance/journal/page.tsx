@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, NotebookPen, RotateCcw } from 'lucide-react';
-import { ApiError, apiList, apiPost } from '@/lib/api';
+import { Check, ChevronLeft, ChevronRight, NotebookPen, RotateCcw, Trash2 } from 'lucide-react';
+import { ApiError, apiDelete, apiList, apiPost } from '@/lib/api';
 import type { JournalTxn } from '@/lib/types';
 import { VOUCHER_TYPES } from '@/lib/finance';
 import { cn, formatMoney } from '@/lib/utils';
@@ -44,6 +44,23 @@ export default function JournalPage() {
     onError: (e) => toast.error('Could not reverse', { description: e instanceof ApiError ? e.message : '' }),
   });
 
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ['transactions'] });
+    qc.invalidateQueries({ queryKey: ['ledger'] });
+    qc.invalidateQueries({ queryKey: ['reports'] });
+    qc.invalidateQueries({ queryKey: ['cash-book'] });
+  };
+  const post = useMutation({
+    mutationFn: (id: string) => apiPost(`/finance/transactions/${id}/post`),
+    onSuccess: () => { toast.success('Voucher posted'); invalidateAll(); },
+    onError: (e) => toast.error('Could not post', { description: e instanceof ApiError ? e.message : '' }),
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => apiDelete(`/finance/transactions/${id}`),
+    onSuccess: () => { toast.success('Draft discarded'); invalidateAll(); },
+    onError: (e) => toast.error('Could not delete', { description: e instanceof ApiError ? e.message : '' }),
+  });
+
   const rows = data?.data ?? [];
   const total = data?.meta.pagination.total ?? 0;
   const totalPages = data?.meta.pagination.totalPages ?? 1;
@@ -68,6 +85,7 @@ export default function JournalPage() {
             <TableRow>
               <TableHead>Voucher #</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
               <TableHead className="text-center">Lines</TableHead>
@@ -81,6 +99,7 @@ export default function JournalPage() {
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                     <TableCell><Skeleton className="mx-auto h-4 w-6" /></TableCell>
@@ -92,12 +111,22 @@ export default function JournalPage() {
                   <TableRow key={t.id}>
                     <TableCell className="font-mono text-xs">{t.voucherNo ?? '—'}</TableCell>
                     <TableCell><Badge variant="secondary">{t.voucherType}</Badge></TableCell>
+                    <TableCell><Badge variant={t.status === 'DRAFT' ? 'warning' : 'success'}>{t.status}</Badge></TableCell>
                     <TableCell className="tabular-nums text-muted-foreground">{String(t.occurredOn).slice(0, 10)}</TableCell>
                     <TableCell className="font-medium">{t.description}</TableCell>
                     <TableCell className="text-center tabular-nums">{t.lineCount}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(t.total.amountMinor, t.total.currency)}</TableCell>
                     <TableCell className="text-right">
-                      {t.reversedById ? (
+                      {t.status === 'DRAFT' ? (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="outline" disabled={post.isPending} onClick={() => post.mutate(t.id)}>
+                            <Check className="size-4" /> Post
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={del.isPending} onClick={() => del.mutate(t.id)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      ) : t.reversedById ? (
                         <Badge variant="warning">Reversed</Badge>
                       ) : t.reversesId ? (
                         <Badge variant="secondary">Contra</Badge>

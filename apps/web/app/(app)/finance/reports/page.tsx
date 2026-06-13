@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { BalanceSheet, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import type { AgingBucketKey, ArAging, BalanceSheet, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -11,7 +11,11 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-type View = 'trial' | 'balance' | 'income';
+type View = 'trial' | 'balance' | 'income' | 'aging';
+
+const BUCKET_LABEL: Record<AgingBucketKey, string> = {
+  current: 'Current', d1_30: '1–30 days', d31_60: '31–60 days', d61_90: '61–90 days', d90_plus: '90+ days',
+};
 
 function BalancedBadge({ ok }: { ok: boolean }) {
   return (
@@ -54,6 +58,7 @@ export default function ReportsPage() {
   const trial = useQuery({ queryKey: ['reports', 'trial'], queryFn: () => apiGet<TrialBalance>('/finance/trial-balance'), enabled: view === 'trial' });
   const balance = useQuery({ queryKey: ['reports', 'balance'], queryFn: () => apiGet<BalanceSheet>('/finance/statements/balance-sheet'), enabled: view === 'balance' });
   const income = useQuery({ queryKey: ['reports', 'income'], queryFn: () => apiGet<IncomeStatement>('/finance/statements/income'), enabled: view === 'income' });
+  const aging = useQuery({ queryKey: ['reports', 'aging'], queryFn: () => apiGet<ArAging>('/finance/ar-aging'), enabled: view === 'aging' });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
@@ -67,6 +72,7 @@ export default function ReportsPage() {
             <SelectItem value="trial">Trial Balance</SelectItem>
             <SelectItem value="balance">Balance Sheet</SelectItem>
             <SelectItem value="income">Income Statement</SelectItem>
+            <SelectItem value="aging">AR Aging</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -139,6 +145,50 @@ export default function ReportsPage() {
             <span className="font-semibold">Net income</span>
             <span className="text-lg font-semibold tabular-nums">{formatMoney(income.data.netIncomeMinor)}</span>
           </div>
+        </Card>
+      ) : null}
+
+      {view === 'aging' && aging.data ? (
+        <Card className="space-y-6 p-6">
+          <span className="font-medium">Accounts Receivable Aging</span>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {aging.data.buckets.map((b) => (
+              <div key={b} className="rounded-lg border p-3 text-center">
+                <p className="text-xs text-muted-foreground">{BUCKET_LABEL[b]}</p>
+                <p className="mt-1 font-semibold tabular-nums">{formatMoney(aging.data!.totals[b])}</p>
+              </div>
+            ))}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="text-center">Days past due</TableHead>
+                <TableHead>Bucket</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {aging.data.invoices.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No outstanding invoices.</TableCell></TableRow>
+              ) : (
+                aging.data.invoices.map((iv) => (
+                  <TableRow key={iv.invoiceId}>
+                    <TableCell className="font-medium">{iv.number}</TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">{String(iv.dueDate).slice(0, 10)}</TableCell>
+                    <TableCell className="text-center tabular-nums">{iv.daysPastDue > 0 ? iv.daysPastDue : '—'}</TableCell>
+                    <TableCell>{BUCKET_LABEL[iv.bucket]}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(iv.amount.amountMinor, iv.amount.currency)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+              <TableRow className="border-t-2">
+                <TableCell className="font-semibold" colSpan={4}>Total outstanding</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatMoney(aging.data.totals.total)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </Card>
       ) : null}
     </div>

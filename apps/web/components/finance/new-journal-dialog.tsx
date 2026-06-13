@@ -64,18 +64,19 @@ export function NewJournalDialog() {
     lines.every((l) => l.accountId && (toMinor(l.debit) > 0) !== (toMinor(l.credit) > 0));
 
   const create = useMutation({
-    mutationFn: () =>
-      apiPost('/finance/transactions', {
+    mutationFn: (draft: boolean) =>
+      apiPost<{ status: string }>('/finance/transactions', {
         description,
         voucherType,
+        draft,
         ...(reference ? { reference } : {}),
         entries: lines.map((l) => ({
           accountId: l.accountId,
           ...(toMinor(l.debit) > 0 ? { debitMinor: toMinor(l.debit) } : { creditMinor: toMinor(l.credit) }),
         })),
       }),
-    onSuccess: () => {
-      toast.success('Journal entry posted', { description });
+    onSuccess: (r) => {
+      toast.success(r.status === 'DRAFT' ? 'Draft saved' : 'Journal entry posted', { description });
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['ledger'] });
       qc.invalidateQueries({ queryKey: ['reports'] });
@@ -90,7 +91,7 @@ export function NewJournalDialog() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    create.mutate();
+    create.mutate(false);
   }
 
   return (
@@ -179,7 +180,8 @@ export function NewJournalDialog() {
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={!valid || create.isPending}>{create.isPending ? 'Posting…' : 'Post entry'}</Button>
+            <Button type="button" variant="outline" disabled={!valid || create.isPending} onClick={() => create.mutate(true)}>Save as draft</Button>
+            <Button type="submit" disabled={!valid || create.isPending}>{create.isPending ? 'Saving…' : 'Post entry'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

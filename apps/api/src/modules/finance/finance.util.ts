@@ -116,6 +116,20 @@ export function assertVoucherType(type: VoucherType, lines: VoucherLine[]): void
   }
 }
 
+// ── Aging buckets (AR/AP) ─────────────────────────────────────────────────────────────────────
+
+export const AGING_BUCKETS = ['current', 'd1_30', 'd31_60', 'd61_90', 'd90_plus'] as const;
+export type AgingBucket = (typeof AGING_BUCKETS)[number];
+
+/** Classify an outstanding item by how many days past its due date it is (negative = not yet due). */
+export function agingBucket(daysPastDue: number): AgingBucket {
+  if (daysPastDue <= 0) return 'current';
+  if (daysPastDue <= 30) return 'd1_30';
+  if (daysPastDue <= 60) return 'd31_60';
+  if (daysPastDue <= 90) return 'd61_90';
+  return 'd90_plus';
+}
+
 // ── Account-type accounting semantics (pure; used by GL / trial balance / statements) ────────────
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';

@@ -8,6 +8,7 @@ import {
   UnbalancedTransactionError,
   VOUCHER_TYPES,
   VoucherValidationError,
+  agingBucket,
   assertBalanced,
   assertVoucherType,
   computeInvoiceTotals,
@@ -134,6 +135,17 @@ describe('account normal-balance semantics', () => {
     expect(() => assertVoucherType('CPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).toThrow(VoucherValidationError);
     // JV has no cash/bank constraint.
     expect(() => assertVoucherType('JV', [other, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+  });
+
+  it('agingBucket classifies by days past due', () => {
+    expect(agingBucket(-5)).toBe('current');
+    expect(agingBucket(0)).toBe('current');
+    expect(agingBucket(1)).toBe('d1_30');
+    expect(agingBucket(30)).toBe('d1_30');
+    expect(agingBucket(31)).toBe('d31_60');
+    expect(agingBucket(60)).toBe('d31_60');
+    expect(agingBucket(61)).toBe('d61_90');
+    expect(agingBucket(91)).toBe('d90_plus');
   });
 
   it('a balanced ledger trial-balances to equal debit and credit totals', () => {

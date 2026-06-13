@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -24,6 +25,7 @@ import {
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
+  ReconcileDto,
   UpdateAccountDto,
   UpdatePeriodDto,
 } from './dto/finance.dto';
@@ -81,6 +83,24 @@ export class FinanceController {
     return this.finance.cashBook(query);
   }
 
+  // Accounts-receivable aging
+  @Get('ar-aging')
+  arAging(@Query() query: AsOfQueryDto) {
+    return this.finance.arAging(query);
+  }
+
+  // Bank reconciliation
+  @Get('reconciliation/:accountId')
+  reconciliation(@Param('accountId', ParseUUIDPipe) accountId: string) {
+    return this.finance.reconciliation(accountId);
+  }
+
+  @Post('reconciliation')
+  @Roles(...WRITE)
+  setReconciled(@Body() dto: ReconcileDto) {
+    return this.finance.setReconciled(dto);
+  }
+
   // Transactions (journal entries)
   @Get('transactions')
   listTransactions(@Query() query: ListTransactionsQueryDto) {
@@ -104,6 +124,18 @@ export class FinanceController {
   @HttpCode(HttpStatus.CREATED)
   reverseTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.reverseTransaction(id);
+  }
+
+  @Post('transactions/:id/post')
+  @Roles(...WRITE)
+  postTransaction(@Param('id', ParseUUIDPipe) id: string) {
+    return this.finance.postTransaction(id);
+  }
+
+  @Delete('transactions/:id')
+  @Roles(...WRITE)
+  deleteDraft(@Param('id', ParseUUIDPipe) id: string) {
+    return this.finance.deleteDraft(id);
   }
 
   // General ledger & financial statements (read-only)

@@ -19,16 +19,20 @@ import type {
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
+  ReconcileDto,
   UpdateAccountDto,
   UpdatePeriodDto,
 } from './dto/finance.dto';
 import {
   type AccountType,
+  AGING_BUCKETS,
+  type AgingBucket,
   type ControlType,
   MAX_ACCOUNT_LEVELS,
   UnbalancedTransactionError,
   type VoucherType,
   VoucherValidationError,
+  agingBucket,
   assertBalanced,
   assertVoucherType,
   computeInvoiceTotals,
@@ -180,8 +184,12 @@ export class FinanceService {
         throw err;
       }
 
-      // Period lock: once fiscal periods exist, the date must fall inside an OPEN one.
-      await this.assertOpenPeriod(m, dto.occurredOn);
+      // DRAFT vouchers (maker) don't hit the ledger and skip the period lock until posted.
+      const status = dto.draft ? 'DRAFT' : 'POSTED';
+      if (status === 'POSTED') {
+        // Period lock: once fiscal periods exist, the date must fall inside an OPEN one.
+        await this.assertOpenPeriod(m, dto.occurredOn);
+      }
 
       // Allocate the next per-tenant, per-type voucher number atomically.
       const seq = (await m.query(
@@ -195,10 +203,10 @@ export class FinanceService {
       const voucherNo = formatVoucherNo(voucherType, Number(seq[0]!.last_no));
 
       const txRows = (await m.query(
-        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reference)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, COALESCE($4::date, current_date), $5)
-         RETURNING id, description, voucher_type, voucher_no, occurred_on, reference`,
-        [dto.description, voucherType, voucherNo, dto.occurredOn ?? null, dto.reference ?? null],
+        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reference, status, posted_at)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, COALESCE($4::date, current_date), $5, $6, CASE WHEN $6='POSTED' THEN now() ELSE NULL END)
+         RETURNING id, description, voucher_type, voucher_no, occurred_on, reference, status`,
+        [dto.description, voucherType, voucherNo, dto.occurredOn ?? null, dto.reference ?? null, status],
       )) as Row[];
       const txn = txRows[0]!;
       try {
@@ -218,12 +226,42 @@ export class FinanceService {
         description: txn.description,
         voucherType: txn.voucher_type,
         voucherNo: txn.voucher_no,
+        status: txn.status,
         occurredOn: txn.occurred_on,
         reference: txn.reference,
         totalDebitMinor: totals.debit,
         totalCreditMinor: totals.credit,
         entries: dto.entries,
       };
+    });
+  }
+
+  /** Approve a DRAFT voucher → POSTED (subject to the period lock). The checker half of maker/checker. */
+  async postTransaction(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, status, occurred_on FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ id: string; status: string; occurred_on: string }>;
+      if (!rows[0]) throw new NotFoundException('Transaction not found');
+      if (rows[0].status === 'POSTED') throw new UnprocessableEntityException('Voucher is already posted');
+      await this.assertOpenPeriod(m, rows[0].occurred_on);
+      await m.query(`UPDATE finance_transaction SET status='POSTED', posted_at=now(), updated_at=now() WHERE id=$1`, [id]);
+      return { id, status: 'POSTED' };
+    });
+  }
+
+  /** Discard a DRAFT voucher (soft delete). Posted vouchers must be reversed, never deleted. */
+  async deleteDraft(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT status FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ status: string }>;
+      if (!rows[0]) throw new NotFoundException('Transaction not found');
+      if (rows[0].status !== 'DRAFT') throw new UnprocessableEntityException('Only a draft can be deleted; post is reversed');
+      await m.query(`UPDATE finance_transaction SET deleted_at=now() WHERE id=$1`, [id]);
+      return { id, deleted: true };
     });
   }
 
@@ -246,10 +284,11 @@ export class FinanceService {
   async reverseTransaction(id: string) {
     return this.tenantTx.run(async (m) => {
       const orig = (await m.query(
-        `SELECT id, voucher_no, reversed_by_id FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT id, voucher_no, reversed_by_id, status FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
         [id],
-      )) as Array<{ id: string; voucher_no: string | null; reversed_by_id: string | null }>;
+      )) as Array<{ id: string; voucher_no: string | null; reversed_by_id: string | null; status: string }>;
       if (!orig[0]) throw new NotFoundException('Transaction not found');
+      if (orig[0].status !== 'POSTED') throw new UnprocessableEntityException('Only a posted voucher can be reversed');
       if (orig[0].reversed_by_id) throw new UnprocessableEntityException('This voucher has already been reversed');
       const entries = (await m.query(
         `SELECT account_id, debit_minor, credit_minor FROM finance_journal_entry WHERE transaction_id=$1`,
@@ -266,8 +305,8 @@ export class FinanceService {
       )) as Array<{ last_no: string }>;
       const voucherNo = formatVoucherNo('JV', Number(seq[0]!.last_no));
       const rev = (await m.query(
-        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reverses_id)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, 'JV', $2, current_date, $3)
+        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reverses_id, status, posted_at)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, 'JV', $2, current_date, $3, 'POSTED', now())
          RETURNING id`,
         [`Reversal of ${orig[0].voucher_no ?? id}`, voucherNo, id],
       )) as Row[];
@@ -355,7 +394,7 @@ export class FinanceService {
                                   THEN je.credit_minor ELSE 0 END), 0)::bigint AS payments
            FROM finance_account a
            LEFT JOIN finance_journal_entry je ON je.account_id = a.id
-           LEFT JOIN finance_transaction t ON t.id = je.transaction_id AND t.deleted_at IS NULL
+           LEFT JOIN finance_transaction t ON t.id = je.transaction_id AND t.deleted_at IS NULL AND t.status='POSTED'
           WHERE a.deleted_at IS NULL AND a.control_type IN ('CASH','BANK')
           GROUP BY a.id
           ORDER BY a.control_type, a.code`,
@@ -393,12 +432,13 @@ export class FinanceService {
     const conditions = ['t.deleted_at IS NULL'];
     const params: unknown[] = [];
     if (query.voucherType) conditions.push(`t.voucher_type = $${params.push(query.voucherType)}`);
+    if (query.status) conditions.push(`t.status = $${params.push(query.status)}`);
     if (query.from) conditions.push(`t.occurred_on >= $${params.push(query.from)}`);
     if (query.to) conditions.push(`t.occurred_on <= $${params.push(query.to)}`);
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT t.id, t.description, t.voucher_type, t.voucher_no, t.occurred_on, t.reference,
+        `SELECT t.id, t.description, t.voucher_type, t.voucher_no, t.status, t.occurred_on, t.reference,
                 t.reverses_id, t.reversed_by_id,
                 COALESCE(SUM(je.debit_minor), 0)::bigint AS total_debit_minor,
                 COUNT(je.id)::int AS line_count
@@ -420,6 +460,7 @@ export class FinanceService {
           description: r.description,
           voucherType: r.voucher_type,
           voucherNo: r.voucher_no ?? null,
+          status: r.status,
           occurredOn: r.occurred_on,
           reference: r.reference ?? null,
           reversesId: r.reverses_id ?? null,
@@ -452,13 +493,13 @@ export class FinanceService {
           `SELECT COALESCE(SUM(je.debit_minor - je.credit_minor), 0)::bigint AS raw
              FROM finance_journal_entry je
              JOIN finance_transaction t ON t.id = je.transaction_id
-            WHERE je.account_id=$1 AND t.deleted_at IS NULL AND t.occurred_on < $2`,
+            WHERE je.account_id=$1 AND t.deleted_at IS NULL AND t.status='POSTED' AND t.occurred_on < $2`,
           [accountId, query.from],
         )) as Array<{ raw: string }>;
         openingRaw = Number(op[0]?.raw ?? 0);
       }
 
-      const conditions = ['je.account_id = $1', 't.deleted_at IS NULL'];
+      const conditions = ['je.account_id = $1', "t.deleted_at IS NULL", "t.status = 'POSTED'"];
       const params: unknown[] = [accountId];
       if (query.from) conditions.push(`t.occurred_on >= $${params.push(query.from)}`);
       if (query.to) conditions.push(`t.occurred_on <= $${params.push(query.to)}`);
@@ -510,7 +551,7 @@ export class FinanceService {
     onlyTypes?: AccountType[],
     range?: { from?: string; to?: string },
   ): Promise<Array<{ id: string; code: string; name: string; type: AccountType; debit: number; credit: number }>> {
-    const conditions = ['a.deleted_at IS NULL', 'a.is_group = false', 't.deleted_at IS NULL'];
+    const conditions = ['a.deleted_at IS NULL', 'a.is_group = false', 't.deleted_at IS NULL', "t.status = 'POSTED'"];
     const params: unknown[] = [];
     if (upTo) conditions.push(`t.occurred_on <= $${params.push(upTo)}`);
     if (range?.from) conditions.push(`t.occurred_on >= $${params.push(range.from)}`);
@@ -614,6 +655,99 @@ export class FinanceService {
         expenses: { lines: expenses, totalMinor: totalExpenses },
         netIncomeMinor: totalRevenue - totalExpenses,
       };
+    });
+  }
+
+  /** Accounts-receivable aging: outstanding invoices bucketed by days past due. */
+  async arAging(query: AsOfQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const asOf = query.asOf ? new Date(query.asOf) : new Date();
+      const rows = (await m.query(
+        `SELECT id, number, client_id, total_minor, currency, due_date, created_at::date AS created_on
+           FROM finance_invoice
+          WHERE deleted_at IS NULL AND status NOT IN ('PAID','VOID')`,
+      )) as Row[];
+      const totals: Record<AgingBucket | 'total', number> = {
+        current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0, total: 0,
+      };
+      const invoices = rows.map((r) => {
+        const due = new Date((r.due_date ?? r.created_on) as string);
+        const daysPastDue = Math.floor((asOf.getTime() - due.getTime()) / 86_400_000);
+        const bucket = agingBucket(daysPastDue);
+        const amountMinor = Number(r.total_minor);
+        totals[bucket] += amountMinor;
+        totals.total += amountMinor;
+        return {
+          invoiceId: r.id,
+          number: r.number,
+          clientId: r.client_id ?? null,
+          dueDate: r.due_date ?? r.created_on,
+          daysPastDue,
+          bucket,
+          amount: money(amountMinor, r.currency as string),
+        };
+      });
+      return { asOf: query.asOf ?? null, buckets: [...AGING_BUCKETS], totals, invoices };
+    });
+  }
+
+  // ── Bank reconciliation ──────────────────────────────────────────────────────
+  /** A bank/cash account's postings with their cleared flag + a book-vs-cleared summary. */
+  async reconciliation(accountId: string) {
+    return this.tenantTx.run(async (m) => {
+      const acc = (await m.query(
+        `SELECT id, code, name, control_type, bank_name, account_number FROM finance_account WHERE id=$1 AND deleted_at IS NULL`,
+        [accountId],
+      )) as Row[];
+      if (!acc[0]) throw new NotFoundException('Account not found');
+      const rows = (await m.query(
+        `SELECT je.id, t.occurred_on, t.voucher_no, t.description, je.debit_minor, je.credit_minor, je.reconciled, je.reconciled_at
+           FROM finance_journal_entry je
+           JOIN finance_transaction t ON t.id = je.transaction_id
+          WHERE je.account_id=$1 AND t.deleted_at IS NULL AND t.status='POSTED'
+          ORDER BY t.occurred_on, t.created_at, je.created_at`,
+        [accountId],
+      )) as Row[];
+      let book = 0;
+      let cleared = 0;
+      const entries = rows.map((r) => {
+        const net = Number(r.debit_minor) - Number(r.credit_minor); // debit-positive (asset)
+        book += net;
+        if (r.reconciled) cleared += net;
+        return {
+          entryId: r.id,
+          occurredOn: r.occurred_on,
+          voucherNo: r.voucher_no ?? null,
+          description: r.description,
+          debit: money(r.debit_minor),
+          credit: money(r.credit_minor),
+          reconciled: Boolean(r.reconciled),
+          reconciledAt: r.reconciled_at ?? null,
+        };
+      });
+      return {
+        account: { id: acc[0].id, code: acc[0].code, name: acc[0].name, controlType: acc[0].control_type, bankName: acc[0].bank_name ?? null, accountNumber: acc[0].account_number ?? null },
+        bookBalance: money(book),
+        clearedBalance: money(cleared),
+        unclearedBalance: money(book - cleared),
+        unclearedCount: entries.filter((e) => !e.reconciled).length,
+        entries,
+      };
+    });
+  }
+
+  /** Mark/unmark postings as cleared on a bank statement. */
+  async setReconciled(dto: ReconcileDto) {
+    return this.tenantTx.run(async (m) => {
+      const res = (await m.query(
+        `UPDATE finance_journal_entry
+            SET reconciled = $1,
+                reconciled_at = CASE WHEN $1 THEN COALESCE($2::date, current_date) ELSE NULL END
+          WHERE id = ANY($3::uuid[])
+          RETURNING id`,
+        [dto.reconciled, dto.reconciledAt ?? null, dto.entryIds],
+      )) as Row[];
+      return { updated: res.length, reconciled: dto.reconciled };
     });
   }
 

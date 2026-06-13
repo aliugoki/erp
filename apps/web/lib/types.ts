@@ -78,12 +78,48 @@ export interface JournalTxn {
   description: string;
   voucherType: VoucherType;
   voucherNo: string | null;
+  status: 'DRAFT' | 'POSTED';
   occurredOn: string;
   reference: string | null;
   reversesId: string | null;
   reversedById: string | null;
   lineCount: number;
   total: Money;
+}
+
+export type AgingBucketKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus';
+export interface ArAging {
+  asOf: string | null;
+  buckets: AgingBucketKey[];
+  totals: Record<AgingBucketKey | 'total', number>;
+  invoices: {
+    invoiceId: string;
+    number: string;
+    clientId: string | null;
+    dueDate: string;
+    daysPastDue: number;
+    bucket: AgingBucketKey;
+    amount: Money;
+  }[];
+}
+
+export interface ReconEntry {
+  entryId: string;
+  occurredOn: string;
+  voucherNo: string | null;
+  description: string;
+  debit: Money;
+  credit: Money;
+  reconciled: boolean;
+  reconciledAt: string | null;
+}
+export interface Reconciliation {
+  account: { id: string; code: string; name: string; controlType: 'CASH' | 'BANK'; bankName: string | null; accountNumber: string | null };
+  bookBalance: Money;
+  clearedBalance: Money;
+  unclearedBalance: Money;
+  unclearedCount: number;
+  entries: ReconEntry[];
 }
 
 export interface LedgerLine {
