@@ -160,6 +160,18 @@ post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"Bran
 check "cost-center P&L shows BR1 revenue = 5000" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(next((c['revenue']['amountMinor'] for c in d if c['code']=='BR1'),0))")" "5000"
 check "untagged income rolls up to Unassigned" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(any(c['name']=='Unassigned' for c in d))")" "True"
 
+echo "== budget vs actual =="
+BP=$(post "$MGR" finance/periods '{"name":"Budget Month","startDate":"2026-06-01","endDate":"2026-06-30"}' | jget data.id)
+BREV=$(post "$MGR" finance/accounts '{"code":"4999","name":"Budgeted Sales","type":"REVENUE"}' | jget data.id)
+post "$MGR" finance/budgets "{\"periodId\":\"$BP\",\"accountId\":\"$BREV\",\"amountMinor\":100000}" >/dev/null
+post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"budget actual\",\"occurredOn\":\"2026-06-10\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":60000},{\"accountId\":\"$BREV\",\"creditMinor\":60000}]}" >/dev/null
+bva(){ get "$MGR" "finance/reports/budget-vs-actual?periodId=$BP" | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['lines'];print(next((l['$1']['amountMinor'] for l in d if l['code']=='4999'),0))"; }
+check "budgeted = 100000" "$(bva budget)" "100000"
+check "actual = 60000" "$(bva actual)" "60000"
+check "variance = -40000 (under)" "$(bva variance)" "-40000"
+# Close Budget Month so the period-lock section below still sees no OPEN period covering today.
+curl -s -o /dev/null -XPATCH "$B/finance/periods/$BP" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

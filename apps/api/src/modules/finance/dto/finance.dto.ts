@@ -94,6 +94,16 @@ export class CreateCostCenterDto {
   @IsString() @MinLength(1) name!: string;
 }
 
+export class SetBudgetDto {
+  @IsUUID() periodId!: string;
+  @IsUUID() accountId!: string;
+  @IsInt() @Min(0) amountMinor!: number;
+}
+
+export class BudgetQueryDto {
+  @IsUUID() periodId!: string;
+}
+
 export class CreateTransactionDto {
   @IsString() @MinLength(1) description!: string;
   /** Voucher type — BRV/BPV/CPV/CRV/JV. Defaults to JV (general journal voucher). */

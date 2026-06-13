@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, CashFlow, CostCenterReport, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, BudgetVsActual, CashFlow, CostCenterReport, FiscalPeriod, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
 import { NewCostCenterDialog } from '@/components/finance/new-cost-center-dialog';
+import { SetBudgetDialog } from '@/components/finance/set-budget-dialog';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -12,7 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-type View = 'trial' | 'balance' | 'income' | 'cashflow' | 'aging' | 'apaging' | 'costcenter';
+type View = 'trial' | 'balance' | 'income' | 'cashflow' | 'aging' | 'apaging' | 'costcenter' | 'budget';
 
 const BUCKET_LABEL: Record<AgingBucketKey, string> = {
   current: 'Current', d1_30: '1–30 days', d31_60: '31–60 days', d61_90: '61–90 days', d90_plus: '90+ days',
@@ -55,6 +56,7 @@ function StatementSection({ title, lines, totalMinor }: { title: string; lines: 
 
 export default function ReportsPage() {
   const [view, setView] = useState<View>('trial');
+  const [budgetPeriodId, setBudgetPeriodId] = useState('');
 
   const trial = useQuery({ queryKey: ['reports', 'trial'], queryFn: () => apiGet<TrialBalance>('/finance/trial-balance'), enabled: view === 'trial' });
   const balance = useQuery({ queryKey: ['reports', 'balance'], queryFn: () => apiGet<BalanceSheet>('/finance/statements/balance-sheet'), enabled: view === 'balance' });
@@ -63,6 +65,12 @@ export default function ReportsPage() {
   const apaging = useQuery({ queryKey: ['reports', 'apaging'], queryFn: () => apiGet<ApAging>('/finance/ap-aging'), enabled: view === 'apaging' });
   const cashflow = useQuery({ queryKey: ['reports', 'cashflow'], queryFn: () => apiGet<CashFlow>('/finance/statements/cash-flow'), enabled: view === 'cashflow' });
   const costcenter = useQuery({ queryKey: ['reports', 'costcenter'], queryFn: () => apiGet<CostCenterReport>('/finance/reports/cost-center'), enabled: view === 'costcenter' });
+  const periods = useQuery({ queryKey: ['periods'], queryFn: () => apiGet<FiscalPeriod[]>('/finance/periods'), enabled: view === 'budget' });
+  const budget = useQuery({
+    queryKey: ['reports', 'budget', budgetPeriodId],
+    queryFn: () => apiGet<BudgetVsActual>(`/finance/reports/budget-vs-actual?periodId=${budgetPeriodId}`),
+    enabled: view === 'budget' && Boolean(budgetPeriodId),
+  });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
@@ -80,9 +88,21 @@ export default function ReportsPage() {
             <SelectItem value="aging">AR Aging</SelectItem>
             <SelectItem value="apaging">AP Aging</SelectItem>
             <SelectItem value="costcenter">Cost Center P&amp;L</SelectItem>
+            <SelectItem value="budget">Budget vs Actual</SelectItem>
           </SelectContent>
         </Select>
         {view === 'costcenter' ? <NewCostCenterDialog /> : null}
+        {view === 'budget' ? (
+          <>
+            <Select value={budgetPeriodId} onValueChange={setBudgetPeriodId}>
+              <SelectTrigger className="w-56"><SelectValue placeholder="Select period" /></SelectTrigger>
+              <SelectContent>
+                {(periods.data ?? []).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <SetBudgetDialog periodId={budgetPeriodId || undefined} />
+          </>
+        ) : null}
       </div>
 
       {view === 'trial' ? (
@@ -302,6 +322,49 @@ export default function ReportsPage() {
             </TableBody>
           </Table>
         </Card>
+      ) : null}
+
+      {view === 'budget' ? (
+        !budgetPeriodId ? (
+          <Card className="p-8 text-center text-sm text-muted-foreground">Select a fiscal period to compare budget vs actual.</Card>
+        ) : budget.data ? (
+          <Card className="overflow-hidden">
+            <div className="border-b p-4 font-medium">Budget vs Actual · {budget.data.period.name}</div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Account</TableHead>
+                  <TableHead className="text-right">Budget</TableHead>
+                  <TableHead className="text-right">Actual</TableHead>
+                  <TableHead className="text-right">Variance</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {budget.data.lines.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No budgets set for this period.</TableCell></TableRow>
+                ) : (
+                  budget.data.lines.map((l) => (
+                    <TableRow key={l.accountId}>
+                      <TableCell><span className="font-mono text-xs text-muted-foreground">{l.code}</span> {l.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatMoney(l.budget.amountMinor)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatMoney(l.actual.amountMinor)}</TableCell>
+                      <TableCell className={cn('text-right tabular-nums', l.variance.amountMinor < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400')}>{formatMoney(l.variance.amountMinor)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{l.variancePct === null ? '—' : `${l.variancePct}%`}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+                <TableRow className="border-t-2">
+                  <TableCell className="font-semibold">Total</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(budget.data.totals.budgetMinor)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(budget.data.totals.actualMinor)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(budget.data.totals.varianceMinor)}</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableBody>
+            </Table>
+          </Card>
+        ) : null
       ) : null}
     </div>
   );

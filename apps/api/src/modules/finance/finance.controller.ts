@@ -16,6 +16,7 @@ import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AsOfQueryDto,
+  BudgetQueryDto,
   CashBookQueryDto,
   CreateAccountDto,
   CreateBillDto,
@@ -25,6 +26,7 @@ import {
   CreatePeriodDto,
   CreateTransactionDto,
   CreateVendorDto,
+  SetBudgetDto,
   LedgerQueryDto,
   ListBillsQueryDto,
   ListInvoicesQueryDto,
@@ -227,6 +229,19 @@ export class FinanceController {
   @Get('reports/cost-center')
   costCenterReport(@Query() query: PeriodQueryDto) {
     return this.finance.costCenterReport(query);
+  }
+
+  // Budgets
+  @Post('budgets')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  setBudget(@Body() dto: SetBudgetDto) {
+    return this.finance.setBudget(dto);
+  }
+
+  @Get('reports/budget-vs-actual')
+  budgetVsActual(@Query() query: BudgetQueryDto) {
+    return this.finance.budgetVsActual(query);
   }
 
   // Invoices

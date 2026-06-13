@@ -12,6 +12,7 @@ import type {
   AsOfQueryDto,
   CashBookQueryDto,
   CreateAccountDto,
+  BudgetQueryDto,
   CreateBillDto,
   CreateBillPaymentDto,
   CreateCostCenterDto,
@@ -19,6 +20,7 @@ import type {
   CreatePeriodDto,
   CreateTransactionDto,
   CreateVendorDto,
+  SetBudgetDto,
   LedgerQueryDto,
   ListBillsQueryDto,
   ListInvoicesQueryDto,
@@ -805,6 +807,80 @@ export class FinanceService {
         to: query.to ?? null,
         costCenters,
         totals: { revenueMinor: totalRevenue, expenseMinor: totalExpense, netMinor: totalRevenue - totalExpense },
+      };
+    });
+  }
+
+  // ── Budgets ──────────────────────────────────────────────────────────────────
+  /** Set (upsert) the budgeted amount for an account in a fiscal period. */
+  async setBudget(dto: SetBudgetDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO finance_budget (tenant_id, period_id, account_id, amount_minor)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
+           ON CONFLICT (tenant_id, period_id, account_id)
+             DO UPDATE SET amount_minor = EXCLUDED.amount_minor, updated_at = now()
+           RETURNING id, period_id, account_id, amount_minor`,
+          [dto.periodId, dto.accountId, dto.amountMinor],
+        )) as Row[];
+        const r = rows[0]!;
+        return { id: r.id, periodId: r.period_id, accountId: r.account_id, amount: money(r.amount_minor) };
+      } catch (err) {
+        if (isForeignKey(err)) throw new BadRequestException('Period or account does not exist in this tenant');
+        throw err;
+      }
+    });
+  }
+
+  /** Budget vs actual for a fiscal period: planned amount vs posted net per account, with variance. */
+  async budgetVsActual(query: BudgetQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const periods = (await m.query(
+        `SELECT id, name, start_date, end_date FROM finance_fiscal_period WHERE id=$1 AND deleted_at IS NULL`,
+        [query.periodId],
+      )) as Array<{ id: string; name: string; start_date: string; end_date: string }>;
+      const period = periods[0];
+      if (!period) throw new NotFoundException('Period not found');
+
+      const rows = (await m.query(
+        `SELECT b.account_id, a.code, a.name, a.type, b.amount_minor AS budget,
+                COALESCE(SUM(je.debit_minor), 0)::bigint AS debit,
+                COALESCE(SUM(je.credit_minor), 0)::bigint AS credit
+           FROM finance_budget b
+           JOIN finance_account a ON a.id = b.account_id
+           LEFT JOIN finance_journal_entry je ON je.account_id = b.account_id
+           LEFT JOIN finance_transaction t ON t.id = je.transaction_id
+                AND t.status='POSTED' AND t.deleted_at IS NULL
+                AND t.occurred_on BETWEEN $2::date AND $3::date
+          WHERE b.period_id = $1 AND b.deleted_at IS NULL
+          GROUP BY b.account_id, a.code, a.name, a.type, b.amount_minor
+          ORDER BY a.code`,
+        [query.periodId, period.start_date, period.end_date],
+      )) as Row[];
+
+      let totalBudget = 0;
+      let totalActual = 0;
+      const lines = rows.map((r) => {
+        const budget = Number(r.budget);
+        const actual = signedBalanceMinor(r.type as AccountType, Number(r.debit), Number(r.credit));
+        totalBudget += budget;
+        totalActual += actual;
+        return {
+          accountId: r.account_id,
+          code: r.code,
+          name: r.name,
+          type: r.type,
+          budget: money(budget),
+          actual: money(actual),
+          variance: money(actual - budget),
+          variancePct: budget !== 0 ? Math.round(((actual - budget) / Math.abs(budget)) * 1000) / 10 : null,
+        };
+      });
+      return {
+        period: { id: period.id, name: period.name, startDate: period.start_date, endDate: period.end_date },
+        lines,
+        totals: { budgetMinor: totalBudget, actualMinor: totalActual, varianceMinor: totalActual - totalBudget },
       };
     });
   }

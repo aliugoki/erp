@@ -92,6 +92,21 @@ export interface CostCenterReport {
   totals: { revenueMinor: number; expenseMinor: number; netMinor: number };
 }
 
+export interface BudgetVsActual {
+  period: { id: string; name: string; startDate: string; endDate: string };
+  lines: {
+    accountId: string;
+    code: string;
+    name: string;
+    type: AccountType;
+    budget: Money;
+    actual: Money;
+    variance: Money;
+    variancePct: number | null;
+  }[];
+  totals: { budgetMinor: number; actualMinor: number; varianceMinor: number };
+}
+
 export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
 
 export interface JournalTxn {
