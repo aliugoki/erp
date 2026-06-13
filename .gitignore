@@ -45,3 +45,6 @@ venv/
 # User docs / office lock files (left untracked by the build loop)
 .~lock.*#
 *.odg
+
+# DB backups (Chunk 9.2)
+backups/
