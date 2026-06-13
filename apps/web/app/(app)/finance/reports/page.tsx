@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, CashFlow, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-type View = 'trial' | 'balance' | 'income' | 'aging' | 'apaging';
+type View = 'trial' | 'balance' | 'income' | 'cashflow' | 'aging' | 'apaging';
 
 const BUCKET_LABEL: Record<AgingBucketKey, string> = {
   current: 'Current', d1_30: '1–30 days', d31_60: '31–60 days', d61_90: '61–90 days', d90_plus: '90+ days',
@@ -60,6 +60,7 @@ export default function ReportsPage() {
   const income = useQuery({ queryKey: ['reports', 'income'], queryFn: () => apiGet<IncomeStatement>('/finance/statements/income'), enabled: view === 'income' });
   const aging = useQuery({ queryKey: ['reports', 'aging'], queryFn: () => apiGet<ArAging>('/finance/ar-aging'), enabled: view === 'aging' });
   const apaging = useQuery({ queryKey: ['reports', 'apaging'], queryFn: () => apiGet<ApAging>('/finance/ap-aging'), enabled: view === 'apaging' });
+  const cashflow = useQuery({ queryKey: ['reports', 'cashflow'], queryFn: () => apiGet<CashFlow>('/finance/statements/cash-flow'), enabled: view === 'cashflow' });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
@@ -73,6 +74,7 @@ export default function ReportsPage() {
             <SelectItem value="trial">Trial Balance</SelectItem>
             <SelectItem value="balance">Balance Sheet</SelectItem>
             <SelectItem value="income">Income Statement</SelectItem>
+            <SelectItem value="cashflow">Cash Flow</SelectItem>
             <SelectItem value="aging">AR Aging</SelectItem>
             <SelectItem value="apaging">AP Aging</SelectItem>
           </SelectContent>
@@ -146,6 +148,30 @@ export default function ReportsPage() {
           <div className="flex items-center justify-between rounded-lg bg-primary/10 px-4 py-3">
             <span className="font-semibold">Net income</span>
             <span className="text-lg font-semibold tabular-nums">{formatMoney(income.data.netIncomeMinor)}</span>
+          </div>
+        </Card>
+      ) : null}
+
+      {view === 'cashflow' && cashflow.data ? (
+        <Card className="space-y-6 p-6">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Cash Flow Statement <span className="text-xs text-muted-foreground">(direct method)</span></span>
+            <BalancedBadge ok={cashflow.data.reconciles} />
+          </div>
+          <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-2 text-sm">
+            <span className="text-muted-foreground">Opening cash &amp; bank</span>
+            <span className="tabular-nums">{formatMoney(cashflow.data.opening.amountMinor)}</span>
+          </div>
+          <StatementSection title="Operating activities" lines={cashflow.data.operating.lines} totalMinor={cashflow.data.operating.totalMinor} />
+          <StatementSection title="Investing activities" lines={cashflow.data.investing.lines} totalMinor={cashflow.data.investing.totalMinor} />
+          <StatementSection title="Financing activities" lines={cashflow.data.financing.lines} totalMinor={cashflow.data.financing.totalMinor} />
+          <div className="flex items-center justify-between rounded-lg bg-primary/10 px-4 py-3">
+            <span className="font-semibold">Net change in cash</span>
+            <span className="text-lg font-semibold tabular-nums">{formatMoney(cashflow.data.netChangeMinor)}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-2 text-sm">
+            <span className="text-muted-foreground">Closing cash &amp; bank</span>
+            <span className="tabular-nums">{formatMoney(cashflow.data.closing.amountMinor)}</span>
           </div>
         </Card>
       ) : null}

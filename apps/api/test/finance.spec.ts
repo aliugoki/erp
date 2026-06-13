@@ -11,6 +11,7 @@ import {
   agingBucket,
   assertBalanced,
   assertVoucherType,
+  cashFlowSection,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -135,6 +136,14 @@ describe('account normal-balance semantics', () => {
     expect(() => assertVoucherType('CPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).toThrow(VoucherValidationError);
     // JV has no cash/bank constraint.
     expect(() => assertVoucherType('JV', [other, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+  });
+
+  it('cashFlowSection classifies cash movements by counterpart account', () => {
+    expect(cashFlowSection('REVENUE')).toBe('operating');
+    expect(cashFlowSection('EXPENSE')).toBe('operating');
+    expect(cashFlowSection('ASSET')).toBe('investing');
+    expect(cashFlowSection('LIABILITY')).toBe('financing');
+    expect(cashFlowSection('EQUITY')).toBe('financing');
   });
 
   it('agingBucket classifies by days past due', () => {

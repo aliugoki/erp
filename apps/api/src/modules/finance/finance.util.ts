@@ -160,6 +160,17 @@ export function trialColumns(netDebitMinor: number): { debitMinor: number; credi
     : { debitMinor: 0, creditMinor: -netDebitMinor };
 }
 
+/**
+ * Cash-flow classification (direct method): given the COUNTERPART account of a cash/bank movement,
+ * which activity does the cash flow belong to? Revenue/expense → operating; other (non-cash) assets →
+ * investing (capex, asset buys/sells); liabilities & equity → financing (loans, capital).
+ */
+export function cashFlowSection(counterpartType: AccountType): 'operating' | 'investing' | 'financing' {
+  if (counterpartType === 'REVENUE' || counterpartType === 'EXPENSE') return 'operating';
+  if (counterpartType === 'ASSET') return 'investing';
+  return 'financing'; // LIABILITY, EQUITY
+}
+
 /** Compute invoice subtotal/total from line items (integer math only). */
 export function computeInvoiceTotals(
   lines: InvoiceLineInput[],

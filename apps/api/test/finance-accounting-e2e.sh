@@ -149,6 +149,10 @@ post "$MGR" finance/bills "{\"number\":\"BILL-OLD\",\"vendorId\":\"$VEN\",\"line
 check "AP aging total = 70000 (one outstanding bill)" "$(get "$MGR" finance/ap-aging | jget data.totals.total)" "70000"
 check "AP overdue bill in 90+ bucket" "$(get "$MGR" finance/ap-aging | jget data.totals.d90_plus)" "70000"
 
+echo "== cash flow statement (direct method) =="
+check "cash flow reconciles (opening + net = closing)" "$(get "$MGR" finance/statements/cash-flow | jget data.reconciles)" "True"
+check "operating activities non-zero" "$(get "$MGR" finance/statements/cash-flow | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['operating']['totalMinor']!=0)")" "True"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

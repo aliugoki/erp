@@ -39,6 +39,7 @@ import {
   agingBucket,
   assertBalanced,
   assertVoucherType,
+  cashFlowSection,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -658,6 +659,78 @@ export class FinanceService {
         revenue: { lines: revenue, totalMinor: totalRevenue },
         expenses: { lines: expenses, totalMinor: totalExpenses },
         netIncomeMinor: totalRevenue - totalExpenses,
+      };
+    });
+  }
+
+  /**
+   * Cash-flow statement (direct method): classifies every cash/bank movement in the period by the
+   * counterpart account into operating / investing / financing. Opening + net change = closing cash.
+   */
+  async getCashFlow(query: PeriodQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const from = query.from ?? null;
+      const to = query.to ?? null;
+      const cashNet = async (cond: string, params: unknown[]) => {
+        const r = (await m.query(
+          `SELECT COALESCE(SUM(je.debit_minor - je.credit_minor), 0)::bigint AS raw
+             FROM finance_journal_entry je
+             JOIN finance_account a ON a.id = je.account_id
+             JOIN finance_transaction t ON t.id = je.transaction_id
+            WHERE a.control_type IN ('CASH','BANK') AND t.status='POSTED' AND t.deleted_at IS NULL AND ${cond}`,
+          params,
+        )) as Array<{ raw: string }>;
+        return Number(r[0]?.raw ?? 0);
+      };
+      const opening = from ? await cashNet('t.occurred_on < $1', [from]) : 0;
+      const closing = await cashNet('($1::date IS NULL OR t.occurred_on <= $1)', [to]);
+
+      // Non-cash legs of every cash-touching transaction in the period explain the cash movement.
+      const rows = (await m.query(
+        `WITH cash_txns AS (
+           SELECT DISTINCT je.transaction_id
+             FROM finance_journal_entry je
+             JOIN finance_account a ON a.id = je.account_id
+             JOIN finance_transaction t ON t.id = je.transaction_id
+            WHERE a.control_type IN ('CASH','BANK') AND t.status='POSTED' AND t.deleted_at IS NULL
+              AND ($1::date IS NULL OR t.occurred_on >= $1::date)
+              AND ($2::date IS NULL OR t.occurred_on <= $2::date)
+         )
+         SELECT a.id, a.code, a.name, a.type,
+                COALESCE(SUM(je.credit_minor - je.debit_minor), 0)::bigint AS contribution
+           FROM finance_journal_entry je
+           JOIN finance_account a ON a.id = je.account_id
+          WHERE je.transaction_id IN (SELECT transaction_id FROM cash_txns)
+            AND a.control_type = 'NONE'
+          GROUP BY a.id
+         HAVING COALESCE(SUM(je.credit_minor - je.debit_minor), 0) <> 0
+          ORDER BY a.type, a.code`,
+        [from, to],
+      )) as Row[];
+
+      const sections: Record<'operating' | 'investing' | 'financing', { lines: Array<{ accountId: unknown; code: unknown; name: unknown; amountMinor: number }>; totalMinor: number }> = {
+        operating: { lines: [], totalMinor: 0 },
+        investing: { lines: [], totalMinor: 0 },
+        financing: { lines: [], totalMinor: 0 },
+      };
+      for (const r of rows) {
+        const amountMinor = Number(r.contribution);
+        const sec = cashFlowSection(r.type as AccountType);
+        sections[sec].lines.push({ accountId: r.id, code: r.code, name: r.name, amountMinor });
+        sections[sec].totalMinor += amountMinor;
+      }
+      const netChangeMinor = sections.operating.totalMinor + sections.investing.totalMinor + sections.financing.totalMinor;
+      return {
+        from,
+        to,
+        currency: 'PKR',
+        opening: money(opening),
+        operating: sections.operating,
+        investing: sections.investing,
+        financing: sections.financing,
+        netChangeMinor,
+        closing: money(closing),
+        reconciles: opening + netChangeMinor === closing,
       };
     });
   }

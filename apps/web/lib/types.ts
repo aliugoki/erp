@@ -218,6 +218,23 @@ export interface IncomeStatement {
   netIncomeMinor: number;
 }
 
+export interface CashFlowSection {
+  lines: { accountId: string; code: string; name: string; amountMinor: number }[];
+  totalMinor: number;
+}
+export interface CashFlow {
+  from: string | null;
+  to: string | null;
+  currency: string;
+  opening: Money;
+  operating: CashFlowSection;
+  investing: CashFlowSection;
+  financing: CashFlowSection;
+  netChangeMinor: number;
+  closing: Money;
+  reconciles: boolean;
+}
+
 export interface Product {
   id: string;
   sku: string;

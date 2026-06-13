@@ -205,6 +205,11 @@ export class FinanceController {
     return this.finance.getIncomeStatement(query);
   }
 
+  @Get('statements/cash-flow')
+  cashFlow(@Query() query: PeriodQueryDto) {
+    return this.finance.getCashFlow(query);
+  }
+
   // Invoices
   @Get('invoices')
   listInvoices(@Query() query: ListInvoicesQueryDto) {
