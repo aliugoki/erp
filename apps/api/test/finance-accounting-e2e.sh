@@ -153,6 +153,13 @@ echo "== cash flow statement (direct method) =="
 check "cash flow reconciles (opening + net = closing)" "$(get "$MGR" finance/statements/cash-flow | jget data.reconciles)" "True"
 check "operating activities non-zero" "$(get "$MGR" finance/statements/cash-flow | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['operating']['totalMinor']!=0)")" "True"
 
+echo "== cost centers (analytical dimension) =="
+CC=$(post "$MGR" finance/cost-centers '{"code":"BR1","name":"Branch 1"}' | jget data.id)
+[ -n "$CC" ] && echo "  ✅ cost center created" && pass=$((pass+1)) || { echo "  ❌ cost center create failed"; fail=$((fail+1)); }
+post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"Branch sale\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":5000},{\"accountId\":\"$REV\",\"creditMinor\":5000,\"costCenterId\":\"$CC\"}]}" >/dev/null
+check "cost-center P&L shows BR1 revenue = 5000" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(next((c['revenue']['amountMinor'] for c in d if c['code']=='BR1'),0))")" "5000"
+check "untagged income rolls up to Unassigned" "$(get "$MGR" finance/reports/cost-center | python3 -c "import sys,json;d=json.load(sys.stdin)['data']['costCenters'];print(any(c['name']=='Unassigned' for c in d))")" "True"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

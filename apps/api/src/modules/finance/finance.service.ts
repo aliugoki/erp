@@ -14,6 +14,7 @@ import type {
   CreateAccountDto,
   CreateBillDto,
   CreateBillPaymentDto,
+  CreateCostCenterDto,
   CreateInvoiceDto,
   CreatePeriodDto,
   CreateTransactionDto,
@@ -217,13 +218,13 @@ export class FinanceService {
       try {
         for (const e of dto.entries) {
           await m.query(
-            `INSERT INTO finance_journal_entry (tenant_id, transaction_id, account_id, debit_minor, credit_minor)
-             VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)`,
-            [txn.id, e.accountId, e.debitMinor ?? 0, e.creditMinor ?? 0],
+            `INSERT INTO finance_journal_entry (tenant_id, transaction_id, account_id, debit_minor, credit_minor, cost_center_id)
+             VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5)`,
+            [txn.id, e.accountId, e.debitMinor ?? 0, e.creditMinor ?? 0, e.costCenterId ?? null],
           );
         }
       } catch (err) {
-        if (isForeignKey(err)) throw new BadRequestException('One or more accounts do not exist in this tenant');
+        if (isForeignKey(err)) throw new BadRequestException('One or more accounts or cost centers do not exist in this tenant');
         throw err;
       }
       return {
@@ -735,6 +736,79 @@ export class FinanceService {
     });
   }
 
+  // ── Cost centers (analytical dimension) ──────────────────────────────────────
+  async createCostCenter(dto: CreateCostCenterDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO cost_center (tenant_id, code, name)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2)
+           RETURNING id, code, name, active`,
+          [dto.code, dto.name],
+        )) as Row[];
+        return mapCostCenter(rows[0]!);
+      } catch (err) {
+        if (isUnique(err)) throw new BadRequestException(`Cost center code "${dto.code}" already exists`);
+        throw err;
+      }
+    });
+  }
+
+  async listCostCenters() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, code, name, active FROM cost_center WHERE deleted_at IS NULL ORDER BY code`,
+      )) as Row[];
+      return rows.map(mapCostCenter);
+    });
+  }
+
+  /** Cost-center P&L: revenue, expense and net per cost center (untagged → "Unassigned"). */
+  async costCenterReport(query: PeriodQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const params: unknown[] = [];
+      const range: string[] = [];
+      if (query.from) range.push(`t.occurred_on >= $${params.push(query.from)}::date`);
+      if (query.to) range.push(`t.occurred_on <= $${params.push(query.to)}::date`);
+      const rangeSql = range.length ? `AND ${range.join(' AND ')}` : '';
+      const rows = (await m.query(
+        `SELECT cc.id AS cost_center_id, cc.code, cc.name,
+                COALESCE(SUM(CASE WHEN a.type='REVENUE' THEN je.credit_minor - je.debit_minor ELSE 0 END), 0)::bigint AS revenue,
+                COALESCE(SUM(CASE WHEN a.type='EXPENSE' THEN je.debit_minor - je.credit_minor ELSE 0 END), 0)::bigint AS expense
+           FROM finance_journal_entry je
+           JOIN finance_account a ON a.id = je.account_id
+           JOIN finance_transaction t ON t.id = je.transaction_id
+           LEFT JOIN cost_center cc ON cc.id = je.cost_center_id
+          WHERE t.status='POSTED' AND t.deleted_at IS NULL AND a.type IN ('REVENUE','EXPENSE') ${rangeSql}
+          GROUP BY cc.id, cc.code, cc.name
+          ORDER BY cc.code NULLS LAST`,
+        params,
+      )) as Row[];
+      let totalRevenue = 0;
+      let totalExpense = 0;
+      const costCenters = rows.map((r) => {
+        const revenue = Number(r.revenue);
+        const expense = Number(r.expense);
+        totalRevenue += revenue;
+        totalExpense += expense;
+        return {
+          costCenterId: r.cost_center_id ?? null,
+          code: r.code ?? null,
+          name: r.name ?? 'Unassigned',
+          revenue: money(revenue),
+          expense: money(expense),
+          net: money(revenue - expense),
+        };
+      });
+      return {
+        from: query.from ?? null,
+        to: query.to ?? null,
+        costCenters,
+        totals: { revenueMinor: totalRevenue, expenseMinor: totalExpense, netMinor: totalRevenue - totalExpense },
+      };
+    });
+  }
+
   /** Accounts-receivable aging: outstanding invoices bucketed by days past due. */
   async arAging(query: AsOfQueryDto) {
     return this.tenantTx.run(async (m) => {
@@ -1093,6 +1167,10 @@ function mapAccount(r: Row) {
     accountNumber: r.account_number ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
   };
+}
+
+function mapCostCenter(r: Row) {
+  return { id: r.id, code: r.code, name: r.name, active: r.active ?? true };
 }
 
 function mapVendor(r: Row) {

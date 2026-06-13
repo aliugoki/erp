@@ -71,6 +71,27 @@ export interface CashBook {
   totals: { receiptsMinor: number; paymentsMinor: number; closingMinor: number };
 }
 
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+}
+
+export interface CostCenterReport {
+  from: string | null;
+  to: string | null;
+  costCenters: {
+    costCenterId: string | null;
+    code: string | null;
+    name: string;
+    revenue: Money;
+    expense: Money;
+    net: Money;
+  }[];
+  totals: { revenueMinor: number; expenseMinor: number; netMinor: number };
+}
+
 export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
 
 export interface JournalTxn {

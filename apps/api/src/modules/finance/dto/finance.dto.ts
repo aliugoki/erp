@@ -85,6 +85,13 @@ export class JournalEntryDto {
   @IsUUID() accountId!: string;
   @IsOptional() @IsInt() @Min(0) debitMinor?: number;
   @IsOptional() @IsInt() @Min(0) creditMinor?: number;
+  /** Optional analytical dimension (branch / department / project). */
+  @IsOptional() @IsUUID() costCenterId?: string;
+}
+
+export class CreateCostCenterDto {
+  @IsString() @MinLength(1) code!: string;
+  @IsString() @MinLength(1) name!: string;
 }
 
 export class CreateTransactionDto {

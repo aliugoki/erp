@@ -3,7 +3,7 @@ import { type FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { Account, VoucherType } from '@/lib/types';
+import type { Account, CostCenter, VoucherType } from '@/lib/types';
 import { VOUCHER_TYPES } from '@/lib/finance';
 import { cn, formatMoney } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
@@ -23,10 +23,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 interface Line {
   accountId: string;
+  costCenterId: string;
   debit: string;
   credit: string;
 }
-const emptyLine = (): Line => ({ accountId: '', debit: '', credit: '' });
+const emptyLine = (): Line => ({ accountId: '', costCenterId: 'NONE', debit: '', credit: '' });
 const toMinor = (v: string) => Math.round((Number(v) || 0) * 100);
 
 /** Compose a balanced double-entry journal: ≥2 lines, each a debit XOR credit, debits === credits. */
@@ -44,6 +45,11 @@ export function NewJournalDialog() {
     enabled: open,
   });
   const postable = (accounts ?? []).filter((a) => !a.isGroup);
+  const { data: costCenters } = useQuery({
+    queryKey: ['cost-centers'],
+    queryFn: () => apiGet<CostCenter[]>('/finance/cost-centers'),
+    enabled: open,
+  });
 
   const totals = useMemo(() => {
     let debit = 0;
@@ -72,6 +78,7 @@ export function NewJournalDialog() {
         ...(reference ? { reference } : {}),
         entries: lines.map((l) => ({
           accountId: l.accountId,
+          ...(l.costCenterId !== 'NONE' ? { costCenterId: l.costCenterId } : {}),
           ...(toMinor(l.debit) > 0 ? { debitMinor: toMinor(l.debit) } : { creditMinor: toMinor(l.credit) }),
         })),
       }),
@@ -130,18 +137,26 @@ export function NewJournalDialog() {
           </div>
 
           <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_7rem_7rem_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
+            <div className="grid grid-cols-[1fr_9rem_6rem_6rem_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground">
               <span>Account</span>
+              <span>Cost center</span>
               <span className="text-right">Debit</span>
               <span className="text-right">Credit</span>
               <span />
             </div>
             {lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-[1fr_7rem_7rem_2rem] items-center gap-2">
+              <div key={i} className="grid grid-cols-[1fr_9rem_6rem_6rem_2rem] items-center gap-2">
                 <Select value={l.accountId} onValueChange={(v) => setLine(i, { accountId: v })}>
                   <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
                   <SelectContent>
                     {postable.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} · {a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={l.costCenterId} onValueChange={(v) => setLine(i, { costCenterId: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">—</SelectItem>
+                    {(costCenters ?? []).map((c) => <SelectItem key={c.id} value={c.id}>{c.code}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Input

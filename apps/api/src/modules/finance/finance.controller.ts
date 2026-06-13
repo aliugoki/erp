@@ -20,6 +20,7 @@ import {
   CreateAccountDto,
   CreateBillDto,
   CreateBillPaymentDto,
+  CreateCostCenterDto,
   CreateInvoiceDto,
   CreatePeriodDto,
   CreateTransactionDto,
@@ -208,6 +209,24 @@ export class FinanceController {
   @Get('statements/cash-flow')
   cashFlow(@Query() query: PeriodQueryDto) {
     return this.finance.getCashFlow(query);
+  }
+
+  // Cost centers (analytical dimension)
+  @Get('cost-centers')
+  listCostCenters() {
+    return this.finance.listCostCenters();
+  }
+
+  @Post('cost-centers')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createCostCenter(@Body() dto: CreateCostCenterDto) {
+    return this.finance.createCostCenter(dto);
+  }
+
+  @Get('reports/cost-center')
+  costCenterReport(@Query() query: PeriodQueryDto) {
+    return this.finance.costCenterReport(query);
   }
 
   // Invoices

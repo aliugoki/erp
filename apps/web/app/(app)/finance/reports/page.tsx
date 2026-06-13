@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, CashFlow, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, CashFlow, CostCenterReport, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import { NewCostCenterDialog } from '@/components/finance/new-cost-center-dialog';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -11,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-type View = 'trial' | 'balance' | 'income' | 'cashflow' | 'aging' | 'apaging';
+type View = 'trial' | 'balance' | 'income' | 'cashflow' | 'aging' | 'apaging' | 'costcenter';
 
 const BUCKET_LABEL: Record<AgingBucketKey, string> = {
   current: 'Current', d1_30: '1–30 days', d31_60: '31–60 days', d61_90: '61–90 days', d90_plus: '90+ days',
@@ -61,6 +62,7 @@ export default function ReportsPage() {
   const aging = useQuery({ queryKey: ['reports', 'aging'], queryFn: () => apiGet<ArAging>('/finance/ar-aging'), enabled: view === 'aging' });
   const apaging = useQuery({ queryKey: ['reports', 'apaging'], queryFn: () => apiGet<ApAging>('/finance/ap-aging'), enabled: view === 'apaging' });
   const cashflow = useQuery({ queryKey: ['reports', 'cashflow'], queryFn: () => apiGet<CashFlow>('/finance/statements/cash-flow'), enabled: view === 'cashflow' });
+  const costcenter = useQuery({ queryKey: ['reports', 'costcenter'], queryFn: () => apiGet<CostCenterReport>('/finance/reports/cost-center'), enabled: view === 'costcenter' });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
@@ -77,8 +79,10 @@ export default function ReportsPage() {
             <SelectItem value="cashflow">Cash Flow</SelectItem>
             <SelectItem value="aging">AR Aging</SelectItem>
             <SelectItem value="apaging">AP Aging</SelectItem>
+            <SelectItem value="costcenter">Cost Center P&amp;L</SelectItem>
           </SelectContent>
         </Select>
+        {view === 'costcenter' ? <NewCostCenterDialog /> : null}
       </div>
 
       {view === 'trial' ? (
@@ -258,6 +262,42 @@ export default function ReportsPage() {
               <TableRow className="border-t-2">
                 <TableCell className="font-semibold" colSpan={4}>Total payable</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{formatMoney(apaging.data.totals.total)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Card>
+      ) : null}
+
+      {view === 'costcenter' && costcenter.data ? (
+        <Card className="overflow-hidden">
+          <div className="border-b p-4 font-medium">Cost Center P&amp;L</div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cost center</TableHead>
+                <TableHead className="text-right">Revenue</TableHead>
+                <TableHead className="text-right">Expense</TableHead>
+                <TableHead className="text-right">Net</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {costcenter.data.costCenters.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">No posted income/expense yet.</TableCell></TableRow>
+              ) : (
+                costcenter.data.costCenters.map((c) => (
+                  <TableRow key={c.costCenterId ?? 'unassigned'}>
+                    <TableCell>{c.code ? <span className="font-mono text-xs text-muted-foreground">{c.code} </span> : null}{c.name}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(c.revenue.amountMinor, c.revenue.currency)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(c.expense.amountMinor, c.expense.currency)}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{formatMoney(c.net.amountMinor, c.net.currency)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+              <TableRow className="border-t-2">
+                <TableCell className="font-semibold">Total</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatMoney(costcenter.data.totals.revenueMinor)}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatMoney(costcenter.data.totals.expenseMinor)}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatMoney(costcenter.data.totals.netMinor)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
