@@ -15,13 +15,17 @@ import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AsOfQueryDto,
+  CashBookQueryDto,
   CreateAccountDto,
   CreateInvoiceDto,
+  CreatePeriodDto,
   CreateTransactionDto,
   LedgerQueryDto,
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
+  UpdateAccountDto,
+  UpdatePeriodDto,
 } from './dto/finance.dto';
 import { FinanceService } from './finance.service';
 
@@ -46,6 +50,37 @@ export class FinanceController {
     return this.finance.createAccount(dto);
   }
 
+  @Patch('accounts/:id')
+  @Roles(...WRITE)
+  updateAccount(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
+    return this.finance.updateAccount(id, dto);
+  }
+
+  // Fiscal periods (posting is locked outside an open period)
+  @Get('periods')
+  listPeriods() {
+    return this.finance.listPeriods();
+  }
+
+  @Post('periods')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createPeriod(@Body() dto: CreatePeriodDto) {
+    return this.finance.createPeriod(dto);
+  }
+
+  @Patch('periods/:id')
+  @Roles(...WRITE)
+  updatePeriod(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePeriodDto) {
+    return this.finance.updatePeriod(id, dto);
+  }
+
+  // Cash & Bank book
+  @Get('cash-book')
+  cashBook(@Query() query: CashBookQueryDto) {
+    return this.finance.cashBook(query);
+  }
+
   // Transactions (journal entries)
   @Get('transactions')
   listTransactions(@Query() query: ListTransactionsQueryDto) {
@@ -62,6 +97,13 @@ export class FinanceController {
   @Get('transactions/:id')
   getTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.getTransaction(id);
+  }
+
+  @Post('transactions/:id/reverse')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  reverseTransaction(@Param('id', ParseUUIDPipe) id: string) {
+    return this.finance.reverseTransaction(id);
   }
 
   // General ledger & financial statements (read-only)

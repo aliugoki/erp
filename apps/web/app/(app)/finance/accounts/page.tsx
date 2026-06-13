@@ -59,6 +59,9 @@ export default function ChartOfAccountsPage() {
                         {a.isGroup ? <Folder className="size-4 text-muted-foreground" /> : <Tag className="size-4 text-muted-foreground" />}
                         <span className="font-mono text-xs text-muted-foreground">{a.code}</span>
                         <span className={cn(a.isGroup && 'font-semibold')}>{a.name}</span>
+                        {a.controlType !== 'NONE' ? (
+                          <Badge variant="secondary" className="ml-1">{a.controlType === 'BANK' ? `Bank${a.bankName ? ` · ${a.bankName}` : ''}` : 'Cash'}</Badge>
+                        ) : null}
                       </span>
                     </TableCell>
                     <TableCell><Badge variant={TYPE_VARIANT[a.type]}>{a.type}</Badge></TableCell>

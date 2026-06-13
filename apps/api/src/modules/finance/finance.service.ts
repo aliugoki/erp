@@ -10,20 +10,27 @@ import { OutboxService } from '../outbox/outbox.service';
 import { normalizePagination } from '../hr/hr.util';
 import type {
   AsOfQueryDto,
+  CashBookQueryDto,
   CreateAccountDto,
   CreateInvoiceDto,
+  CreatePeriodDto,
   CreateTransactionDto,
   LedgerQueryDto,
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
+  UpdateAccountDto,
+  UpdatePeriodDto,
 } from './dto/finance.dto';
 import {
   type AccountType,
+  type ControlType,
   MAX_ACCOUNT_LEVELS,
   UnbalancedTransactionError,
   type VoucherType,
+  VoucherValidationError,
   assertBalanced,
+  assertVoucherType,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -64,12 +71,16 @@ export class FinanceService {
         throw new BadRequestException('A root (level-1) account requires a type');
       }
       const isGroup = dto.isGroup ?? false;
+      const controlType = (dto.controlType ?? 'NONE') as ControlType;
+      if (controlType !== 'NONE' && isGroup) {
+        throw new UnprocessableEntityException('Only a postable (non-group) account can be a cash/bank account');
+      }
       try {
         const rows = (await m.query(
-          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6)
-           RETURNING id, code, name, type, parent_id, is_group, level`,
-          [dto.code, dto.name, type, dto.parentId ?? null, isGroup, level],
+          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number`,
+          [dto.code, dto.name, type, dto.parentId ?? null, isGroup, level, controlType, dto.bankName ?? null, dto.accountNumber ?? null],
         )) as Row[];
         return mapAccount(rows[0]!);
       } catch (err) {
@@ -79,21 +90,49 @@ export class FinanceService {
     });
   }
 
+  /** Edit an account's display name and cash/bank tagging (structure stays fixed). */
+  async updateAccount(id: string, dto: UpdateAccountDto) {
+    return this.tenantTx.run(async (m) => {
+      const existing = (await m.query(
+        `SELECT is_group FROM finance_account WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ is_group: boolean }>;
+      if (!existing[0]) throw new NotFoundException('Account not found');
+      if (dto.controlType && dto.controlType !== 'NONE' && existing[0].is_group) {
+        throw new UnprocessableEntityException('Only a postable (non-group) account can be a cash/bank account');
+      }
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (dto.name !== undefined) sets.push(`name = $${params.push(dto.name)}`);
+      if (dto.controlType !== undefined) sets.push(`control_type = $${params.push(dto.controlType)}`);
+      if (dto.bankName !== undefined) sets.push(`bank_name = $${params.push(dto.bankName)}`);
+      if (dto.accountNumber !== undefined) sets.push(`account_number = $${params.push(dto.accountNumber)}`);
+      if (!sets.length) throw new BadRequestException('No fields to update');
+      const rows = (await m.query(
+        `UPDATE finance_account SET ${sets.join(', ')}, updated_at = now()
+         WHERE id = $${params.push(id)} AND deleted_at IS NULL
+         RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number`,
+        params,
+      )) as Row[];
+      return mapAccount(rows[0]!);
+    });
+  }
+
   /** The chart of accounts as a tree-ordered flat list (each row carries its depth `level`). */
   async listAccounts() {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(`
         WITH RECURSIVE tree AS (
-          SELECT id, code, name, type, parent_id, is_group, 1 AS level, ARRAY[code] AS path
+          SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, 1 AS level, ARRAY[code] AS path
             FROM finance_account
            WHERE deleted_at IS NULL AND parent_id IS NULL
           UNION ALL
-          SELECT c.id, c.code, c.name, c.type, c.parent_id, c.is_group, t.level + 1, t.path || c.code
+          SELECT c.id, c.code, c.name, c.type, c.parent_id, c.is_group, c.control_type, c.bank_name, c.account_number, t.level + 1, t.path || c.code
             FROM finance_account c
             JOIN tree t ON c.parent_id = t.id
            WHERE c.deleted_at IS NULL
         )
-        SELECT id, code, name, type, parent_id, is_group, level FROM tree ORDER BY path
+        SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, level FROM tree ORDER BY path
       `)) as Row[];
       return rows.map(mapAccount);
     });
@@ -113,9 +152,9 @@ export class FinanceService {
       // Postings are only allowed to leaf (non-group) accounts that exist in this tenant.
       const ids = [...new Set(dto.entries.map((e) => e.accountId))];
       const accts = (await m.query(
-        `SELECT id, is_group FROM finance_account WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+        `SELECT id, is_group, control_type FROM finance_account WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
         [ids],
-      )) as Array<{ id: string; is_group: boolean }>;
+      )) as Array<{ id: string; is_group: boolean; control_type: ControlType }>;
       if (accts.length !== ids.length) {
         throw new BadRequestException('One or more accounts do not exist in this tenant');
       }
@@ -123,8 +162,28 @@ export class FinanceService {
         throw new UnprocessableEntityException('Cannot post to a group account — choose a leaf account');
       }
 
-      // Allocate the next per-tenant, per-type voucher number atomically.
       const voucherType = (dto.voucherType ?? 'JV') as VoucherType;
+
+      // Voucher-side rule: receipts/payments must touch the right cash/bank account.
+      const controlById = new Map(accts.map((a) => [a.id, a.control_type]));
+      try {
+        assertVoucherType(
+          voucherType,
+          dto.entries.map((e) => ({
+            controlType: controlById.get(e.accountId) ?? 'NONE',
+            debitMinor: e.debitMinor ?? 0,
+            creditMinor: e.creditMinor ?? 0,
+          })),
+        );
+      } catch (err) {
+        if (err instanceof VoucherValidationError) throw new UnprocessableEntityException(err.message);
+        throw err;
+      }
+
+      // Period lock: once fiscal periods exist, the date must fall inside an OPEN one.
+      await this.assertOpenPeriod(m, dto.occurredOn);
+
+      // Allocate the next per-tenant, per-type voucher number atomically.
       const seq = (await m.query(
         `INSERT INTO finance_voucher_seq (tenant_id, voucher_type, last_no)
          VALUES (current_setting('app.tenant_id')::uuid, $1, 1)
@@ -183,6 +242,151 @@ export class FinanceService {
     });
   }
 
+  /** Reverse a voucher with a contra entry (debits↔credits), linked for the audit trail. */
+  async reverseTransaction(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const orig = (await m.query(
+        `SELECT id, voucher_no, reversed_by_id FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ id: string; voucher_no: string | null; reversed_by_id: string | null }>;
+      if (!orig[0]) throw new NotFoundException('Transaction not found');
+      if (orig[0].reversed_by_id) throw new UnprocessableEntityException('This voucher has already been reversed');
+      const entries = (await m.query(
+        `SELECT account_id, debit_minor, credit_minor FROM finance_journal_entry WHERE transaction_id=$1`,
+        [id],
+      )) as Array<{ account_id: string; debit_minor: string; credit_minor: string }>;
+
+      await this.assertOpenPeriod(m, undefined);
+
+      const seq = (await m.query(
+        `INSERT INTO finance_voucher_seq (tenant_id, voucher_type, last_no)
+         VALUES (current_setting('app.tenant_id')::uuid, 'JV', 1)
+         ON CONFLICT (tenant_id, voucher_type) DO UPDATE SET last_no = finance_voucher_seq.last_no + 1
+         RETURNING last_no`,
+      )) as Array<{ last_no: string }>;
+      const voucherNo = formatVoucherNo('JV', Number(seq[0]!.last_no));
+      const rev = (await m.query(
+        `INSERT INTO finance_transaction (tenant_id, description, voucher_type, voucher_no, occurred_on, reverses_id)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, 'JV', $2, current_date, $3)
+         RETURNING id`,
+        [`Reversal of ${orig[0].voucher_no ?? id}`, voucherNo, id],
+      )) as Row[];
+      const revId = rev[0]!.id as string;
+      for (const e of entries) {
+        // Swap debit and credit to cancel the original.
+        await m.query(
+          `INSERT INTO finance_journal_entry (tenant_id, transaction_id, account_id, debit_minor, credit_minor)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)`,
+          [revId, e.account_id, Number(e.credit_minor), Number(e.debit_minor)],
+        );
+      }
+      await m.query(`UPDATE finance_transaction SET reversed_by_id=$1, updated_at=now() WHERE id=$2`, [revId, id]);
+      return { id: revId, voucherNo, reversesId: id, reversesVoucherNo: orig[0].voucher_no };
+    });
+  }
+
+  /** Block posting outside an OPEN fiscal period — but only once the tenant has defined any periods. */
+  private async assertOpenPeriod(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    occurredOn?: string,
+  ): Promise<void> {
+    const any = (await m.query(`SELECT 1 FROM finance_fiscal_period WHERE deleted_at IS NULL LIMIT 1`)) as unknown[];
+    if (!any.length) return; // no periods configured → no lock (backward compatible)
+    const open = (await m.query(
+      `SELECT 1 FROM finance_fiscal_period
+        WHERE deleted_at IS NULL AND status='OPEN'
+          AND COALESCE($1::date, current_date) BETWEEN start_date AND end_date
+        LIMIT 1`,
+      [occurredOn ?? null],
+    )) as unknown[];
+    if (!open.length) {
+      throw new UnprocessableEntityException(`No open fiscal period for ${occurredOn ?? 'today'}`);
+    }
+  }
+
+  // ── Fiscal periods ───────────────────────────────────────────────────────────
+  async createPeriod(dto: CreatePeriodDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO finance_fiscal_period (tenant_id, name, start_date, end_date)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
+         RETURNING id, name, start_date, end_date, status`,
+        [dto.name, dto.startDate, dto.endDate],
+      )) as Row[];
+      return mapPeriod(rows[0]!);
+    });
+  }
+
+  async listPeriods() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, name, start_date, end_date, status FROM finance_fiscal_period
+          WHERE deleted_at IS NULL ORDER BY start_date DESC`,
+      )) as Row[];
+      return rows.map(mapPeriod);
+    });
+  }
+
+  async updatePeriod(id: string, dto: UpdatePeriodDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `UPDATE finance_fiscal_period SET status=$1, updated_at=now()
+          WHERE id=$2 AND deleted_at IS NULL
+          RETURNING id, name, start_date, end_date, status`,
+        [dto.status, id],
+      )) as Row[];
+      if (!rows[0]) throw new NotFoundException('Period not found');
+      return mapPeriod(rows[0]);
+    });
+  }
+
+  /** Cash & Bank book: opening / receipts / payments / closing for each cash & bank account. */
+  async cashBook(query: CashBookQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT a.id, a.code, a.name, a.control_type, a.bank_name, a.account_number,
+                COALESCE(SUM(CASE WHEN $1::date IS NOT NULL AND t.occurred_on < $1::date
+                                  THEN je.debit_minor - je.credit_minor ELSE 0 END), 0)::bigint AS opening,
+                COALESCE(SUM(CASE WHEN ($1::date IS NULL OR t.occurred_on >= $1::date)
+                                   AND ($2::date IS NULL OR t.occurred_on <= $2::date)
+                                  THEN je.debit_minor ELSE 0 END), 0)::bigint AS receipts,
+                COALESCE(SUM(CASE WHEN ($1::date IS NULL OR t.occurred_on >= $1::date)
+                                   AND ($2::date IS NULL OR t.occurred_on <= $2::date)
+                                  THEN je.credit_minor ELSE 0 END), 0)::bigint AS payments
+           FROM finance_account a
+           LEFT JOIN finance_journal_entry je ON je.account_id = a.id
+           LEFT JOIN finance_transaction t ON t.id = je.transaction_id AND t.deleted_at IS NULL
+          WHERE a.deleted_at IS NULL AND a.control_type IN ('CASH','BANK')
+          GROUP BY a.id
+          ORDER BY a.control_type, a.code`,
+        [query.from ?? null, query.to ?? null],
+      )) as Row[];
+      const accounts = rows.map((r) => {
+        const opening = Number(r.opening);
+        const receipts = Number(r.receipts);
+        const payments = Number(r.payments);
+        return {
+          accountId: r.id,
+          code: r.code,
+          name: r.name,
+          controlType: r.control_type,
+          bankName: r.bank_name ?? null,
+          accountNumber: r.account_number ?? null,
+          opening: money(opening),
+          receipts: money(receipts),
+          payments: money(payments),
+          closing: money(opening + receipts - payments),
+        };
+      });
+      const totals = {
+        receiptsMinor: accounts.reduce((s, a) => s + a.receipts.amountMinor, 0),
+        paymentsMinor: accounts.reduce((s, a) => s + a.payments.amountMinor, 0),
+        closingMinor: accounts.reduce((s, a) => s + a.closing.amountMinor, 0),
+      };
+      return { from: query.from ?? null, to: query.to ?? null, accounts, totals };
+    });
+  }
+
   /** Paginated list of journal transactions (header + its total debit), newest first. */
   async listTransactions(query: ListTransactionsQueryDto): Promise<SuccessEnvelope<unknown[]>> {
     const { page, pageSize, limit, offset } = normalizePagination(query.page, query.pageSize);
@@ -195,6 +399,7 @@ export class FinanceService {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
         `SELECT t.id, t.description, t.voucher_type, t.voucher_no, t.occurred_on, t.reference,
+                t.reverses_id, t.reversed_by_id,
                 COALESCE(SUM(je.debit_minor), 0)::bigint AS total_debit_minor,
                 COUNT(je.id)::int AS line_count
            FROM finance_transaction t
@@ -217,6 +422,8 @@ export class FinanceService {
           voucherNo: r.voucher_no ?? null,
           occurredOn: r.occurred_on,
           reference: r.reference ?? null,
+          reversesId: r.reverses_id ?? null,
+          reversedById: r.reversed_by_id ?? null,
           lineCount: Number(r.line_count),
           total: money(r.total_debit_minor),
         })),
@@ -520,7 +727,20 @@ function mapAccount(r: Row) {
     type: r.type,
     parentId: r.parent_id ?? null,
     isGroup: r.is_group ?? false,
+    controlType: r.control_type ?? 'NONE',
+    bankName: r.bank_name ?? null,
+    accountNumber: r.account_number ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
+  };
+}
+
+function mapPeriod(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    status: r.status,
   };
 }
 

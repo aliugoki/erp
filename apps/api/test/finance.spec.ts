@@ -7,7 +7,9 @@ import {
   MAX_ACCOUNT_LEVELS,
   UnbalancedTransactionError,
   VOUCHER_TYPES,
+  VoucherValidationError,
   assertBalanced,
+  assertVoucherType,
   computeInvoiceTotals,
   formatVoucherNo,
   normalBalance,
@@ -115,6 +117,23 @@ describe('account normal-balance semantics', () => {
   it('formatVoucherNo zero-pads to a per-type running number', () => {
     expect(formatVoucherNo('BRV', 1)).toBe('BRV-000001');
     expect(formatVoucherNo('JV', 4242)).toBe('JV-004242');
+  });
+
+  it('assertVoucherType enforces cash/bank sides per voucher type', () => {
+    const bankDr = { controlType: 'BANK' as const, debitMinor: 1000, creditMinor: 0 };
+    const bankCr = { controlType: 'BANK' as const, debitMinor: 0, creditMinor: 1000 };
+    const cashDr = { controlType: 'CASH' as const, debitMinor: 1000, creditMinor: 0 };
+    const cashCr = { controlType: 'CASH' as const, debitMinor: 0, creditMinor: 1000 };
+    const other = { controlType: 'NONE' as const, debitMinor: 0, creditMinor: 1000 };
+
+    expect(() => assertVoucherType('BRV', [bankDr, other])).not.toThrow();
+    expect(() => assertVoucherType('BRV', [cashDr, other])).toThrow(VoucherValidationError);
+    expect(() => assertVoucherType('BPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+    expect(() => assertVoucherType('CRV', [cashDr, other])).not.toThrow();
+    expect(() => assertVoucherType('CPV', [cashCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
+    expect(() => assertVoucherType('CPV', [bankCr, { ...other, debitMinor: 1000, creditMinor: 0 }])).toThrow(VoucherValidationError);
+    // JV has no cash/bank constraint.
+    expect(() => assertVoucherType('JV', [other, { ...other, debitMinor: 1000, creditMinor: 0 }])).not.toThrow();
   });
 
   it('a balanced ledger trial-balances to equal debit and credit totals', () => {

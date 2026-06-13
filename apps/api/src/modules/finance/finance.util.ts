@@ -73,6 +73,49 @@ export function formatVoucherNo(type: VoucherType, n: number): string {
   return `${type}-${String(n).padStart(6, '0')}`;
 }
 
+/** How an account participates in cash/bank books and voucher validation. */
+export type ControlType = 'NONE' | 'CASH' | 'BANK';
+export const CONTROL_TYPES: ControlType[] = ['NONE', 'CASH', 'BANK'];
+
+/** Thrown when a voucher's lines don't match its type's cash/bank rule. Mapped to HTTP 422. */
+export class VoucherValidationError extends Error {}
+
+export interface VoucherLine {
+  controlType: ControlType;
+  debitMinor: number;
+  creditMinor: number;
+}
+
+/**
+ * Enforce the cash/bank semantics of a voucher type:
+ *  - BRV (Bank Receipt)  → must DEBIT a bank account (money into the bank)
+ *  - BPV (Bank Payment)  → must CREDIT a bank account (money out of the bank)
+ *  - CRV (Cash Receipt)  → must DEBIT a cash account
+ *  - CPV (Cash Payment)  → must CREDIT a cash account
+ *  - JV  (Journal)       → no cash/bank constraint
+ * The double-entry balance is checked separately (assertBalanced).
+ */
+export function assertVoucherType(type: VoucherType, lines: VoucherLine[]): void {
+  const has = (control: ControlType, side: 'debit' | 'credit') =>
+    lines.some((l) => l.controlType === control && (side === 'debit' ? l.debitMinor > 0 : l.creditMinor > 0));
+  switch (type) {
+    case 'BRV':
+      if (!has('BANK', 'debit')) throw new VoucherValidationError('A Bank Receipt Voucher must debit a bank account');
+      break;
+    case 'BPV':
+      if (!has('BANK', 'credit')) throw new VoucherValidationError('A Bank Payment Voucher must credit a bank account');
+      break;
+    case 'CRV':
+      if (!has('CASH', 'debit')) throw new VoucherValidationError('A Cash Receipt Voucher must debit a cash account');
+      break;
+    case 'CPV':
+      if (!has('CASH', 'credit')) throw new VoucherValidationError('A Cash Payment Voucher must credit a cash account');
+      break;
+    case 'JV':
+      break;
+  }
+}
+
 // ── Account-type accounting semantics (pure; used by GL / trial balance / statements) ────────────
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';

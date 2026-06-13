@@ -86,14 +86,36 @@ check "child inherits parent type (no type sent)" "$(get "$MGR" finance/accounts
 check "level-4 group has level 4" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['level'] for a in json.load(sys.stdin)['data'] if a['code']=='9-1-1-1'))")" "4"
 check "5th level rejected (max 4) -> 422" "$(code -XPOST "$B/finance/accounts" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"code\":\"9-1-1-1-1\",\"name\":\"too deep\",\"parentId\":\"$G4\"}")" "422"
 
-echo "== voucher types & numbering =="
-V1=$(post "$MGR" finance/transactions "{\"description\":\"Bank receipt\",\"voucherType\":\"BRV\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":1000},{\"accountId\":\"$REV\",\"creditMinor\":1000}]}" | jget data.voucherNo)
-check "first BRV -> BRV-000001" "$V1" "BRV-000001"
-V2=$(post "$MGR" finance/transactions "{\"description\":\"Bank receipt 2\",\"voucherType\":\"BRV\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":2000},{\"accountId\":\"$REV\",\"creditMinor\":2000}]}" | jget data.voucherNo)
+echo "== cash/bank tagging + voucher-side validation =="
+# Tag the existing Cash leaf as CASH; add a BANK control account under the Assets group.
+curl -s -o /dev/null -XPATCH "$B/finance/accounts/$CASH" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"controlType":"CASH"}'
+BANK=$(post "$MGR" finance/accounts "{\"code\":\"1100\",\"name\":\"Bank\",\"parentId\":\"$ASSETS\",\"controlType\":\"BANK\",\"bankName\":\"HBL\"}" | jget data.id)
+check "account tagged BANK" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['controlType'] for a in json.load(sys.stdin)['data'] if a['code']=='1100'))")" "BANK"
+V1=$(post "$MGR" finance/transactions "{\"voucherType\":\"BRV\",\"description\":\"Bank receipt\",\"entries\":[{\"accountId\":\"$BANK\",\"debitMinor\":1000},{\"accountId\":\"$REV\",\"creditMinor\":1000}]}" | jget data.voucherNo)
+check "BRV debiting bank -> BRV-000001" "$V1" "BRV-000001"
+V2=$(post "$MGR" finance/transactions "{\"voucherType\":\"BRV\",\"description\":\"Bank receipt 2\",\"entries\":[{\"accountId\":\"$BANK\",\"debitMinor\":2000},{\"accountId\":\"$REV\",\"creditMinor\":2000}]}" | jget data.voucherNo)
 check "second BRV -> BRV-000002 (per-type sequence)" "$V2" "BRV-000002"
-VC=$(post "$MGR" finance/transactions "{\"description\":\"Cash payment\",\"voucherType\":\"CPV\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":500},{\"accountId\":\"$CASH\",\"creditMinor\":500}]}" | jget data.voucherNo)
-check "first CPV -> CPV-000001 (independent sequence)" "$VC" "CPV-000001"
+check "BRV NOT debiting a bank acct -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"BRV\",\"description\":\"bad\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":500},{\"accountId\":\"$REV\",\"creditMinor\":500}]}")" "422"
+VC=$(post "$MGR" finance/transactions "{\"voucherType\":\"CPV\",\"description\":\"Cash payment\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":500},{\"accountId\":\"$CASH\",\"creditMinor\":500}]}" | jget data.voucherNo)
+check "CPV crediting cash -> CPV-000001" "$VC" "CPV-000001"
+check "CPV NOT crediting cash -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"CPV\",\"description\":\"bad\",\"entries\":[{\"accountId\":\"$RENT\",\"debitMinor\":500},{\"accountId\":\"$BANK\",\"creditMinor\":500}]}")" "422"
 check "filter voucherType=BRV lists 2" "$(get "$MGR" "finance/transactions?voucherType=BRV" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']))")" "2"
+
+echo "== voucher reversal =="
+RID=$(post "$MGR" finance/transactions "{\"voucherType\":\"JV\",\"description\":\"To reverse\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":700},{\"accountId\":\"$REV\",\"creditMinor\":700}]}" | jget data.id)
+RV=$(curl -s -XPOST "$B/finance/transactions/$RID/reverse" -H "Authorization: Bearer $MGR" | jget data.voucherNo)
+[ -n "$RV" ] && echo "  ✅ reversal voucher $RV created" && pass=$((pass+1)) || { echo "  ❌ reversal failed"; fail=$((fail+1)); }
+check "reversing again -> 422 (already reversed)" "$(code -XPOST "$B/finance/transactions/$RID/reverse" -H "Authorization: Bearer $MGR")" "422"
+
+echo "== cash & bank book =="
+check "cash book lists cash + bank accounts" "$(get "$MGR" finance/cash-book | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['accounts']))")" "2"
+
+echo "== fiscal period lock (run last — enabling periods restricts posting) =="
+P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
+check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"
+check "posting inside the open period -> 201" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"in period\",\"occurredOn\":\"2020-01-15\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "201"
+curl -s -o /dev/null -XPATCH "$B/finance/periods/$P" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
+check "posting into a CLOSED period -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"closed\",\"occurredOn\":\"2020-01-15\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"
 
 echo ""
 echo "RESULT: $pass passed, $fail failed"

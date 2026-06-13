@@ -26,7 +26,10 @@ const TYPES: AccountType[] = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENS
 export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ code: '', name: '', type: 'ASSET' as AccountType, parentId: 'NONE', isGroup: false });
+  const [f, setF] = useState({
+    code: '', name: '', type: 'ASSET' as AccountType, parentId: 'NONE', isGroup: false,
+    controlType: 'NONE' as 'NONE' | 'CASH' | 'BANK', bankName: '', accountNumber: '',
+  });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
 
   // Only groups below the 4th level can be parents (a child must fit within 4 levels).
@@ -42,13 +45,15 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
         name: f.name,
         type: f.type,
         isGroup: f.isGroup,
+        controlType: f.isGroup ? 'NONE' : f.controlType,
+        ...(f.controlType === 'BANK' ? { bankName: f.bankName, accountNumber: f.accountNumber } : {}),
         ...(f.parentId !== 'NONE' ? { parentId: f.parentId } : {}),
       }),
     onSuccess: () => {
       toast.success('Account created', { description: `${f.code} · ${f.name}` });
       qc.invalidateQueries({ queryKey: ['accounts'] });
       setOpen(false);
-      setF({ code: '', name: '', type: 'ASSET', parentId: 'NONE', isGroup: false });
+      setF({ code: '', name: '', type: 'ASSET', parentId: 'NONE', isGroup: false, controlType: 'NONE', bankName: '', accountNumber: '' });
     },
     onError: (e) => toast.error('Could not create account', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -113,6 +118,34 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
             </div>
             <Switch id="isGroup" checked={f.isGroup} onCheckedChange={(v) => set('isGroup', v)} />
           </div>
+          {!f.isGroup ? (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="space-y-2">
+                <Label>Cash / Bank control</Label>
+                <Select value={f.controlType} onValueChange={(v) => set('controlType', v as typeof f.controlType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Ordinary account</SelectItem>
+                    <SelectItem value="CASH">Cash account</SelectItem>
+                    <SelectItem value="BANK">Bank account</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Cash/Bank accounts drive voucher rules (BRV/BPV/CRV/CPV) and the cash &amp; bank book.</p>
+              </div>
+              {f.controlType === 'BANK' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="bn">Bank name</Label>
+                    <Input id="bn" value={f.bankName} onChange={(e) => set('bankName', e.target.value)} placeholder="HBL" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="an">Account #</Label>
+                    <Input id="an" value={f.accountNumber} onChange={(e) => set('accountNumber', e.target.value)} placeholder="0001-xxxxxxx" />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create account'}</Button>

@@ -29,6 +29,7 @@ export interface Invoice {
 }
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+export type ControlType = 'NONE' | 'CASH' | 'BANK';
 
 export interface Account {
   id: string;
@@ -37,7 +38,37 @@ export interface Account {
   type: AccountType;
   parentId: string | null;
   isGroup: boolean;
+  controlType: ControlType;
+  bankName: string | null;
+  accountNumber: string | null;
   level?: number;
+}
+
+export interface FiscalPeriod {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: 'OPEN' | 'CLOSED';
+}
+
+export interface CashBookRow {
+  accountId: string;
+  code: string;
+  name: string;
+  controlType: 'CASH' | 'BANK';
+  bankName: string | null;
+  accountNumber: string | null;
+  opening: Money;
+  receipts: Money;
+  payments: Money;
+  closing: Money;
+}
+export interface CashBook {
+  from: string | null;
+  to: string | null;
+  accounts: CashBookRow[];
+  totals: { receiptsMinor: number; paymentsMinor: number; closingMinor: number };
 }
 
 export type VoucherType = 'BRV' | 'BPV' | 'CPV' | 'CRV' | 'JV';
@@ -49,6 +80,8 @@ export interface JournalTxn {
   voucherNo: string | null;
   occurredOn: string;
   reference: string | null;
+  reversesId: string | null;
+  reversedById: string | null;
   lineCount: number;
   total: Money;
 }

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, FileText, ListTree, NotebookPen, PieChart } from 'lucide-react';
+import { BookOpen, CalendarRange, FileText, Landmark, ListTree, NotebookPen, PieChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -9,7 +9,9 @@ const TABS = [
   { href: '/finance/accounts', label: 'Chart of Accounts', icon: ListTree, exact: false },
   { href: '/finance/journal', label: 'Journal', icon: NotebookPen, exact: false },
   { href: '/finance/ledger', label: 'General Ledger', icon: BookOpen, exact: false },
+  { href: '/finance/cash-book', label: 'Cash & Bank', icon: Landmark, exact: false },
   { href: '/finance/reports', label: 'Reports', icon: PieChart, exact: false },
+  { href: '/finance/periods', label: 'Periods', icon: CalendarRange, exact: false },
 ];
 
 /** Sub-navigation across the finance sub-pages (invoices, COA, journal, ledger, statements). */
