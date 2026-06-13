@@ -104,6 +104,12 @@ export class BudgetQueryDto {
   @IsUUID() periodId!: string;
 }
 
+export class YearEndCloseDto {
+  @IsUUID() periodId!: string;
+  /** Equity account that absorbs net income (retained earnings). */
+  @IsUUID() retainedEarningsAccountId!: string;
+}
+
 export class CreateTransactionDto {
   @IsString() @MinLength(1) description!: string;
   /** Voucher type — BRV/BPV/CPV/CRV/JV. Defaults to JV (general journal voucher). */

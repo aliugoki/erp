@@ -7,6 +7,7 @@ import type { FiscalPeriod } from '@/lib/types';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
+import { YearEndCloseDialog } from '@/components/finance/year-end-close-dialog';
 import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -85,9 +86,12 @@ export default function PeriodsPage() {
                 <TableCell className="tabular-nums text-muted-foreground">{String(p.endDate).slice(0, 10)}</TableCell>
                 <TableCell><Badge variant={p.status === 'OPEN' ? 'success' : 'secondary'}>{p.status}</Badge></TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" variant="outline" disabled={toggle.isPending} onClick={() => toggle.mutate(p)}>
-                    {p.status === 'OPEN' ? <><Lock className="size-4" /> Close</> : <><LockOpen className="size-4" /> Reopen</>}
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <YearEndCloseDialog period={p} />
+                    <Button size="sm" variant="outline" disabled={toggle.isPending} onClick={() => toggle.mutate(p)}>
+                      {p.status === 'OPEN' ? <><Lock className="size-4" /> Lock</> : <><LockOpen className="size-4" /> Reopen</>}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

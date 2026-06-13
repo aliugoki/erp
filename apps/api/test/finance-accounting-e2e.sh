@@ -172,6 +172,15 @@ check "variance = -40000 (under)" "$(bva variance)" "-40000"
 # Close Budget Month so the period-lock section below still sees no OPEN period covering today.
 curl -s -o /dev/null -XPATCH "$B/finance/periods/$BP" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
 
+echo "== year-end close =="
+RE=$(post "$MGR" finance/accounts '{"code":"3000","name":"Retained Earnings","type":"EQUITY"}' | jget data.id)
+CY=$(post "$MGR" finance/periods '{"name":"Close 2026","startDate":"2026-01-01","endDate":"2026-12-31"}' | jget data.id)
+check "year-end close posts a closing voucher" "$(curl -s -XPOST "$B/finance/year-end-close" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"periodId\":\"$CY\",\"retainedEarningsAccountId\":\"$RE\"}" | jget data.posted)" "True"
+check "income statement net = 0 after close" "$(get "$MGR" finance/statements/income | jget data.netIncomeMinor)" "0"
+check "re-running close finds nothing to close" "$(curl -s -XPOST "$B/finance/year-end-close" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"periodId\":\"$CY\",\"retainedEarningsAccountId\":\"$RE\"}" | jget data.posted)" "False"
+# Close the year period so the period-lock section below still sees no OPEN period covering today.
+curl -s -o /dev/null -XPATCH "$B/finance/periods/$CY" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"status":"CLOSED"}'
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

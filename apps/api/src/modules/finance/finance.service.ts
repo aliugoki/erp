@@ -29,6 +29,7 @@ import type {
   ReconcileDto,
   UpdateAccountDto,
   UpdatePeriodDto,
+  YearEndCloseDto,
 } from './dto/finance.dto';
 import {
   type AccountType,
@@ -976,6 +977,58 @@ export class FinanceService {
       )) as Row[];
       return { updated: res.length, reconciled: dto.reconciled };
     });
+  }
+
+  /**
+   * Year-end close: zero every revenue & expense account as of the period end by posting a balanced
+   * closing voucher (JV), with the net income rolled into a retained-earnings equity account.
+   * Naturally idempotent — a second run finds the P&L already at zero and posts nothing.
+   */
+  async yearEndClose(dto: YearEndCloseDto) {
+    const prep = await this.tenantTx.run(async (m) => {
+      const periods = (await m.query(
+        `SELECT id, name, end_date FROM finance_fiscal_period WHERE id=$1 AND deleted_at IS NULL`,
+        [dto.periodId],
+      )) as Array<{ id: string; name: string; end_date: string }>;
+      const period = periods[0];
+      if (!period) throw new NotFoundException('Period not found');
+      const re = (await m.query(
+        `SELECT type, is_group FROM finance_account WHERE id=$1 AND deleted_at IS NULL`,
+        [dto.retainedEarningsAccountId],
+      )) as Array<{ type: string; is_group: boolean }>;
+      if (!re[0]) throw new BadRequestException('Retained-earnings account not found');
+      if (re[0].type !== 'EQUITY' || re[0].is_group) {
+        throw new UnprocessableEntityException('Retained earnings must be a postable EQUITY account');
+      }
+      const sums = await this.accountSums(m, period.end_date, ['REVENUE', 'EXPENSE']);
+      return { period, sums };
+    });
+
+    // Build the closing entries: reverse each P&L account's raw balance to bring it to zero.
+    let sumRaw = 0;
+    const entries: Array<{ accountId: string; debitMinor?: number; creditMinor?: number }> = [];
+    for (const a of prep.sums) {
+      const raw = a.debit - a.credit; // debit-positive
+      if (raw === 0) continue;
+      entries.push(raw < 0 ? { accountId: a.id, debitMinor: -raw } : { accountId: a.id, creditMinor: raw });
+      sumRaw += raw;
+    }
+    if (entries.length === 0) {
+      return { posted: false, message: 'Nothing to close — revenue and expense are already zero', netIncomeMinor: 0 };
+    }
+    // Retained-earnings balancing leg absorbs the net (debit-credit contribution = sumRaw).
+    entries.push(sumRaw > 0
+      ? { accountId: dto.retainedEarningsAccountId, debitMinor: sumRaw }
+      : { accountId: dto.retainedEarningsAccountId, creditMinor: -sumRaw });
+    const netIncomeMinor = -sumRaw;
+
+    const txn = (await this.createTransaction({
+      description: `Year-end close: ${prep.period.name}`,
+      voucherType: 'JV',
+      occurredOn: prep.period.end_date,
+      entries,
+    } as CreateTransactionDto)) as { voucherNo?: string };
+    return { posted: true, voucherNo: txn.voucherNo ?? null, netIncomeMinor, closedAccounts: entries.length - 1 };
   }
 
   // ── Accounts Payable (vendors / bills / payments) ────────────────────────────

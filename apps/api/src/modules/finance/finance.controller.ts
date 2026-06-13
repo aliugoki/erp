@@ -35,6 +35,7 @@ import {
   ReconcileDto,
   UpdateAccountDto,
   UpdatePeriodDto,
+  YearEndCloseDto,
 } from './dto/finance.dto';
 import { FinanceService } from './finance.service';
 
@@ -82,6 +83,13 @@ export class FinanceController {
   @Roles(...WRITE)
   updatePeriod(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePeriodDto) {
     return this.finance.updatePeriod(id, dto);
+  }
+
+  @Post('year-end-close')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  yearEndClose(@Body() dto: YearEndCloseDto) {
+    return this.finance.yearEndClose(dto);
   }
 
   // Cash & Bank book
