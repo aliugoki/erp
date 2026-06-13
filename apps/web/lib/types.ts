@@ -224,6 +224,15 @@ export interface ReconEntry {
   reconciled: boolean;
   reconciledAt: string | null;
 }
+export interface BankStatementLine {
+  id: string;
+  date: string;
+  description: string | null;
+  amount: Money;
+  reference: string | null;
+  matched: boolean;
+}
+
 export interface Reconciliation {
   account: { id: string; code: string; name: string; controlType: 'CASH' | 'BANK'; bankName: string | null; accountNumber: string | null };
   bookBalance: Money;

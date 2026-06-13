@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListChecks } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { Account, Reconciliation } from '@/lib/types';
+import type { Account, BankStatementLine, Reconciliation } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
+import { ImportStatementDialog } from '@/components/finance/import-statement-dialog';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,6 +27,21 @@ export default function ReconciliationPage() {
     queryKey: ['reconciliation', accountId],
     queryFn: () => apiGet<Reconciliation>(`/finance/reconciliation/${accountId}`),
     enabled: Boolean(accountId),
+  });
+  const { data: statement } = useQuery({
+    queryKey: ['statement', accountId],
+    queryFn: () => apiGet<BankStatementLine[]>(`/finance/bank-statements/${accountId}`),
+    enabled: Boolean(accountId),
+  });
+
+  const autoMatch = useMutation({
+    mutationFn: () => apiPost<{ matched: number; unmatched: number }>('/finance/bank-statements/auto-match', { accountId }),
+    onSuccess: (r) => {
+      toast.success(`Auto-matched ${r.matched}`, { description: `${r.unmatched} line(s) still unmatched` });
+      qc.invalidateQueries({ queryKey: ['reconciliation'] });
+      qc.invalidateQueries({ queryKey: ['statement'] });
+    },
+    onError: (e) => toast.error('Auto-match failed', { description: e instanceof ApiError ? e.message : '' }),
   });
 
   const mark = useMutation({
@@ -59,6 +75,12 @@ export default function ReconciliationPage() {
               {cashBank.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} · {a.name} ({a.controlType})</SelectItem>)}
             </SelectContent>
           </Select>
+          {accountId ? (
+            <div className="flex items-center gap-2">
+              <ImportStatementDialog accountId={accountId} />
+              <Button size="sm" variant="outline" disabled={autoMatch.isPending} onClick={() => autoMatch.mutate()}>Auto-match</Button>
+            </div>
+          ) : null}
           {recon ? (
             <div className="ml-auto flex items-center gap-5 text-sm">
               <span className="text-muted-foreground">Book <span className="tabular-nums text-foreground">{formatMoney(recon.bookBalance.amountMinor)}</span></span>
@@ -116,6 +138,32 @@ export default function ReconciliationPage() {
           </>
         )}
       </Card>
+
+      {accountId && (statement?.length ?? 0) > 0 ? (
+        <Card className="overflow-hidden">
+          <div className="border-b p-4 text-sm font-medium">Imported statement lines</div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-center">Matched</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {statement!.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="tabular-nums text-muted-foreground">{String(s.date).slice(0, 10)}</TableCell>
+                  <TableCell>{s.description ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatMoney(s.amount.amountMinor, s.amount.currency)}</TableCell>
+                  <TableCell className="text-center">{s.matched ? '✓' : <span className="text-xs text-muted-foreground">unmatched</span>}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      ) : null}
     </div>
   );
 }

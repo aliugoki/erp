@@ -16,10 +16,12 @@ import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AsOfQueryDto,
+  AutoMatchDto,
   BudgetQueryDto,
   CashBookQueryDto,
   ConvertQueryDto,
   CreateAccountDto,
+  ImportStatementDto,
   CreateBillDto,
   CreateBillPaymentDto,
   CreateCostCenterDto,
@@ -187,6 +189,24 @@ export class FinanceController {
   @Roles(...WRITE)
   setReconciled(@Body() dto: ReconcileDto) {
     return this.finance.setReconciled(dto);
+  }
+
+  @Get('bank-statements/:accountId')
+  listStatement(@Param('accountId', ParseUUIDPipe) accountId: string) {
+    return this.finance.listStatement(accountId);
+  }
+
+  @Post('bank-statements/import')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  importStatement(@Body() dto: ImportStatementDto) {
+    return this.finance.importStatement(dto);
+  }
+
+  @Post('bank-statements/auto-match')
+  @Roles(...WRITE)
+  autoMatch(@Body() dto: AutoMatchDto) {
+    return this.finance.autoMatch(dto);
   }
 
   // Transactions (journal entries)

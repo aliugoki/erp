@@ -198,6 +198,13 @@ check "USD 10000 minor -> PKR = 2785000" "$(get "$MGR" "finance/convert?amountMi
 check "PKR 2785000 -> USD = 10000" "$(get "$MGR" "finance/convert?amountMinor=2785000&from=PKR&to=USD" | jget data.result.amountMinor)" "10000"
 check "second base currency rejected -> 400" "$(code -XPOST "$B/finance/currencies" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"code":"EUR","name":"Euro","isBase":true}')" "400"
 
+echo "== bank statement import + auto-match =="
+# BANK has two BRV deposits (1000, 2000); the 1000 was cleared manually in the reconciliation section.
+post "$MGR" finance/bank-statements/import "{\"accountId\":\"$BANK\",\"lines\":[{\"date\":\"2026-06-15\",\"amountMinor\":2000,\"description\":\"deposit\"},{\"date\":\"2026-06-16\",\"amountMinor\":999999,\"description\":\"unknown\"}]}" >/dev/null
+check "auto-match matches the 2000 deposit" "$(post "$MGR" finance/bank-statements/auto-match "{\"accountId\":\"$BANK\"}" | jget data.matched)" "1"
+check "one imported line remains unmatched" "$(get "$MGR" "finance/bank-statements/$BANK" | python3 -c "import sys,json;print(sum(1 for s in json.load(sys.stdin)['data'] if not s['matched']))")" "1"
+check "bank now fully cleared (uncleared count 0)" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.unclearedCount)" "0"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

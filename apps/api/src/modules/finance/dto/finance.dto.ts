@@ -162,6 +162,27 @@ export class CreateTransactionDto {
   entries!: JournalEntryDto[];
 }
 
+export class StatementLineDto {
+  @IsISO8601() date!: string;
+  /** Signed minor amount: + deposit / − payment (debit-positive effect on the bank). */
+  @IsInt() amountMinor!: number;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() reference?: string;
+}
+
+export class ImportStatementDto {
+  @IsUUID() accountId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StatementLineDto)
+  lines!: StatementLineDto[];
+}
+
+export class AutoMatchDto {
+  @IsUUID() accountId!: string;
+}
+
 /** Mark/unmark bank or cash postings as cleared on a statement (bank reconciliation). */
 export class ReconcileDto {
   @IsArray()

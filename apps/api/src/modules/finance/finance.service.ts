@@ -10,9 +10,11 @@ import { OutboxService } from '../outbox/outbox.service';
 import { normalizePagination } from '../hr/hr.util';
 import type {
   AsOfQueryDto,
+  AutoMatchDto,
   CashBookQueryDto,
   ConvertQueryDto,
   CreateAccountDto,
+  ImportStatementDto,
   BudgetQueryDto,
   CreateBillDto,
   CreateBillPaymentDto,
@@ -971,6 +973,77 @@ export class FinanceService {
         unclearedCount: entries.filter((e) => !e.reconciled).length,
         entries,
       };
+    });
+  }
+
+  /** Import bank-statement lines for an account (for later auto-match). */
+  async importStatement(dto: ImportStatementDto) {
+    return this.tenantTx.run(async (m) => {
+      for (const l of dto.lines) {
+        await m.query(
+          `INSERT INTO bank_statement_line (tenant_id, account_id, stmt_date, description, amount_minor, reference)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5)`,
+          [dto.accountId, l.date, l.description ?? null, l.amountMinor, l.reference ?? null],
+        );
+      }
+      return { imported: dto.lines.length };
+    });
+  }
+
+  async listStatement(accountId: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, stmt_date::text AS stmt_date, description, amount_minor, reference, matched_entry_id
+           FROM bank_statement_line WHERE account_id=$1 AND deleted_at IS NULL
+          ORDER BY stmt_date, created_at`,
+        [accountId],
+      )) as Row[];
+      return rows.map((r) => ({
+        id: r.id,
+        date: r.stmt_date,
+        description: r.description ?? null,
+        amount: money(r.amount_minor),
+        reference: r.reference ?? null,
+        matched: Boolean(r.matched_entry_id),
+      }));
+    });
+  }
+
+  /** Auto-match unmatched statement lines to unreconciled bank postings by signed amount. */
+  async autoMatch(dto: AutoMatchDto) {
+    return this.tenantTx.run(async (m) => {
+      const lines = (await m.query(
+        `SELECT id, stmt_date::text AS stmt_date, amount_minor FROM bank_statement_line
+          WHERE account_id=$1 AND deleted_at IS NULL AND matched_entry_id IS NULL
+          ORDER BY stmt_date, created_at`,
+        [dto.accountId],
+      )) as Array<{ id: string; stmt_date: string; amount_minor: string }>;
+      const entries = (await m.query(
+        `SELECT je.id, (je.debit_minor - je.credit_minor) AS net
+           FROM finance_journal_entry je
+           JOIN finance_transaction t ON t.id = je.transaction_id
+          WHERE je.account_id=$1 AND je.reconciled=false AND t.status='POSTED' AND t.deleted_at IS NULL`,
+        [dto.accountId],
+      )) as Array<{ id: string; net: string }>;
+
+      // Pool of available journal entries keyed by their signed net amount.
+      const pool = new Map<number, string[]>();
+      for (const e of entries) {
+        const net = Number(e.net);
+        (pool.get(net) ?? pool.set(net, []).get(net)!).push(e.id);
+      }
+      let matched = 0;
+      for (const line of lines) {
+        const want = Number(line.amount_minor);
+        const ids = pool.get(want);
+        if (ids && ids.length) {
+          const jeId = ids.shift()!;
+          await m.query(`UPDATE finance_journal_entry SET reconciled=true, reconciled_at=$2 WHERE id=$1`, [jeId, line.stmt_date]);
+          await m.query(`UPDATE bank_statement_line SET matched_entry_id=$2, updated_at=now() WHERE id=$1`, [line.id, jeId]);
+          matched += 1;
+        }
+      }
+      return { matched, unmatched: lines.length - matched };
     });
   }
 
