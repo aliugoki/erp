@@ -87,6 +87,29 @@ export interface JournalTxn {
   total: Money;
 }
 
+export interface Vendor {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+
+export type BillStatus = 'DRAFT' | 'RECEIVED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';
+export interface Bill {
+  id: string;
+  number: string;
+  vendorId: string;
+  vendorName: string | null;
+  subtotal: Money;
+  tax: Money;
+  total: Money;
+  paid: Money;
+  outstanding: Money;
+  status: BillStatus;
+  billDate: string | null;
+  dueDate: string | null;
+}
+
 export type AgingBucketKey = 'current' | 'd1_30' | 'd31_60' | 'd61_90' | 'd90_plus';
 export interface ArAging {
   asOf: string | null;
@@ -96,6 +119,22 @@ export interface ArAging {
     invoiceId: string;
     number: string;
     clientId: string | null;
+    dueDate: string;
+    daysPastDue: number;
+    bucket: AgingBucketKey;
+    amount: Money;
+  }[];
+}
+
+export interface ApAging {
+  asOf: string | null;
+  buckets: AgingBucketKey[];
+  totals: Record<AgingBucketKey | 'total', number>;
+  bills: {
+    billId: string;
+    number: string;
+    vendorId: string;
+    vendorName: string | null;
     dueDate: string;
     daysPastDue: number;
     bucket: AgingBucketKey;

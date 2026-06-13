@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { AgingBucketKey, ArAging, BalanceSheet, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
+import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-type View = 'trial' | 'balance' | 'income' | 'aging';
+type View = 'trial' | 'balance' | 'income' | 'aging' | 'apaging';
 
 const BUCKET_LABEL: Record<AgingBucketKey, string> = {
   current: 'Current', d1_30: '1–30 days', d31_60: '31–60 days', d61_90: '61–90 days', d90_plus: '90+ days',
@@ -59,6 +59,7 @@ export default function ReportsPage() {
   const balance = useQuery({ queryKey: ['reports', 'balance'], queryFn: () => apiGet<BalanceSheet>('/finance/statements/balance-sheet'), enabled: view === 'balance' });
   const income = useQuery({ queryKey: ['reports', 'income'], queryFn: () => apiGet<IncomeStatement>('/finance/statements/income'), enabled: view === 'income' });
   const aging = useQuery({ queryKey: ['reports', 'aging'], queryFn: () => apiGet<ArAging>('/finance/ar-aging'), enabled: view === 'aging' });
+  const apaging = useQuery({ queryKey: ['reports', 'apaging'], queryFn: () => apiGet<ApAging>('/finance/ap-aging'), enabled: view === 'apaging' });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
@@ -73,6 +74,7 @@ export default function ReportsPage() {
             <SelectItem value="balance">Balance Sheet</SelectItem>
             <SelectItem value="income">Income Statement</SelectItem>
             <SelectItem value="aging">AR Aging</SelectItem>
+            <SelectItem value="apaging">AP Aging</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -186,6 +188,50 @@ export default function ReportsPage() {
               <TableRow className="border-t-2">
                 <TableCell className="font-semibold" colSpan={4}>Total outstanding</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{formatMoney(aging.data.totals.total)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Card>
+      ) : null}
+
+      {view === 'apaging' && apaging.data ? (
+        <Card className="space-y-6 p-6">
+          <span className="font-medium">Accounts Payable Aging</span>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {apaging.data.buckets.map((b) => (
+              <div key={b} className="rounded-lg border p-3 text-center">
+                <p className="text-xs text-muted-foreground">{BUCKET_LABEL[b]}</p>
+                <p className="mt-1 font-semibold tabular-nums">{formatMoney(apaging.data!.totals[b])}</p>
+              </div>
+            ))}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Bill</TableHead>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="text-center">Days past due</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {apaging.data.bills.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No outstanding bills.</TableCell></TableRow>
+              ) : (
+                apaging.data.bills.map((bl) => (
+                  <TableRow key={bl.billId}>
+                    <TableCell className="font-medium">{bl.number}</TableCell>
+                    <TableCell>{bl.vendorName ?? '—'}</TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">{String(bl.dueDate).slice(0, 10)}</TableCell>
+                    <TableCell className="text-center tabular-nums">{bl.daysPastDue > 0 ? bl.daysPastDue : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(bl.amount.amountMinor, bl.amount.currency)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+              <TableRow className="border-t-2">
+                <TableCell className="font-semibold" colSpan={4}>Total payable</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{formatMoney(apaging.data.totals.total)}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

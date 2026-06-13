@@ -131,6 +131,41 @@ export class CreateInvoiceDto {
   @IsOptional() @IsISO8601() dueDate?: string;
 }
 
+// ── Accounts Payable (vendors / bills / payments) ───────────────────────────
+
+export class CreateVendorDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+}
+
+export class CreateBillDto {
+  @IsString() @MinLength(1) number!: string;
+  @IsUUID() vendorId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceLineDto)
+  lineItems!: InvoiceLineDto[];
+  @IsOptional() @IsInt() @Min(0) taxMinor?: number;
+  @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  @IsOptional() @IsISO8601() billDate?: string;
+  @IsOptional() @IsISO8601() dueDate?: string;
+}
+
+export class CreateBillPaymentDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsOptional() @IsISO8601() paidOn?: string;
+  @IsOptional() @IsString() method?: string;
+}
+
+export class ListBillsQueryDto {
+  @IsOptional() @IsIn(['DRAFT', 'RECEIVED', 'PARTIALLY_PAID', 'PAID', 'VOID']) status?: string;
+  @IsOptional() @IsUUID() vendorId?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
+}
+
 export class ListInvoicesQueryDto {
   @IsOptional() @IsIn(['DRAFT', 'SENT', 'PAID', 'VOID']) status?: string;
   @IsOptional() @IsISO8601() from?: string;

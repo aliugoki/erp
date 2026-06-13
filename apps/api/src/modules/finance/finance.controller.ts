@@ -18,10 +18,14 @@ import {
   AsOfQueryDto,
   CashBookQueryDto,
   CreateAccountDto,
+  CreateBillDto,
+  CreateBillPaymentDto,
   CreateInvoiceDto,
   CreatePeriodDto,
   CreateTransactionDto,
+  CreateVendorDto,
   LedgerQueryDto,
+  ListBillsQueryDto,
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
@@ -87,6 +91,48 @@ export class FinanceController {
   @Get('ar-aging')
   arAging(@Query() query: AsOfQueryDto) {
     return this.finance.arAging(query);
+  }
+
+  // Accounts Payable — vendors, bills, payments
+  @Get('vendors')
+  listVendors() {
+    return this.finance.listVendors();
+  }
+
+  @Post('vendors')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createVendor(@Body() dto: CreateVendorDto) {
+    return this.finance.createVendor(dto);
+  }
+
+  @Get('bills')
+  listBills(@Query() query: ListBillsQueryDto) {
+    return this.finance.listBills(query);
+  }
+
+  @Post('bills')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createBill(@Body() dto: CreateBillDto) {
+    return this.finance.createBill(dto);
+  }
+
+  @Get('bills/:id')
+  getBill(@Param('id', ParseUUIDPipe) id: string) {
+    return this.finance.getBill(id);
+  }
+
+  @Post('bills/:id/payments')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  payBill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateBillPaymentDto) {
+    return this.finance.payBill(id, dto);
+  }
+
+  @Get('ap-aging')
+  apAging(@Query() query: AsOfQueryDto) {
+    return this.finance.apAging(query);
   }
 
   // Bank reconciliation

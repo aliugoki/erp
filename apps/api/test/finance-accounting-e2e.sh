@@ -133,6 +133,22 @@ curl -s -o /dev/null -XPOST "$B/finance/reconciliation" -H "Authorization: Beare
 check "cleared balance = 1000 after clearing one entry" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.clearedBalance.amountMinor)" "1000"
 check "uncleared count = 1" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.unclearedCount)" "1"
 
+echo "== accounts payable (vendors / bills / payments) =="
+VEN=$(post "$MGR" finance/vendors '{"name":"Acme Supplies","email":"ar@acme.test"}' | jget data.id)
+[ -n "$VEN" ] && echo "  ✅ vendor created" && pass=$((pass+1)) || { echo "  ❌ vendor create failed"; fail=$((fail+1)); }
+BILL=$(post "$MGR" finance/bills "{\"number\":\"BILL-1\",\"vendorId\":\"$VEN\",\"lineItems\":[{\"description\":\"materials\",\"quantity\":2,\"unitPriceMinor\":50000}],\"dueDate\":\"2020-02-01\"}" | jget data.id)
+check "bill total = 100000" "$(get "$MGR" "finance/bills/$BILL" | jget data.total.amountMinor)" "100000"
+check "new bill status = RECEIVED" "$(get "$MGR" "finance/bills/$BILL" | jget data.status)" "RECEIVED"
+post "$MGR" "finance/bills/$BILL/payments" '{"amountMinor":40000}' >/dev/null
+check "after partial payment -> PARTIALLY_PAID" "$(get "$MGR" "finance/bills/$BILL" | jget data.status)" "PARTIALLY_PAID"
+check "outstanding = 60000" "$(get "$MGR" "finance/bills/$BILL" | jget data.outstanding.amountMinor)" "60000"
+check "overpayment -> 422" "$(code -XPOST "$B/finance/bills/$BILL/payments" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d '{"amountMinor":999999}')" "422"
+post "$MGR" "finance/bills/$BILL/payments" '{"amountMinor":60000}' >/dev/null
+check "after full payment -> PAID" "$(get "$MGR" "finance/bills/$BILL" | jget data.status)" "PAID"
+post "$MGR" finance/bills "{\"number\":\"BILL-OLD\",\"vendorId\":\"$VEN\",\"lineItems\":[{\"description\":\"old\",\"quantity\":1,\"unitPriceMinor\":70000}],\"dueDate\":\"2020-01-01\"}" >/dev/null
+check "AP aging total = 70000 (one outstanding bill)" "$(get "$MGR" finance/ap-aging | jget data.totals.total)" "70000"
+check "AP overdue bill in 90+ bucket" "$(get "$MGR" finance/ap-aging | jget data.totals.d90_plus)" "70000"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

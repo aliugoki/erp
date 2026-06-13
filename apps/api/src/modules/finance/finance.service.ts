@@ -12,10 +12,14 @@ import type {
   AsOfQueryDto,
   CashBookQueryDto,
   CreateAccountDto,
+  CreateBillDto,
+  CreateBillPaymentDto,
   CreateInvoiceDto,
   CreatePeriodDto,
   CreateTransactionDto,
+  CreateVendorDto,
   LedgerQueryDto,
+  ListBillsQueryDto,
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
@@ -751,6 +755,156 @@ export class FinanceService {
     });
   }
 
+  // ── Accounts Payable (vendors / bills / payments) ────────────────────────────
+  async createVendor(dto: CreateVendorDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO vendor (tenant_id, name, email, phone)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
+         RETURNING id, name, email, phone`,
+        [dto.name, dto.email ?? null, dto.phone ?? null],
+      )) as Row[];
+      return mapVendor(rows[0]!);
+    });
+  }
+
+  async listVendors() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, name, email, phone FROM vendor WHERE deleted_at IS NULL ORDER BY name`,
+      )) as Row[];
+      return rows.map(mapVendor);
+    });
+  }
+
+  async createBill(dto: CreateBillDto) {
+    const totals = computeInvoiceTotals(dto.lineItems, dto.taxMinor ?? 0);
+    const currency = dto.currency ?? 'PKR';
+    const lines = dto.lineItems.map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unitPriceMinor: l.unitPriceMinor,
+      lineTotalMinor: l.quantity * l.unitPriceMinor,
+    }));
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO vendor_bill
+             (tenant_id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, currency, bill_date, due_date)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, COALESCE($8::date, current_date), $9)
+           RETURNING id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, amount_paid_minor, currency, status, bill_date, due_date`,
+          [dto.number, dto.vendorId, JSON.stringify(lines), totals.subtotalMinor, totals.taxMinor, totals.totalMinor, currency, dto.billDate ?? null, dto.dueDate ?? null],
+        )) as Row[];
+        return mapBill(rows[0]!);
+      } catch (err) {
+        if (isUnique(err)) throw new BadRequestException(`Bill number "${dto.number}" already exists`);
+        if (isForeignKey(err)) throw new BadRequestException('Vendor does not exist in this tenant');
+        throw err;
+      }
+    });
+  }
+
+  async listBills(query: ListBillsQueryDto): Promise<SuccessEnvelope<unknown[]>> {
+    const { page, pageSize, limit, offset } = normalizePagination(query.page, query.pageSize);
+    const conditions = ['b.deleted_at IS NULL'];
+    const params: unknown[] = [];
+    if (query.status) conditions.push(`b.status = $${params.push(query.status)}`);
+    if (query.vendorId) conditions.push(`b.vendor_id = $${params.push(query.vendorId)}`);
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT b.id, b.number, b.vendor_id, v.name AS vendor_name, b.subtotal_minor, b.tax_minor,
+                b.total_minor, b.amount_paid_minor, b.currency, b.status, b.bill_date, b.due_date
+           FROM vendor_bill b
+           LEFT JOIN vendor v ON v.id = b.vendor_id
+           ${where}
+          ORDER BY b.bill_date DESC, b.created_at DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset],
+      )) as Row[];
+      const count = (await m.query(`SELECT count(*)::int AS total FROM vendor_bill b ${where}`, params)) as Array<{ total: number }>;
+      return {
+        data: rows.map(mapBill),
+        meta: { pagination: paginationMeta(count[0]?.total ?? 0, page, pageSize) },
+      };
+    });
+  }
+
+  async getBill(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT b.id, b.number, b.vendor_id, v.name AS vendor_name, b.line_items, b.subtotal_minor, b.tax_minor,
+                b.total_minor, b.amount_paid_minor, b.currency, b.status, b.bill_date, b.due_date
+           FROM vendor_bill b LEFT JOIN vendor v ON v.id = b.vendor_id
+          WHERE b.id=$1 AND b.deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!rows[0]) throw new NotFoundException('Bill not found');
+      const payments = (await m.query(
+        `SELECT id, amount_minor, paid_on, method FROM bill_payment WHERE bill_id=$1 ORDER BY paid_on, created_at`,
+        [id],
+      )) as Row[];
+      return { ...mapBill(rows[0]), payments: payments.map((p) => ({ id: p.id, amount: money(p.amount_minor), paidOn: p.paid_on, method: p.method ?? null })) };
+    });
+  }
+
+  /** Record a payment against a bill; updates amount paid + status (PARTIALLY_PAID / PAID). */
+  async payBill(id: string, dto: CreateBillPaymentDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, total_minor, amount_paid_minor, status FROM vendor_bill WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      )) as Array<{ id: string; total_minor: string; amount_paid_minor: string; status: string }>;
+      const bill = rows[0];
+      if (!bill) throw new NotFoundException('Bill not found');
+      if (bill.status === 'VOID') throw new UnprocessableEntityException('Cannot pay a void bill');
+      const total = Number(bill.total_minor);
+      const newPaid = Number(bill.amount_paid_minor) + dto.amountMinor;
+      if (newPaid > total) throw new UnprocessableEntityException('Payment exceeds the outstanding amount');
+      await m.query(
+        `INSERT INTO bill_payment (tenant_id, bill_id, amount_minor, paid_on, method)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, COALESCE($3::date, current_date), $4)`,
+        [id, dto.amountMinor, dto.paidOn ?? null, dto.method ?? null],
+      );
+      const status = newPaid >= total ? 'PAID' : 'PARTIALLY_PAID';
+      await m.query(`UPDATE vendor_bill SET amount_paid_minor=$1, status=$2, updated_at=now() WHERE id=$3`, [newPaid, status, id]);
+      return { id, status, amountPaid: money(newPaid), outstanding: money(total - newPaid) };
+    });
+  }
+
+  /** Accounts-payable aging: unpaid bill balances bucketed by days past due. */
+  async apAging(query: AsOfQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const asOf = query.asOf ? new Date(query.asOf) : new Date();
+      const rows = (await m.query(
+        `SELECT b.id, b.number, b.vendor_id, v.name AS vendor_name, b.currency, b.due_date, b.bill_date,
+                (b.total_minor - b.amount_paid_minor) AS outstanding_minor
+           FROM vendor_bill b LEFT JOIN vendor v ON v.id = b.vendor_id
+          WHERE b.deleted_at IS NULL AND b.status NOT IN ('PAID','VOID') AND (b.total_minor - b.amount_paid_minor) > 0`,
+      )) as Row[];
+      const totals: Record<AgingBucket | 'total', number> = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0, total: 0 };
+      const bills = rows.map((r) => {
+        const due = new Date((r.due_date ?? r.bill_date) as string);
+        const daysPastDue = Math.floor((asOf.getTime() - due.getTime()) / 86_400_000);
+        const bucket = agingBucket(daysPastDue);
+        const amountMinor = Number(r.outstanding_minor);
+        totals[bucket] += amountMinor;
+        totals.total += amountMinor;
+        return {
+          billId: r.id,
+          number: r.number,
+          vendorId: r.vendor_id,
+          vendorName: r.vendor_name ?? null,
+          dueDate: r.due_date ?? r.bill_date,
+          daysPastDue,
+          bucket,
+          amount: money(amountMinor, r.currency as string),
+        };
+      });
+      return { asOf: query.asOf ?? null, buckets: [...AGING_BUCKETS], totals, bills };
+    });
+  }
+
   // ── Invoices ───────────────────────────────────────────────────────────────
   async createInvoice(dto: CreateInvoiceDto) {
     const totals = computeInvoiceTotals(dto.lineItems, dto.taxMinor ?? 0);
@@ -865,6 +1019,32 @@ function mapAccount(r: Row) {
     bankName: r.bank_name ?? null,
     accountNumber: r.account_number ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
+  };
+}
+
+function mapVendor(r: Row) {
+  return { id: r.id, name: r.name, email: r.email ?? null, phone: r.phone ?? null };
+}
+
+function mapBill(r: Row) {
+  const currency = r.currency as string;
+  const money_ = (v: unknown) => ({ amountMinor: Number(v), currency });
+  const total = Number(r.total_minor);
+  const paid = Number(r.amount_paid_minor);
+  return {
+    id: r.id,
+    number: r.number,
+    vendorId: r.vendor_id,
+    vendorName: r.vendor_name ?? null,
+    ...(r.line_items !== undefined ? { lineItems: r.line_items } : {}),
+    subtotal: money_(r.subtotal_minor),
+    tax: money_(r.tax_minor),
+    total: money_(total),
+    paid: money_(paid),
+    outstanding: money_(total - paid),
+    status: r.status,
+    billDate: r.bill_date ?? null,
+    dueDate: r.due_date ?? null,
   };
 }
 
