@@ -1,0 +1,11 @@
+# Per-app ignore. NOTE: the web image builds with the repo ROOT as context (it needs the workspace),
+# so the root /.dockerignore is what Docker honors for that build. This file applies only if apps/web
+# is ever built with its own directory as the context.
+node_modules
+.next
+*.tsbuildinfo
+coverage
+.env
+.env.*
+!.env.example
+*.log

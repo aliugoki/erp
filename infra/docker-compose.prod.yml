@@ -1,0 +1,257 @@
+# MetaXperts ERP — PRODUCTION stack (Chunk 9.1).
+#
+# Runs the WHOLE system in containers: the four apps (built from per-app multi-stage Dockerfiles,
+# distroless/non-root) plus the backing infrastructure. Unlike infra/docker-compose.yml (dev infra
+# only; apps run on the host), every service here talks over the `erp` network by service name.
+#
+#   docker compose -f infra/docker-compose.prod.yml up --build
+#
+# Secrets: demo defaults are inlined via ${VAR:-...change_me...} so the stack comes up with one
+# command. In a real deployment, supply JWT_ACCESS_SECRET / SERVICE_AUTH_SECRET via your secret
+# store, or mount files and use the *_FILE convention the config loader supports (Chunk 8.3).
+#
+# Background workers (outbox relay, reactions, notifications, reporting refresh) are OFF here — they
+# need the schema, which Chunk 9.2 finalizes (migrate + seed). Turn them on once the DB is migrated.
+name: metaxperts-erp-prod
+
+networks:
+  erp:
+    name: erp-prod
+
+volumes:
+  pgdata:
+  redisdata:
+  rabbitmqdata:
+  miniodata:
+  prometheusdata:
+  grafanadata:
+
+# ── shared env for the Node apps (api/worker) ───────────────────────────────
+x-app-env: &app-env
+  NODE_ENV: production
+  # Apps connect THROUGH PgBouncer as the non-superuser app_user → every query is subject to RLS.
+  DATABASE_URL: postgresql://app_user:app_pass@pgbouncer:5432/metaxperts
+  # Owner connection (direct to Postgres) for the outbox relay, which must see all tenants (bypasses RLS).
+  MIGRATION_DATABASE_URL: postgresql://metaxperts:metaxperts@postgres:5432/metaxperts
+  REDIS_URL: redis://redis:6379
+  RABBITMQ_URL: amqp://metaxperts:metaxperts@rabbitmq:5672
+  RABBITMQ_MGMT_URL: http://metaxperts:metaxperts@rabbitmq:15672
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-prod_demo_change_me_access_secret_0123456789}
+  SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:-prod_demo_change_me_service_secret_0123456789}
+  ML_BASE_URL: http://ml:8000
+  # Observability — export traces to the collector (Chunk 8.1).
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  LOG_LEVEL: info
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
+  # Background workers OFF until the schema exists (Chunk 9.2). Flip to "true" after migrate+seed.
+  OUTBOX_RELAY_ENABLED: "false"
+  WORKER_REACTIONS_ENABLED: "false"
+  NOTIFICATIONS_ENABLED: "false"
+  REPORTING_REFRESH_ENABLED: "false"
+
+services:
+  # ── Infrastructure ────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: metaxperts
+      POSTGRES_PASSWORD: metaxperts
+      POSTGRES_DB: metaxperts
+    command: ["postgres", "-c", "max_connections=200"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro # creates the app_user RLS role on a fresh volume
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metaxperts -d metaxperts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: app_user
+      DB_PASSWORD: app_pass
+      DB_NAME: metaxperts
+      POOL_MODE: transaction        # PgBouncer prod mode (also see Chunk 9.2)
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      AUTH_TYPE: scram-sha-256
+      LISTEN_PORT: "5432"
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: metaxperts
+      RABBITMQ_DEFAULT_PASS: metaxperts
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: metaxperts
+      MINIO_ROOT_PASSWORD: metaxperts123
+    volumes:
+      - miniodata:/data
+    networks: [erp]
+    # distroless image (no shell) — health verified out of band; no in-container healthcheck.
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.154.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    networks: [erp]
+    # distroless image — no in-container healthcheck.
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro # scrapes api:3000 (containerized)
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "9092:9090"
+    networks: [erp]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3004:3000"
+    networks: [erp]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Application services ───────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      API_PORT: "3000"
+      OTEL_SERVICE_NAME: metaxperts-api
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3300:3000" # host 3300 (host :3000 is occupied on this machine)
+    networks: [erp]
+    # HEALTHCHECK is defined in the image (hits /health/ready: Postgres + Redis reachable).
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      WORKER_PORT: "3002"
+      OTEL_SERVICE_NAME: metaxperts-worker
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [erp]
+    # HEALTHCHECK in the image (hits /worker/health).
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    networks: [erp]
+    # HEALTHCHECK in the image (hits /).
+
+  ml:
+    build:
+      context: ../apps/ml
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ML_PORT: "8000"
+      # ML is a trusted backend: privileged DB URL (owner; scopes by explicit tenant_id), service-token auth.
+      ML_DATABASE_URL: postgresql://metaxperts:metaxperts@postgres:5432/metaxperts
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:-prod_demo_change_me_service_secret_0123456789}
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: metaxperts-ml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8000" # host 8000 is occupied on this machine
+    networks: [erp]
+    # HEALTHCHECK in the image (hits /health).

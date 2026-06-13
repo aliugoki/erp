@@ -1,0 +1,13 @@
+# Per-app ignore. NOTE: the api image builds with the repo ROOT as context (it needs the workspace),
+# so the root /.dockerignore is what Docker honors for that build. This file applies only if apps/api
+# is ever built with its own directory as the context.
+node_modules
+dist
+*.tsbuildinfo
+coverage
+test
+*.spec.ts
+.env
+.env.*
+!.env.example
+*.log

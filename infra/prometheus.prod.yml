@@ -1,0 +1,22 @@
+# Prometheus — PRODUCTION scrape config (Chunk 9.1). Unlike the dev config (which scrapes the
+# host-run API via host.docker.internal), here the API runs as a container on the erp network, so we
+# scrape it by service name. Alert rules are shared with dev (prometheus-alerts.yml).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8888"]
+
+  - job_name: metaxperts-api
+    static_configs:
+      - targets: ["api:3000"]
