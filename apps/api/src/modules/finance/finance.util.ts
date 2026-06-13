@@ -48,6 +48,36 @@ export function assertBalanced(entries: JournalEntryInput[]): { debit: number; c
   return { debit, credit };
 }
 
+// ── Account-type accounting semantics (pure; used by GL / trial balance / statements) ────────────
+
+export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+
+/** The side an account type normally carries. Assets & expenses are debit-normal; the rest credit. */
+export function normalBalance(type: AccountType): 'DEBIT' | 'CREDIT' {
+  return type === 'ASSET' || type === 'EXPENSE' ? 'DEBIT' : 'CREDIT';
+}
+
+/**
+ * Net balance of an account in its NATURAL direction (always integer minor units): positive means a
+ * normal balance, negative an abnormal one. Debit-normal = debit − credit; credit-normal = credit −
+ * debit. So an asset with more debits is positive, a revenue with more credits is positive.
+ */
+export function signedBalanceMinor(type: AccountType, debitMinor: number, creditMinor: number): number {
+  const raw = debitMinor - creditMinor; // debit-positive
+  return normalBalance(type) === 'DEBIT' ? raw : -raw;
+}
+
+/**
+ * Place a debit-positive net onto the two trial-balance columns: a positive net is a debit-side
+ * balance, a negative net a credit-side balance. Sum of all debitMinor === sum of all creditMinor
+ * across a complete set, because every posted entry balances.
+ */
+export function trialColumns(netDebitMinor: number): { debitMinor: number; creditMinor: number } {
+  return netDebitMinor >= 0
+    ? { debitMinor: netDebitMinor, creditMinor: 0 }
+    : { debitMinor: 0, creditMinor: -netDebitMinor };
+}
+
 /** Compute invoice subtotal/total from line items (integer math only). */
 export function computeInvoiceTotals(
   lines: InvoiceLineInput[],

@@ -14,10 +14,14 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
+  AsOfQueryDto,
   CreateAccountDto,
   CreateInvoiceDto,
   CreateTransactionDto,
+  LedgerQueryDto,
   ListInvoicesQueryDto,
+  ListTransactionsQueryDto,
+  PeriodQueryDto,
 } from './dto/finance.dto';
 import { FinanceService } from './finance.service';
 
@@ -42,7 +46,12 @@ export class FinanceController {
     return this.finance.createAccount(dto);
   }
 
-  // Transactions
+  // Transactions (journal entries)
+  @Get('transactions')
+  listTransactions(@Query() query: ListTransactionsQueryDto) {
+    return this.finance.listTransactions(query);
+  }
+
   @Post('transactions')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.CREATED)
@@ -53,6 +62,27 @@ export class FinanceController {
   @Get('transactions/:id')
   getTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.getTransaction(id);
+  }
+
+  // General ledger & financial statements (read-only)
+  @Get('ledger/:accountId')
+  ledger(@Param('accountId', ParseUUIDPipe) accountId: string, @Query() query: LedgerQueryDto) {
+    return this.finance.getLedger(accountId, query);
+  }
+
+  @Get('trial-balance')
+  trialBalance(@Query() query: AsOfQueryDto) {
+    return this.finance.getTrialBalance(query);
+  }
+
+  @Get('statements/balance-sheet')
+  balanceSheet(@Query() query: AsOfQueryDto) {
+    return this.finance.getBalanceSheet(query);
+  }
+
+  @Get('statements/income')
+  incomeStatement(@Query() query: PeriodQueryDto) {
+    return this.finance.getIncomeStatement(query);
   }
 
   // Invoices

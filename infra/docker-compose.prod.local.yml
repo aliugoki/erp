@@ -1,0 +1,17 @@
+# Local-run override for the prod stack on a dev box (NOT for real production).
+# - Publishes the Postgres port so host-side migrations/admin tooling can connect (real prod keeps
+#   the DB unpublished and runs migrations via a dedicated job — formalized in Chunk 9.2).
+# - Turns the background workers ON now that the schema has been migrated + seeded.
+#
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.prod.local.yml up -d
+services:
+  postgres:
+    ports:
+      - "55433:5432" # host-side migration/admin access (prod-internal is still postgres:5432)
+
+  api:
+    environment:
+      OUTBOX_RELAY_ENABLED: "true"
+      WORKER_REACTIONS_ENABLED: "true"
+      NOTIFICATIONS_ENABLED: "true"
+      REPORTING_REFRESH_ENABLED: "true"

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -18,6 +19,34 @@ export class CreateAccountDto {
   @IsString() @MinLength(1) code!: string;
   @IsString() @MinLength(1) name!: string;
   @IsIn(['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE']) type!: string;
+  /** Parent (must be a group account) for a multi-level chart of accounts. Root account if omitted. */
+  @IsOptional() @IsUUID() parentId?: string;
+  /** Group (header) accounts organise the tree and cannot be posted to; leaves are postable. */
+  @IsOptional() @IsBoolean() isGroup?: boolean;
+}
+
+export class ListTransactionsQueryDto {
+  @IsOptional() @IsISO8601() from?: string;
+  @IsOptional() @IsISO8601() to?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
+}
+
+/** General-ledger query: postings for one account over an optional date window. */
+export class LedgerQueryDto {
+  @IsOptional() @IsISO8601() from?: string;
+  @IsOptional() @IsISO8601() to?: string;
+}
+
+/** Point-in-time reports (trial balance, balance sheet): balances as of a date (default: today). */
+export class AsOfQueryDto {
+  @IsOptional() @IsISO8601() asOf?: string;
+}
+
+/** Period report (income statement): activity within a date window. */
+export class PeriodQueryDto {
+  @IsOptional() @IsISO8601() from?: string;
+  @IsOptional() @IsISO8601() to?: string;
 }
 
 export class JournalEntryDto {

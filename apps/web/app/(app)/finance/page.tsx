@@ -8,6 +8,7 @@ import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { NewInvoiceDialog } from '@/components/finance/new-invoice-dialog';
+import { FinanceTabs } from '@/components/finance/finance-tabs';
 import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ export default function FinancePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
       <PageHeader title="Finance" description="Invoices and payments." action={<NewInvoiceDialog />} />
+      <FinanceTabs />
 
       <Card className="overflow-hidden">
         <div className="flex items-center gap-3 border-b p-4">
