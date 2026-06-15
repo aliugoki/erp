@@ -369,3 +369,74 @@ export interface Product {
   minStock: number;
   onHand: number;
 }
+
+// ── Inventory: enterprise documents ──────────────────────────────────────────
+export interface StockReportLine {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  category: string | null;
+  onHand: number;
+  minStock: number;
+  unitCost: Money;
+  value: Money;
+  belowReorder: boolean;
+}
+export interface StockReport {
+  lines: StockReportLine[];
+  totals: { items: number; value: Money };
+}
+export interface ReorderLine {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  onHand: number;
+  minStock: number;
+  suggestedQty: number;
+}
+export interface LedgerEntry {
+  id: string;
+  docType: string;
+  docNo: string | null;
+  qtyIn: number;
+  qtyOut: number;
+  unitCost: Money;
+  balanceQty: number;
+  balanceValue: Money;
+  occurredOn: string | null;
+  narration: string | null;
+}
+export interface Requisition {
+  id: string;
+  req_no: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'ISSUED' | 'CANCELLED';
+  requested_by: string | null;
+  department: string | null;
+  needed_by: string | null;
+  warehouse: string | null;
+  item_count: number;
+}
+export interface PurchaseOrder {
+  id: string;
+  po_no: string;
+  status: 'DRAFT' | 'APPROVED' | 'PARTIAL' | 'RECEIVED' | 'CLOSED' | 'CANCELLED';
+  currency: string;
+  total_minor: number;
+  expected_on: string | null;
+  vendor: string | null;
+  ordered_qty: number;
+  received_qty: number;
+}
+export interface GatePass {
+  id: string;
+  gp_no: string;
+  direction: 'INWARD' | 'OUTWARD';
+  returnable: boolean;
+  party: string | null;
+  vehicle_no: string | null;
+  status: 'OPEN' | 'CLOSED' | 'CANCELLED';
+  issued_on: string | null;
+  item_count: number;
+}

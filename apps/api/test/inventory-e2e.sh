@@ -78,6 +78,72 @@ echo "== tenant isolation =="
 check "Inv Two sees no products" "$(curl -s "$B/inventory/products" -H "Authorization: Bearer $ADMIN2" | jlen)" "0"
 check "Inv Two GET Inv Co product -> 404" "$(code "$B/inventory/products/$PID" -H "Authorization: Bearer $ADMIN2")" "404"
 
+# ── Enterprise documents: opening → requisition → PO → GRN → gate pass → issue → MRN ───────────
+sline() { python3 -c "import sys,json,functools
+d=json.load(sys.stdin)['data']['lines']
+r=next((l for l in d if l['sku']==sys.argv[1]),None)
+v=functools.reduce(lambda o,k:(o or {}).get(k) if isinstance(o,dict) else None, sys.argv[2].split('.'), r) if r else None
+print('' if v is None else v)" "$1" "$2" 2>/dev/null; }
+get() { curl -s "$B/$2" -H "Authorization: Bearer $1"; }
+
+echo "== enterprise: stock master + opening stock (valued ledger) =="
+WP=$(post "$MGR" inventory/products '{"sku":"WIDGET-2","name":"Widget 2","unit":"pcs","minStock":30}' | jget data.id)
+GP_PROD=$(post "$MGR" inventory/products '{"sku":"GADGET-2","name":"Gadget 2","unit":"pcs","minStock":10}' | jget data.id)
+post "$MGR" inventory/adjustments "{\"productId\":\"$WP\",\"warehouseId\":\"$WH\",\"quantity\":100,\"unitCostMinor\":5000,\"docType\":\"OPENING\"}" >/dev/null
+check "opening sets on-hand 100" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "100"
+check "opening stock value = 500000" "$(get "$MGR" inventory/reports/stock | sline WIDGET-2 value.amountMinor)" "500000"
+check "weighted-avg unit cost = 5000" "$(get "$MGR" "inventory/products/$WP" | jget data.costPrice.amountMinor)" "5000"
+
+echo "== enterprise: requisition (submit → approve) =="
+REQ=$(post "$MGR" inventory/requisitions "{\"warehouseId\":\"$WH\",\"requestedBy\":\"Line 1\",\"items\":[{\"productId\":\"$WP\",\"qty\":50}]}")
+REQID=$(echo "$REQ" | jget data.id)
+check "requisition starts DRAFT" "$(echo "$REQ" | jget data.status)" "DRAFT"
+check "cannot approve a DRAFT directly -> 422" "$(code -XPOST "$B/inventory/requisitions/$REQID/approve" -H "Authorization: Bearer $MGR")" "422"
+post "$MGR" "inventory/requisitions/$REQID/submit" '' >/dev/null
+check "requisition approved" "$(post "$MGR" "inventory/requisitions/$REQID/approve" '' | jget data.status)" "APPROVED"
+
+echo "== enterprise: purchase order → GRN (weighted-average costing) =="
+PO=$(post "$MGR" inventory/purchase-orders "{\"warehouseId\":\"$WH\",\"items\":[{\"productId\":\"$WP\",\"qty\":100,\"unitPriceMinor\":7000}]}")
+POID=$(echo "$PO" | jget data.id)
+check "PO total = 700000" "$(echo "$PO" | jget data.total.amountMinor)" "700000"
+check "cannot receive a DRAFT PO -> 422" "$(code -XPOST "$B/inventory/grns" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"poId\":\"$POID\"}")" "422"
+post "$MGR" "inventory/purchase-orders/$POID/approve" '' >/dev/null
+GRN=$(post "$MGR" inventory/grns "{\"poId\":\"$POID\"}")
+check "GRN posted (GRN-000001)" "$(echo "$GRN" | jget data.grnNo)" "GRN-000001"
+check "on-hand after GRN = 200" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "200"
+check "weighted-avg cost after GRN = 6000" "$(get "$MGR" "inventory/products/$WP" | jget data.costPrice.amountMinor)" "6000"
+check "stock value after GRN = 1200000" "$(get "$MGR" inventory/reports/stock | sline WIDGET-2 value.amountMinor)" "1200000"
+check "PO fully received -> RECEIVED" "$(get "$MGR" "inventory/purchase-orders/$POID" | jget data.status)" "RECEIVED"
+
+echo "== enterprise: gate pass =="
+GP=$(post "$MGR" inventory/gate-passes "{\"direction\":\"OUTWARD\",\"returnable\":true,\"party\":\"Workshop\",\"items\":[{\"description\":\"Drill machine\",\"qty\":1}]}")
+GPID=$(echo "$GP" | jget data.id)
+check "gate pass created (GP-000001)" "$(echo "$GP" | jget data.gpNo)" "GP-000001"
+check "gate pass closed" "$(post "$MGR" "inventory/gate-passes/$GPID/close" '' | jget data.status)" "CLOSED"
+
+echo "== enterprise: store issuance (against the requisition) =="
+ISS=$(post "$MGR" inventory/issues "{\"requisitionId\":\"$REQID\",\"issuedTo\":\"Line 1\"}")
+ISSID=$(echo "$ISS" | jget data.id)
+check "issue posted (ISS-000001)" "$(echo "$ISS" | jget data.issueNo)" "ISS-000001"
+check "on-hand after issuing 50 = 150" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "150"
+check "requisition fully issued -> ISSUED" "$(get "$MGR" "inventory/requisitions/$REQID" | jget data.status)" "ISSUED"
+
+echo "== enterprise: material return note (return 20) =="
+MRN=$(post "$MGR" inventory/mrns "{\"issueId\":\"$ISSID\",\"items\":[{\"productId\":\"$WP\",\"qty\":20}]}")
+check "MRN posted (MRN-000001)" "$(echo "$MRN" | jget data.mrnNo)" "MRN-000001"
+check "on-hand after returning 20 = 170" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "170"
+check "stock value after MRN = 1020000 (return at issue cost)" "$(get "$MGR" inventory/reports/stock | sline WIDGET-2 value.amountMinor)" "1020000"
+
+echo "== enterprise: inventory ledger + reorder report =="
+check "item ledger has 4 movements" "$(get "$MGR" "inventory/products/$WP/ledger" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']))")" "4"
+check "item ledger last running balance = 170" "$(get "$MGR" "inventory/products/$WP/ledger" | python3 -c "import sys,json;print(json.load(sys.stdin)['data'][-1]['balanceQty'])")" "170"
+check "reorder flags GADGET-2 (on-hand 0 <= min 10)" "$(get "$MGR" inventory/reports/reorder | python3 -c "import sys,json;print(any(l['sku']=='GADGET-2' for l in json.load(sys.stdin)['data']))")" "True"
+check "reorder excludes WIDGET-2 (well stocked)" "$(get "$MGR" inventory/reports/reorder | python3 -c "import sys,json;print(any(l['sku']=='WIDGET-2' for l in json.load(sys.stdin)['data']))")" "False"
+
+echo "== enterprise: oversell guard =="
+check "issuing more than on-hand -> 422" "$(code -XPOST "$B/inventory/issues" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"warehouseId\":\"$WH\",\"items\":[{\"productId\":\"$WP\",\"qty\":1000}]}")" "422"
+check "on-hand unchanged after the failed issue = 170" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "170"
+
 echo
 echo "RESULT: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

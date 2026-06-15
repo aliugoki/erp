@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/empty-state';
 import { StatCard } from '@/components/stat-card';
 import { NewProductDialog } from '@/components/inventory/new-product-dialog';
 import { MovementDialog } from '@/components/inventory/movement-dialog';
+import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog';
+import { InventoryTabs } from '@/components/inventory/inventory-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,7 +28,8 @@ export default function InventoryPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
-      <PageHeader title="Inventory" description="Products and stock levels." action={<NewProductDialog />} />
+      <PageHeader title="Inventory" description="Stock master, procurement and store operations." action={<div className="flex gap-2"><AdjustStockDialog /><NewProductDialog /></div>} />
+      <InventoryTabs />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard icon={Package} label="Products" value={list.length} delayMs={0} />
