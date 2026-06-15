@@ -41,6 +41,8 @@ export interface Account {
   controlType: ControlType;
   bankName: string | null;
   accountNumber: string | null;
+  /** Foreign denomination for accounts that hold a non-base balance (e.g. USD). Null = base currency. */
+  currency: string | null;
   level?: number;
 }
 

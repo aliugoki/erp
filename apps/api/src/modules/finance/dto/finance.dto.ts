@@ -31,6 +31,8 @@ export class CreateAccountDto {
   @IsOptional() @IsIn(['NONE', 'CASH', 'BANK', 'PAYABLE', 'RECEIVABLE']) controlType?: string;
   @IsOptional() @IsString() bankName?: string;
   @IsOptional() @IsString() accountNumber?: string;
+  /** Denomination for an account that holds a foreign-currency balance (e.g. USD). Omitted = base. */
+  @IsOptional() @IsString() @Length(3, 3) currency?: string;
 }
 
 /** Editable account fields (name + cash/bank tagging). Code/type/parent are structural and fixed. */
@@ -89,6 +91,15 @@ export class JournalEntryDto {
   @IsOptional() @IsInt() @Min(0) creditMinor?: number;
   /** Optional analytical dimension (branch / department / project). */
   @IsOptional() @IsUUID() costCenterId?: string;
+  /** Book this line in a foreign currency: debit/credit are then minor units of THIS currency and are
+   *  converted to base (at the voucher date's rate) for the ledger. Omitted = base currency. */
+  @IsOptional() @IsString() @Length(3, 3) currency?: string;
+}
+
+/** Period-end revaluation of all foreign-currency balances; the net FX gain/loss posts to one account. */
+export class RevalueFxDto {
+  @IsUUID() fxAccountId!: string;
+  @IsOptional() @IsISO8601() asOf?: string;
 }
 
 export class CreateCostCenterDto {

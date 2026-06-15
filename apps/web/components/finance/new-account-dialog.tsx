@@ -1,9 +1,9 @@
 'use client';
 import { type FormEvent, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { ApiError, apiPost } from '@/lib/api';
-import type { Account, AccountType } from '@/lib/types';
+import { ApiError, apiGet, apiPost } from '@/lib/api';
+import type { Account, AccountType, Currency } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,9 +28,11 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     code: '', name: '', type: 'ASSET' as AccountType, parentId: 'NONE', isGroup: false,
-    controlType: 'NONE' as 'NONE' | 'CASH' | 'BANK' | 'PAYABLE' | 'RECEIVABLE', bankName: '', accountNumber: '',
+    controlType: 'NONE' as 'NONE' | 'CASH' | 'BANK' | 'PAYABLE' | 'RECEIVABLE', bankName: '', accountNumber: '', currency: 'BASE',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
+  const { data: currencies } = useQuery({ queryKey: ['currencies'], queryFn: () => apiGet<Currency[]>('/finance/currencies'), enabled: open });
+  const foreign = (currencies ?? []).filter((c) => !c.isBase && c.active);
 
   // Only groups below the 4th level can be parents (a child must fit within 4 levels).
   const groups = accounts.filter((a) => a.isGroup && (a.level ?? 1) < 4);
@@ -47,13 +49,14 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
         isGroup: f.isGroup,
         controlType: f.controlType,
         ...(f.controlType === 'BANK' ? { bankName: f.bankName, accountNumber: f.accountNumber } : {}),
+        ...(!f.isGroup && f.currency !== 'BASE' ? { currency: f.currency } : {}),
         ...(f.parentId !== 'NONE' ? { parentId: f.parentId } : {}),
       }),
     onSuccess: () => {
       toast.success('Account created', { description: `${f.code} · ${f.name}` });
       qc.invalidateQueries({ queryKey: ['accounts'] });
       setOpen(false);
-      setF({ code: '', name: '', type: 'ASSET', parentId: 'NONE', isGroup: false, controlType: 'NONE', bankName: '', accountNumber: '' });
+      setF({ code: '', name: '', type: 'ASSET', parentId: 'NONE', isGroup: false, controlType: 'NONE', bankName: '', accountNumber: '', currency: 'BASE' });
     },
     onError: (e) => toast.error('Could not create account', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -154,6 +157,18 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
                   <Label htmlFor="an">Account #</Label>
                   <Input id="an" value={f.accountNumber} onChange={(e) => set('accountNumber', e.target.value)} placeholder="0001-xxxxxxx" />
                 </div>
+              </div>
+            ) : null}
+            {!f.isGroup && foreign.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Denomination <span className="text-xs text-muted-foreground">(foreign-currency accounts are revalued at period end)</span></Label>
+                <Select value={f.currency} onValueChange={(v) => set('currency', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BASE">Base currency</SelectItem>
+                    {foreign.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} · {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             ) : null}
           </div>

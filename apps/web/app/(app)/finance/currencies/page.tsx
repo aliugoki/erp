@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Plus } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { ConvertResult, Currency, ExchangeRate } from '@/lib/types';
+import type { Account, ConvertResult, Currency, ExchangeRate } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
@@ -20,12 +20,28 @@ export default function CurrenciesPage() {
   const qc = useQueryClient();
   const { data: currencies } = useQuery({ queryKey: ['currencies'], queryFn: () => apiGet<Currency[]>('/finance/currencies') });
   const { data: rates } = useQuery({ queryKey: ['exchange-rates'], queryFn: () => apiGet<ExchangeRate[]>('/finance/exchange-rates') });
+  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts') });
   const list = currencies ?? [];
+  const leaves = (accounts ?? []).filter((a) => !a.isGroup);
+  const hasForeign = (accounts ?? []).some((a) => a.currency);
 
   const [cur, setCur] = useState({ code: '', name: '', symbol: '', isBase: false });
   const [rate, setRate] = useState({ currencyCode: '', rate: '' });
   const [conv, setConv] = useState({ amount: '', from: '', to: '' });
   const [result, setResult] = useState<ConvertResult | null>(null);
+  const [fxAccountId, setFxAccountId] = useState('');
+
+  const revalue = useMutation({
+    mutationFn: () => apiPost<{ posted: boolean; voucherNo?: string; fxGainLossMinor: number; accountsRevalued: number }>('/finance/revalue', { fxAccountId }),
+    onSuccess: (r) => {
+      toast.success(r.posted ? `Revaluation posted (${r.voucherNo})` : 'Nothing to revalue', {
+        description: r.posted ? `${r.accountsRevalued} account(s) restated; net ${r.fxGainLossMinor >= 0 ? 'gain' : 'loss'} booked.` : 'All foreign balances are already at current rates.',
+      });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['accounts'] });
+    },
+    onError: (e) => toast.error('Revaluation failed', { description: e instanceof ApiError ? e.message : '' }),
+  });
 
   const addCurrency = useMutation({
     mutationFn: () => apiPost('/finance/currencies', { code: cur.code.toUpperCase(), name: cur.name, symbol: cur.symbol || undefined, isBase: cur.isBase }),
@@ -130,6 +146,25 @@ export default function CurrenciesPage() {
           ) : null}
         </form>
       </Card>
+
+      {hasForeign ? (
+        <Card className="space-y-3 p-4">
+          <p className="font-medium">FX revaluation</p>
+          <p className="text-xs text-muted-foreground">
+            Restate every foreign-currency account to current rates and book the net unrealised gain/loss. Posts one balancing JV.
+          </p>
+          <form onSubmit={(e: FormEvent) => { e.preventDefault(); revalue.mutate(); }} className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">FX gain/loss account</Label>
+              <Select value={fxAccountId} onValueChange={setFxAccountId}>
+                <SelectTrigger className="w-72"><SelectValue placeholder="Select a posting account" /></SelectTrigger>
+                <SelectContent>{leaves.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} · {a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={!fxAccountId || revalue.isPending}>{revalue.isPending ? 'Revaluing…' : 'Revalue now'}</Button>
+          </form>
+        </Card>
+      ) : null}
     </div>
   );
 }

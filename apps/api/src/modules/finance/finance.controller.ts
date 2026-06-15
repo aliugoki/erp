@@ -40,6 +40,7 @@ import {
   ListTransactionsQueryDto,
   PeriodQueryDto,
   ReconcileDto,
+  RevalueFxDto,
   UpdateAccountDto,
   UpdatePeriodDto,
   YearEndCloseDto,
@@ -332,6 +333,13 @@ export class FinanceController {
   @Get('convert')
   convert(@Query() query: ConvertQueryDto) {
     return this.finance.convert(query);
+  }
+
+  @Post('revalue')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  revalueForeign(@Body() dto: RevalueFxDto) {
+    return this.finance.revalueForeign(dto);
   }
 
   // Invoices

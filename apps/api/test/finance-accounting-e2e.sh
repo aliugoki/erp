@@ -180,6 +180,24 @@ RRES=$(curl -s -XPATCH "$B/finance/invoices/$INVID/pay" -H "Authorization: Beare
 [ -n "$(echo "$RRES" | jget data.journalNo)" ] && echo "  ✅ receipt posted to GL ($(echo "$RRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ receipt did not post to GL"; fail=$((fail+1)); }
 check "client receivable cleared to 0 after receipt" "$(get "$MGR" "finance/ledger/$CRACC" | jget data.closing.amountMinor)" "0"
 
+echo "== FX-aware GL (foreign-currency postings + revaluation) =="
+post "$MGR" finance/currencies '{"code":"PKR","name":"Pak Rupee","symbol":"Rs","isBase":true}' >/dev/null
+post "$MGR" finance/currencies '{"code":"GBP","name":"Pound Sterling","symbol":"£"}' >/dev/null
+post "$MGR" finance/exchange-rates '{"currencyCode":"GBP","rate":280}' >/dev/null
+GBPBANK=$(post "$MGR" finance/accounts "{\"code\":\"1-GBP\",\"name\":\"GBP Bank\",\"type\":\"ASSET\",\"parentId\":\"$ASSETS\",\"controlType\":\"BANK\",\"currency\":\"GBP\"}" | jget data.id)
+check "account denomination currency persisted = GBP" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['currency'] for a in json.load(sys.stdin)['data'] if a['code']=='1-GBP'))")" "GBP"
+FXGL=$(post "$MGR" finance/accounts '{"code":"4900","name":"FX Gain/Loss","type":"REVENUE"}' | jget data.id)
+# Receive GBP 100.00 (10000 minor) into the GBP bank @280 -> base 2800000 minor; the ledger holds base.
+post "$MGR" finance/transactions "{\"voucherType\":\"BRV\",\"description\":\"GBP receipt\",\"entries\":[{\"accountId\":\"$GBPBANK\",\"debitMinor\":10000,\"currency\":\"GBP\"},{\"accountId\":\"$REV\",\"creditMinor\":2800000}]}" >/dev/null
+check "foreign line converted to base (GBP 10000 @280 -> 2800000)" "$(get "$MGR" "finance/ledger/$GBPBANK" | jget data.closing.amountMinor)" "2800000"
+# Rate moves to 290; revaluation restates the GBP balance and books the unrealised gain.
+post "$MGR" finance/exchange-rates '{"currencyCode":"GBP","rate":290}' >/dev/null
+RVL=$(post "$MGR" finance/revalue "{\"fxAccountId\":\"$FXGL\"}")
+check "revaluation gain = 100000 (GBP100 × (290-280))" "$(echo "$RVL" | jget data.fxGainLossMinor)" "100000"
+check "GBP bank restated to 2900000 after revaluation" "$(get "$MGR" "finance/ledger/$GBPBANK" | jget data.closing.amountMinor)" "2900000"
+check "trial balance still balanced after revaluation" "$(get "$MGR" finance/trial-balance | jget data.balanced)" "True"
+check "re-running revaluation at the same rate is a no-op" "$(post "$MGR" finance/revalue "{\"fxAccountId\":\"$FXGL\"}" | jget data.posted)" "False"
+
 echo "== cash flow statement (direct method) =="
 check "cash flow reconciles (opening + net = closing)" "$(get "$MGR" finance/statements/cash-flow | jget data.reconciles)" "True"
 check "operating activities non-zero" "$(get "$MGR" finance/statements/cash-flow | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['operating']['totalMinor']!=0)")" "True"

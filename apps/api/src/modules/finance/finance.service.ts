@@ -34,6 +34,7 @@ import type {
   PayInvoiceDto,
   PeriodQueryDto,
   ReconcileDto,
+  RevalueFxDto,
   UpdateAccountDto,
   UpdatePeriodDto,
   YearEndCloseDto,
@@ -103,10 +104,10 @@ export class FinanceService {
       }
       try {
         const rows = (await m.query(
-          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number`,
-          [dto.code, dto.name, type, dto.parentId ?? null, isGroup, level, controlType, dto.bankName ?? null, dto.accountNumber ?? null],
+          `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number, currency)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number, currency`,
+          [dto.code, dto.name, type, dto.parentId ?? null, isGroup, level, controlType, dto.bankName ?? null, dto.accountNumber ?? null, dto.currency?.toUpperCase() ?? null],
         )) as Row[];
         return mapAccount(rows[0]!);
       } catch (err) {
@@ -137,7 +138,7 @@ export class FinanceService {
       const rows = (await m.query(
         `UPDATE finance_account SET ${sets.join(', ')}, updated_at = now()
          WHERE id = $${params.push(id)} AND deleted_at IS NULL
-         RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number`,
+         RETURNING id, code, name, type, parent_id, is_group, level, control_type, bank_name, account_number, currency`,
         params,
       )) as Row[];
       return mapAccount(rows[0]!);
@@ -149,16 +150,16 @@ export class FinanceService {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(`
         WITH RECURSIVE tree AS (
-          SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, 1 AS level, ARRAY[code] AS path
+          SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, currency, 1 AS level, ARRAY[code] AS path
             FROM finance_account
            WHERE deleted_at IS NULL AND parent_id IS NULL
           UNION ALL
-          SELECT c.id, c.code, c.name, c.type, c.parent_id, c.is_group, c.control_type, c.bank_name, c.account_number, t.level + 1, t.path || c.code
+          SELECT c.id, c.code, c.name, c.type, c.parent_id, c.is_group, c.control_type, c.bank_name, c.account_number, c.currency, t.level + 1, t.path || c.code
             FROM finance_account c
             JOIN tree t ON c.parent_id = t.id
            WHERE c.deleted_at IS NULL
         )
-        SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, level FROM tree ORDER BY path
+        SELECT id, code, name, type, parent_id, is_group, control_type, bank_name, account_number, currency, level FROM tree ORDER BY path
       `)) as Row[];
       return rows.map(mapAccount);
     });
@@ -178,9 +179,39 @@ export class FinanceService {
     m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
     dto: CreateTransactionDto,
   ) {
+    // Foreign-currency lines: convert debit/credit to BASE units at the voucher-date rate, keeping the
+    // original foreign amount + rate so the ledger stays single-currency but the FX detail is retained.
+    const entries: Array<{
+      accountId: string;
+      debitMinor: number;
+      creditMinor: number;
+      costCenterId?: string;
+      fcCurrency: string | null;
+      fcAmountMinor: number | null;
+      rateMicro: number | null;
+    }> = [];
+    for (const e of dto.entries) {
+      let debit = e.debitMinor ?? 0;
+      let credit = e.creditMinor ?? 0;
+      let fcCurrency: string | null = null;
+      let fcAmountMinor: number | null = null;
+      let rateMicro: number | null = null;
+      if (e.currency) {
+        const rm = await this.rateMicroAt(m, e.currency, dto.occurredOn);
+        if (rm !== RATE_SCALE) {
+          fcCurrency = e.currency.toUpperCase();
+          fcAmountMinor = debit > 0 ? debit : credit;
+          rateMicro = rm;
+          debit = Math.round((debit * rm) / RATE_SCALE);
+          credit = Math.round((credit * rm) / RATE_SCALE);
+        }
+      }
+      entries.push({ accountId: e.accountId, debitMinor: debit, creditMinor: credit, costCenterId: e.costCenterId, fcCurrency, fcAmountMinor, rateMicro });
+    }
+
     let totals: { debit: number; credit: number };
     try {
-      totals = assertBalanced(dto.entries);
+      totals = assertBalanced(entries);
     } catch (err) {
       if (err instanceof UnbalancedTransactionError) throw new UnprocessableEntityException(err.message);
       throw err;
@@ -188,7 +219,7 @@ export class FinanceService {
 
     {
       // Postings are only allowed to leaf (non-group) accounts that exist in this tenant.
-      const ids = [...new Set(dto.entries.map((e) => e.accountId))];
+      const ids = [...new Set(entries.map((e) => e.accountId))];
       const accts = (await m.query(
         `SELECT id, is_group, control_type FROM finance_account WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
         [ids],
@@ -207,10 +238,10 @@ export class FinanceService {
       try {
         assertVoucherType(
           voucherType,
-          dto.entries.map((e) => ({
+          entries.map((e) => ({
             controlType: controlById.get(e.accountId) ?? 'NONE',
-            debitMinor: e.debitMinor ?? 0,
-            creditMinor: e.creditMinor ?? 0,
+            debitMinor: e.debitMinor,
+            creditMinor: e.creditMinor,
           })),
         );
       } catch (err) {
@@ -244,11 +275,11 @@ export class FinanceService {
       )) as Row[];
       const txn = txRows[0]!;
       try {
-        for (const e of dto.entries) {
+        for (const e of entries) {
           await m.query(
-            `INSERT INTO finance_journal_entry (tenant_id, transaction_id, account_id, debit_minor, credit_minor, cost_center_id)
-             VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5)`,
-            [txn.id, e.accountId, e.debitMinor ?? 0, e.creditMinor ?? 0, e.costCenterId ?? null],
+            `INSERT INTO finance_journal_entry (tenant_id, transaction_id, account_id, debit_minor, credit_minor, cost_center_id, fc_currency, fc_amount_minor, fx_rate_micro)
+             VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8)`,
+            [txn.id, e.accountId, e.debitMinor, e.creditMinor, e.costCenterId ?? null, e.fcCurrency, e.fcAmountMinor, e.rateMicro],
           );
         }
       } catch (err) {
@@ -1331,6 +1362,54 @@ export class FinanceService {
     });
   }
 
+  /**
+   * Period-end FX revaluation. Every account that carries a foreign-currency balance is restated to its
+   * current base value: `gain/loss = fc_balance × current_rate − booked_base_balance`. One balancing JV
+   * adjusts each account and books the net unrealised gain/loss to `fxAccountId`. Posting only the delta
+   * since the last revaluation makes a re-run at the same rate a no-op (idempotent on a flat market).
+   */
+  async revalueForeign(dto: RevalueFxDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT je.account_id,
+                max(je.fc_currency) AS fc_currency,
+                COALESCE(SUM(CASE WHEN je.debit_minor > 0 THEN je.fc_amount_minor ELSE -je.fc_amount_minor END), 0) AS fc_balance,
+                -- base_balance is the account's FULL posted balance (including prior revaluation
+                -- adjustments, which carry no fc_currency) — not just the foreign-tagged lines.
+                (SELECT COALESCE(SUM(a.debit_minor - a.credit_minor), 0)
+                   FROM finance_journal_entry a
+                   JOIN finance_transaction at2 ON at2.id = a.transaction_id AND at2.status = 'POSTED' AND at2.deleted_at IS NULL
+                  WHERE a.account_id = je.account_id AND a.deleted_at IS NULL) AS base_balance
+           FROM finance_journal_entry je
+           JOIN finance_transaction t ON t.id = je.transaction_id AND t.status = 'POSTED' AND t.deleted_at IS NULL
+          WHERE je.fc_currency IS NOT NULL AND je.deleted_at IS NULL
+          GROUP BY je.account_id`,
+      )) as Array<{ account_id: string; fc_currency: string; fc_balance: string; base_balance: string }>;
+
+      const lines: Array<{ accountId: string; debitMinor?: number; creditMinor?: number }> = [];
+      const adjustments: Array<{ accountId: string; currency: string; diffMinor: number }> = [];
+      let net = 0;
+      for (const r of rows) {
+        const rate = await this.rateMicroAt(m, r.fc_currency, dto.asOf);
+        const revalued = Math.round((Number(r.fc_balance) * rate) / RATE_SCALE);
+        const diff = revalued - Number(r.base_balance); // base minor; signed (handles asset & liability)
+        if (diff === 0) continue;
+        lines.push(diff > 0 ? { accountId: r.account_id, debitMinor: diff } : { accountId: r.account_id, creditMinor: -diff });
+        adjustments.push({ accountId: r.account_id, currency: r.fc_currency, diffMinor: diff });
+        net += diff;
+      }
+
+      if (lines.length === 0) {
+        return { posted: false, fxGainLossMinor: 0, accountsRevalued: 0, adjustments };
+      }
+      // Balance the voucher against the FX gain/loss account. net>0 ⇒ a credit (gain); net<0 ⇒ a debit (loss).
+      lines.push(net > 0 ? { accountId: dto.fxAccountId, creditMinor: net } : { accountId: dto.fxAccountId, debitMinor: -net });
+
+      const txn = await this.postInTx(m, { description: 'FX revaluation', voucherType: 'JV', occurredOn: dto.asOf, entries: lines });
+      return { posted: true, voucherNo: txn.voucherNo, fxGainLossMinor: net, accountsRevalued: adjustments.length, adjustments };
+    });
+  }
+
   // ── Accounts Payable (vendors / bills / payments) ────────────────────────────
   async createVendor(dto: CreateVendorDto) {
     return this.tenantTx.run(async (m) => {
@@ -1743,6 +1822,7 @@ function mapAccount(r: Row) {
     controlType: r.control_type ?? 'NONE',
     bankName: r.bank_name ?? null,
     accountNumber: r.account_number ?? null,
+    currency: r.currency ?? null,
     ...(r.level !== undefined ? { level: Number(r.level) } : {}),
   };
 }

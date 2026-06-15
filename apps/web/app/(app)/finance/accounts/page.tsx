@@ -67,6 +67,7 @@ export default function ChartOfAccountsPage() {
                               : 'Receivables control'}
                           </Badge>
                         ) : null}
+                        {a.currency ? <Badge variant="outline" className="ml-1">{a.currency}</Badge> : null}
                       </span>
                     </TableCell>
                     <TableCell><Badge variant={TYPE_VARIANT[a.type]}>{a.type}</Badge></TableCell>
