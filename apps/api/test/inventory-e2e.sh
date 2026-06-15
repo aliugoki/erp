@@ -140,6 +140,11 @@ check "item ledger last running balance = 170" "$(get "$MGR" "inventory/products
 check "reorder flags GADGET-2 (on-hand 0 <= min 10)" "$(get "$MGR" inventory/reports/reorder | python3 -c "import sys,json;print(any(l['sku']=='GADGET-2' for l in json.load(sys.stdin)['data']))")" "True"
 check "reorder excludes WIDGET-2 (well stocked)" "$(get "$MGR" inventory/reports/reorder | python3 -c "import sys,json;print(any(l['sku']=='WIDGET-2' for l in json.load(sys.stdin)['data']))")" "False"
 
+echo "== enterprise: document registers =="
+check "GRN register lists GRN-000001" "$(get "$MGR" inventory/grns | python3 -c "import sys,json;print(any(g['grn_no']=='GRN-000001' for g in json.load(sys.stdin)['data']))")" "True"
+check "issue register lists ISS-000001" "$(get "$MGR" inventory/issues | python3 -c "import sys,json;print(any(i['issue_no']=='ISS-000001' for i in json.load(sys.stdin)['data']))")" "True"
+check "MRN register lists MRN-000001 with 20 returned" "$(get "$MGR" inventory/mrns | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];n=next((x for x in d if x['mrn_no']=='MRN-000001'),None);print(n['qty'] if n else 'none')")" "20"
+
 echo "== enterprise: oversell guard =="
 check "issuing more than on-hand -> 422" "$(code -XPOST "$B/inventory/issues" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"warehouseId\":\"$WH\",\"items\":[{\"productId\":\"$WP\",\"qty\":1000}]}")" "422"
 check "on-hand unchanged after the failed issue = 170" "$(get "$MGR" "inventory/products/$WP" | jget data.onHand)" "170"

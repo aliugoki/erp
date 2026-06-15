@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, ClipboardList, DoorOpen, Package, ShoppingCart } from 'lucide-react';
+import { BookOpen, ClipboardList, DoorOpen, FileStack, Package, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -9,6 +9,7 @@ const TABS = [
   { href: '/inventory/requisitions', label: 'Requisitions', icon: ClipboardList, exact: false },
   { href: '/inventory/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, exact: false },
   { href: '/inventory/gate-passes', label: 'Gate Passes', icon: DoorOpen, exact: false },
+  { href: '/inventory/registers', label: 'Registers', icon: FileStack, exact: false },
   { href: '/inventory/ledger', label: 'Ledger & Reports', icon: BookOpen, exact: false },
 ];
 

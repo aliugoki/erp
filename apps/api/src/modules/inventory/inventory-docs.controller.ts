@@ -123,6 +123,11 @@ export class InventoryDocsController {
   }
 
   // Goods receipt notes
+  @Get('grns')
+  listGrns() {
+    return this.docs.listGrns();
+  }
+
   @Post('grns')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.CREATED)
@@ -150,6 +155,11 @@ export class InventoryDocsController {
   }
 
   // Store issuance
+  @Get('issues')
+  listIssues() {
+    return this.docs.listIssues();
+  }
+
   @Post('issues')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.CREATED)
@@ -158,6 +168,11 @@ export class InventoryDocsController {
   }
 
   // Material return notes
+  @Get('mrns')
+  listMrns() {
+    return this.docs.listMrns();
+  }
+
   @Post('mrns')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.CREATED)

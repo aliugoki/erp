@@ -440,3 +440,16 @@ export interface GatePass {
   issued_on: string | null;
   item_count: number;
 }
+
+export interface GrnRow {
+  id: string; grn_no: string; status: string; received_on: string | null;
+  po_no: string | null; vendor: string | null; warehouse: string | null; qty: number; value_minor: number;
+}
+export interface IssueRow {
+  id: string; issue_no: string; status: string; issued_on: string | null;
+  issued_to: string | null; department: string | null; req_no: string | null; warehouse: string | null; qty: number; value_minor: number;
+}
+export interface MrnRow {
+  id: string; mrn_no: string; status: string; returned_on: string | null;
+  returned_by: string | null; issue_no: string | null; warehouse: string | null; qty: number; value_minor: number;
+}

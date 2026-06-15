@@ -554,6 +554,50 @@ export class InventoryDocsService {
     });
   }
 
+  // ── Document registers (lists) ──────────────────────────────────────────────
+  async listGrns() {
+    return this.tenantTx.run((m) =>
+      m.query(
+        `SELECT g.id, g.grn_no, g.status, g.received_on::text AS received_on, po.po_no, v.name AS vendor, w.name AS warehouse,
+                COALESCE(SUM(gi.qty),0)::int AS qty, COALESCE(SUM(gi.qty * gi.unit_cost_minor),0)::bigint AS value_minor
+         FROM inventory_grn g
+         LEFT JOIN inventory_purchase_order po ON po.id = g.po_id
+         LEFT JOIN vendor v ON v.id = g.vendor_id
+         LEFT JOIN inventory_warehouse w ON w.id = g.warehouse_id
+         LEFT JOIN inventory_grn_item gi ON gi.grn_id = g.id
+         WHERE g.deleted_at IS NULL GROUP BY g.id, po.po_no, v.name, w.name ORDER BY g.created_at DESC`,
+      ),
+    );
+  }
+
+  async listIssues() {
+    return this.tenantTx.run((m) =>
+      m.query(
+        `SELECT i.id, i.issue_no, i.status, i.issued_on::text AS issued_on, i.issued_to, i.department, r.req_no, w.name AS warehouse,
+                COALESCE(SUM(ii.qty),0)::int AS qty, COALESCE(SUM(ii.qty * ii.unit_cost_minor),0)::bigint AS value_minor
+         FROM inventory_issue i
+         LEFT JOIN inventory_requisition r ON r.id = i.requisition_id
+         LEFT JOIN inventory_warehouse w ON w.id = i.warehouse_id
+         LEFT JOIN inventory_issue_item ii ON ii.issue_id = i.id
+         WHERE i.deleted_at IS NULL GROUP BY i.id, r.req_no, w.name ORDER BY i.created_at DESC`,
+      ),
+    );
+  }
+
+  async listMrns() {
+    return this.tenantTx.run((m) =>
+      m.query(
+        `SELECT n.id, n.mrn_no, n.status, n.returned_on::text AS returned_on, n.returned_by, i.issue_no, w.name AS warehouse,
+                COALESCE(SUM(ni.qty),0)::int AS qty, COALESCE(SUM(ni.qty * ni.unit_cost_minor),0)::bigint AS value_minor
+         FROM inventory_mrn n
+         LEFT JOIN inventory_issue i ON i.id = n.issue_id
+         LEFT JOIN inventory_warehouse w ON w.id = n.warehouse_id
+         LEFT JOIN inventory_mrn_item ni ON ni.mrn_id = n.id
+         WHERE n.deleted_at IS NULL GROUP BY n.id, i.issue_no, w.name ORDER BY n.created_at DESC`,
+      ),
+    );
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────────
   private async insertItems(m: Mgr, table: string, fk: string, parentId: string, rows: Array<[string, number]>) {
     for (const [productId, qty] of rows) {
