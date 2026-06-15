@@ -165,6 +165,18 @@ export class FinanceService {
 
   // ── Transactions (double-entry) ─────────────────────────────────────────────
   async createTransaction(dto: CreateTransactionDto) {
+    return this.tenantTx.run((m) => this.postInTx(m, dto));
+  }
+
+  /**
+   * Post a balanced voucher within an EXISTING tenant transaction (so AP/AR can post atomically with
+   * a bill/payment). Validates balance, leaf accounts, voucher cash/bank rule, period lock; allocates
+   * the voucher number; inserts the transaction + journal lines.
+   */
+  private async postInTx(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    dto: CreateTransactionDto,
+  ) {
     let totals: { debit: number; credit: number };
     try {
       totals = assertBalanced(dto.entries);
@@ -173,7 +185,7 @@ export class FinanceService {
       throw err;
     }
 
-    return this.tenantTx.run(async (m) => {
+    {
       // Postings are only allowed to leaf (non-group) accounts that exist in this tenant.
       const ids = [...new Set(dto.entries.map((e) => e.accountId))];
       const accts = (await m.query(
@@ -254,7 +266,7 @@ export class FinanceService {
         totalCreditMinor: totals.credit,
         entries: dto.entries,
       };
-    });
+    }
   }
 
   /** Approve a DRAFT voucher → POSTED (subject to the period lock). The checker half of maker/checker. */
@@ -1391,21 +1403,53 @@ export class FinanceService {
       lineTotalMinor: l.quantity * l.unitPriceMinor,
     }));
     return this.tenantTx.run(async (m) => {
+      let bill: Row;
       try {
         const rows = (await m.query(
           `INSERT INTO vendor_bill
              (tenant_id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, currency, bill_date, due_date)
            VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, COALESCE($8::date, current_date), $9)
-           RETURNING id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, amount_paid_minor, currency, status, bill_date, due_date`,
+           RETURNING id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, amount_paid_minor, currency, status, bill_date::text AS bill_date, due_date::text AS due_date`,
           [dto.number, dto.vendorId, JSON.stringify(lines), totals.subtotalMinor, totals.taxMinor, totals.totalMinor, currency, dto.billDate ?? null, dto.dueDate ?? null],
         )) as Row[];
-        return mapBill(rows[0]!);
+        bill = rows[0]!;
       } catch (err) {
         if (isUnique(err)) throw new BadRequestException(`Bill number "${dto.number}" already exists`);
         if (isForeignKey(err)) throw new BadRequestException('Vendor does not exist in this tenant');
         throw err;
       }
+
+      // Optional GL posting: Dr expense / Cr the vendor's payable account (atomic with the bill).
+      let journalNo: string | null = null;
+      if (dto.expenseAccountId) {
+        const payable = await this.vendorPayableAccount(m, dto.vendorId);
+        const txn = await this.postInTx(m, {
+          description: `Bill ${bill.number} — purchase`,
+          voucherType: 'JV',
+          occurredOn: String(bill.bill_date).slice(0, 10),
+          entries: [
+            { accountId: dto.expenseAccountId, debitMinor: totals.totalMinor },
+            { accountId: payable, creditMinor: totals.totalMinor },
+          ],
+        } as CreateTransactionDto);
+        await m.query(`UPDATE vendor_bill SET journal_id=$1 WHERE id=$2`, [txn.id, bill.id]);
+        journalNo = (txn.voucherNo ?? null) as string | null;
+      }
+      return { ...mapBill(bill), journalNo };
     });
+  }
+
+  /** The vendor's linked payable ledger account — required to post AP to the GL. */
+  private async vendorPayableAccount(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    vendorId: string,
+  ): Promise<string> {
+    const v = (await m.query(`SELECT account_id FROM vendor WHERE id=$1 AND deleted_at IS NULL`, [vendorId])) as Array<{ account_id: string | null }>;
+    const acc = v[0]?.account_id;
+    if (!acc) {
+      throw new UnprocessableEntityException('This vendor has no payable ledger account — configure a Payables control account first');
+    }
+    return acc;
   }
 
   async listBills(query: ListBillsQueryDto): Promise<SuccessEnvelope<unknown[]>> {
@@ -1456,23 +1500,44 @@ export class FinanceService {
   async payBill(id: string, dto: CreateBillPaymentDto) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, total_minor, amount_paid_minor, status FROM vendor_bill WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        `SELECT id, vendor_id, total_minor, amount_paid_minor, status FROM vendor_bill WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
         [id],
-      )) as Array<{ id: string; total_minor: string; amount_paid_minor: string; status: string }>;
+      )) as Array<{ id: string; vendor_id: string; total_minor: string; amount_paid_minor: string; status: string }>;
       const bill = rows[0];
       if (!bill) throw new NotFoundException('Bill not found');
       if (bill.status === 'VOID') throw new UnprocessableEntityException('Cannot pay a void bill');
       const total = Number(bill.total_minor);
       const newPaid = Number(bill.amount_paid_minor) + dto.amountMinor;
       if (newPaid > total) throw new UnprocessableEntityException('Payment exceeds the outstanding amount');
-      await m.query(
+      const pmt = (await m.query(
         `INSERT INTO bill_payment (tenant_id, bill_id, amount_minor, paid_on, method)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, COALESCE($3::date, current_date), $4)`,
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, COALESCE($3::date, current_date), $4)
+         RETURNING id, paid_on::text AS paid_on`,
         [id, dto.amountMinor, dto.paidOn ?? null, dto.method ?? null],
-      );
+      )) as Array<{ id: string; paid_on: string }>;
       const status = newPaid >= total ? 'PAID' : 'PARTIALLY_PAID';
       await m.query(`UPDATE vendor_bill SET amount_paid_minor=$1, status=$2, updated_at=now() WHERE id=$3`, [newPaid, status, id]);
-      return { id, status, amountPaid: money(newPaid), outstanding: money(total - newPaid) };
+
+      // Optional GL posting: Dr the vendor's payable / Cr the cash·bank account (atomic with the payment).
+      let journalNo: string | null = null;
+      if (dto.paymentAccountId) {
+        const payable = await this.vendorPayableAccount(m, bill.vendor_id);
+        const pa = (await m.query(`SELECT control_type FROM finance_account WHERE id=$1 AND deleted_at IS NULL`, [dto.paymentAccountId])) as Array<{ control_type: ControlType }>;
+        const ctrl = pa[0]?.control_type ?? 'NONE';
+        const voucherType: VoucherType = ctrl === 'BANK' ? 'BPV' : ctrl === 'CASH' ? 'CPV' : 'JV';
+        const txn = await this.postInTx(m, {
+          description: `Payment of bill ${id}`,
+          voucherType,
+          occurredOn: String(pmt[0]!.paid_on).slice(0, 10),
+          entries: [
+            { accountId: payable, debitMinor: dto.amountMinor },
+            { accountId: dto.paymentAccountId, creditMinor: dto.amountMinor },
+          ],
+        } as CreateTransactionDto);
+        await m.query(`UPDATE bill_payment SET journal_id=$1 WHERE id=$2`, [txn.id, pmt[0]!.id]);
+        journalNo = (txn.voucherNo ?? null) as string | null;
+      }
+      return { id, status, amountPaid: money(newPaid), outstanding: money(total - newPaid), journalNo };
     });
   }
 

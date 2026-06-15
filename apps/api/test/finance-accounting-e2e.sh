@@ -149,6 +149,23 @@ post "$MGR" finance/bills "{\"number\":\"BILL-OLD\",\"vendorId\":\"$VEN\",\"line
 check "AP aging total = 70000 (one outstanding bill)" "$(get "$MGR" finance/ap-aging | jget data.totals.total)" "70000"
 check "AP overdue bill in 90+ bucket" "$(get "$MGR" finance/ap-aging | jget data.totals.d90_plus)" "70000"
 
+echo "== vendor → chart of accounts + AP→GL posting (before any period exists) =="
+APCTRL=$(post "$MGR" finance/accounts '{"code":"2-09","name":"Sundry Creditors","type":"LIABILITY","isGroup":true,"controlType":"PAYABLE"}' | jget data.id)
+[ -n "$APCTRL" ] && echo "  ✅ payables control group created" && pass=$((pass+1)) || { echo "  ❌ payables control create failed"; fail=$((fail+1)); }
+VACC=$(post "$MGR" finance/vendors '{"name":"Globex Supplier"}' | jget data.accountCode)
+[ -n "$VACC" ] && echo "  ✅ vendor got ledger sub-account ($VACC)" && pass=$((pass+1)) || { echo "  ❌ vendor sub-account not created"; fail=$((fail+1)); }
+check "vendor account is a child of the payables control" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];p=next(a['id'] for a in d if a['code']=='2-09');print(any(a.get('parentId')==p and a['name']=='Globex Supplier' for a in d))")" "True"
+GLVID=$(post "$MGR" finance/vendors '{"name":"GL Vendor"}' | jget data.id)
+BRES=$(post "$MGR" finance/bills "{\"number\":\"GLBILL-1\",\"vendorId\":\"$GLVID\",\"lineItems\":[{\"description\":\"svc\",\"quantity\":1,\"unitPriceMinor\":80000}],\"expenseAccountId\":\"$RENT\"}")
+BID=$(echo "$BRES" | jget data.id)
+[ -n "$(echo "$BRES" | jget data.journalNo)" ] && echo "  ✅ bill posted to GL ($(echo "$BRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ bill did not post to GL"; fail=$((fail+1)); }
+VPACC=$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next(a['id'] for a in json.load(sys.stdin)['data'] if a['name']=='GL Vendor'))")
+check "vendor payable balance = 80000 after bill" "$(get "$MGR" "finance/ledger/$VPACC" | jget data.closing.amountMinor)" "80000"
+# Pay from CASH (CPV) so it doesn't disturb the BANK ledger the reconciliation section asserts on.
+PRES=$(post "$MGR" "finance/bills/$BID/payments" "{\"amountMinor\":80000,\"paymentAccountId\":\"$CASH\"}")
+[ -n "$(echo "$PRES" | jget data.journalNo)" ] && echo "  ✅ payment posted to GL ($(echo "$PRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ payment did not post to GL"; fail=$((fail+1)); }
+check "vendor payable cleared to 0 after full payment" "$(get "$MGR" "finance/ledger/$VPACC" | jget data.closing.amountMinor)" "0"
+
 echo "== cash flow statement (direct method) =="
 check "cash flow reconciles (opening + net = closing)" "$(get "$MGR" finance/statements/cash-flow | jget data.reconciles)" "True"
 check "operating activities non-zero" "$(get "$MGR" finance/statements/cash-flow | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['operating']['totalMinor']!=0)")" "True"
@@ -204,13 +221,6 @@ post "$MGR" finance/bank-statements/import "{\"accountId\":\"$BANK\",\"lines\":[
 check "auto-match matches the 2000 deposit" "$(post "$MGR" finance/bank-statements/auto-match "{\"accountId\":\"$BANK\"}" | jget data.matched)" "1"
 check "one imported line remains unmatched" "$(get "$MGR" "finance/bank-statements/$BANK" | python3 -c "import sys,json;print(sum(1 for s in json.load(sys.stdin)['data'] if not s['matched']))")" "1"
 check "bank now fully cleared (uncleared count 0)" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.unclearedCount)" "0"
-
-echo "== vendor → chart of accounts (subsidiary ledger) =="
-APCTRL=$(post "$MGR" finance/accounts '{"code":"2-09","name":"Sundry Creditors","type":"LIABILITY","isGroup":true,"controlType":"PAYABLE"}' | jget data.id)
-[ -n "$APCTRL" ] && echo "  ✅ payables control group created" && pass=$((pass+1)) || { echo "  ❌ payables control create failed"; fail=$((fail+1)); }
-VACC=$(post "$MGR" finance/vendors '{"name":"Globex Supplier"}' | jget data.accountCode)
-[ -n "$VACC" ] && echo "  ✅ vendor got ledger sub-account ($VACC)" && pass=$((pass+1)) || { echo "  ❌ vendor sub-account not created"; fail=$((fail+1)); }
-check "vendor account is a child of the payables control" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];p=next(a['id'] for a in d if a['code']=='2-09');print(any(a.get('parentId')==p and a['name']=='Globex Supplier' for a in d))")" "True"
 
 echo "== transaction detail (double-entry view) =="
 TX=$(get "$MGR" "finance/transactions?pageSize=1&status=POSTED" | python3 -c "import sys,json;print(json.load(sys.stdin)['data'][0]['id'])")

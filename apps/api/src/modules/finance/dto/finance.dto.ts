@@ -232,12 +232,16 @@ export class CreateBillDto {
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsISO8601() billDate?: string;
   @IsOptional() @IsISO8601() dueDate?: string;
+  /** Post the bill to the GL: Dr this expense account / Cr the vendor's payable account. */
+  @IsOptional() @IsUUID() expenseAccountId?: string;
 }
 
 export class CreateBillPaymentDto {
   @IsInt() @Min(1) amountMinor!: number;
   @IsOptional() @IsISO8601() paidOn?: string;
   @IsOptional() @IsString() method?: string;
+  /** Post the payment to the GL: Dr the vendor's payable / Cr this cash·bank account. */
+  @IsOptional() @IsUUID() paymentAccountId?: string;
 }
 
 export class ListBillsQueryDto {

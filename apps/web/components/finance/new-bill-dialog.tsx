@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { Vendor } from '@/lib/types';
+import type { Account, Vendor } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -23,28 +23,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function NewBillDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ number: '', vendorId: '', description: '', quantity: '1', unitPrice: '', tax: '0', dueDate: '' });
+  const [f, setF] = useState({ number: '', vendorId: '', description: '', quantity: '1', unitPrice: '', tax: '0', dueDate: '', expenseAccountId: 'NONE' });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
   const { data: vendors } = useQuery({ queryKey: ['vendors'], queryFn: () => apiGet<Vendor[]>('/finance/vendors'), enabled: open });
+  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), enabled: open });
+  const expenseAccts = (accounts ?? []).filter((a) => !a.isGroup && a.type === 'EXPENSE');
 
   const subtotal = (Number(f.quantity) || 0) * Math.round((Number(f.unitPrice) || 0) * 100);
   const total = subtotal + Math.round((Number(f.tax) || 0) * 100);
 
   const create = useMutation({
     mutationFn: () =>
-      apiPost('/finance/bills', {
+      apiPost<{ journalNo: string | null }>('/finance/bills', {
         number: f.number,
         vendorId: f.vendorId,
         lineItems: [{ description: f.description, quantity: Number(f.quantity), unitPriceMinor: Math.round(Number(f.unitPrice) * 100) }],
         taxMinor: Math.round(Number(f.tax) * 100),
         ...(f.dueDate ? { dueDate: f.dueDate } : {}),
+        ...(f.expenseAccountId !== 'NONE' ? { expenseAccountId: f.expenseAccountId } : {}),
       }),
-    onSuccess: () => {
-      toast.success('Bill recorded', { description: f.number });
+    onSuccess: (r) => {
+      toast.success('Bill recorded', { description: r.journalNo ? `Posted to GL as ${r.journalNo}` : f.number });
       qc.invalidateQueries({ queryKey: ['bills'] });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
       setOpen(false);
-      setF({ number: '', vendorId: '', description: '', quantity: '1', unitPrice: '', tax: '0', dueDate: '' });
+      setF({ number: '', vendorId: '', description: '', quantity: '1', unitPrice: '', tax: '0', dueDate: '', expenseAccountId: 'NONE' });
     },
     onError: (e) => toast.error('Could not record bill', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -101,6 +105,16 @@ export function NewBillDialog() {
               <Label htmlFor="bdue">Due</Label>
               <Input id="bdue" type="date" value={f.dueDate} onChange={(e) => set('dueDate')(e.target.value)} />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Post to GL <span className="text-xs text-muted-foreground">(optional — Dr expense / Cr vendor payable)</span></Label>
+            <Select value={f.expenseAccountId} onValueChange={set('expenseAccountId')}>
+              <SelectTrigger><SelectValue placeholder="Don't post to the ledger" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">— Don&apos;t post —</SelectItem>
+                {expenseAccts.map((a) => <SelectItem key={a.id} value={a.id}>{a.code} · {a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3 text-sm">
             <span className="text-muted-foreground">Total</span>
