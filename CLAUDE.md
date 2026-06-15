@@ -154,3 +154,33 @@ authoritative (ADR-009).
 - **Models per phase** (switch with `/model`): Opus for architecture/security/reliability/sagas,
   Sonnet for implementation/CRUD, Haiku for scaffolding. Use `opusplan` for Phases 2/4/7.
 - Prefer ending a chunk at its gate over `/compact`. A clean session beats a compacted one.
+
+---
+
+## 8. Production & Operations (Phase 9)
+
+The whole system runs in containers via **`infra/docker-compose.prod.yml`** (per-app multi-stage,
+distroless, non-root images — Chunk 9.1). Apps reach Postgres **through PgBouncer as `app_user`**
+(RLS enforced); migrations/relay use the owner connection. Health: `/health` (liveness),
+`/health/ready` (Postgres+Redis, drains on shutdown), `/metrics` (Prometheus RED+USE).
+
+- **Deploy / migrate / seed:** `docker compose -f infra/docker-compose.prod.yml up -d --build`, then
+  `pnpm --filter @app/api migration:run` (idempotent), then `infra/scripts/seed-demo.sh` (idempotent
+  demo tenant + data across all modules). Secrets via a store or the `*_FILE` convention.
+- **Backups:** `infra/scripts/backup.sh` (pg_dump custom format, optional S3/MinIO) +
+  `restore.sh`. Test restores into a scratch DB.
+- **CI/CD:** `.github/workflows/ci.yml` (typecheck/lint/unit + e2e against infra + advisory headless
+  `claude -p` review) and `security.yml` (pnpm audit + Trivy + pip-audit) run on every PR;
+  `deploy-staging.yml` builds/pushes images to GHCR and canary-deploys with health-gated rollback.
+- **Runbook:** `docs/runbook.md` — deploy, rolling restart (zero in-flight loss via the outbox),
+  rollback, alerts→actions, DLQ drain, graceful-degradation expectations, scaling.
+- **Acceptance:** `infra/scripts/acceptance.sh` drives every module, fires each domain event, asserts
+  the relay published them + consumers reacted, and proves ML-down graceful degradation.
+
+**Finance is now a full accounting suite** (post-9.1 feature work, not a build-chain chunk): 4-level
+chart of accounts, voucher types (BRV/BPV/CPV/CRV/JV) with numbering + cash/bank validation,
+maker/checker posting workflow, GL + Trial Balance + Balance Sheet + Income Statement + Cash Flow,
+cash book, fiscal periods + locking, voucher reversal, bank reconciliation + statement auto-match,
+AR + AP with aging, cost-center dimensions, budgets vs actual, year-end close, recurring vouchers, and
+multi-currency. All under the same conventions (RLS, integer minor units, raw SQL via the
+tenant-scoped tx, reviewed idempotent migrations).

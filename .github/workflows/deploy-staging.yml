@@ -1,0 +1,93 @@
+name: Deploy staging
+
+# CD (Chunk 9.4): on merge to main, build + push the production images to GHCR, then a guarded
+# canary deploy to a staging host with an automatic rollback if health checks fail. The deploy job
+# only runs when the `STAGING_HOST` repo variable is set, so the build/push works out of the box and
+# the deploy wires up once a staging environment exists.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { app: api, context: ".", dockerfile: apps/api/Dockerfile }
+          - { app: worker, context: ".", dockerfile: apps/worker/Dockerfile }
+          - { app: web, context: ".", dockerfile: apps/web/Dockerfile }
+          - { app: ml, context: apps/ml, dockerfile: Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build + push ${{ matrix.app }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.app }}:latest
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    # Only deploy when a staging host is configured (repo variable). Build/push always runs.
+    if: ${{ vars.STAGING_HOST != '' }}
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Canary deploy + health-gated rollback
+        env:
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          install -m 600 /dev/stdin key <<< "$SSH_KEY"
+          ssh_run() { ssh -o StrictHostKeyChecking=no -i key "$STAGING_HOST" "$@"; }
+
+          echo "::group::Pull new images ($IMAGE_TAG)"
+          ssh_run "cd /opt/metaxperts && IMAGE_TAG=$IMAGE_TAG docker compose -f infra/docker-compose.prod.yml pull api web worker ml"
+          echo "::endgroup::"
+
+          # Record current tag for rollback, then recreate the api as the canary.
+          PREV=$(ssh_run "cd /opt/metaxperts && cat .deployed_tag 2>/dev/null || echo latest")
+          echo "previous tag: $PREV"
+          ssh_run "cd /opt/metaxperts && IMAGE_TAG=$IMAGE_TAG docker compose -f infra/docker-compose.prod.yml up -d --no-deps api"
+
+          echo "Waiting for /health/ready ..."
+          ok=0
+          for i in $(seq 1 30); do
+            if ssh_run "curl -fsS http://127.0.0.1:3300/health/ready >/dev/null"; then ok=1; break; fi
+            sleep 4
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "::error::Canary unhealthy — rolling back to $PREV"
+            ssh_run "cd /opt/metaxperts && IMAGE_TAG=$PREV docker compose -f infra/docker-compose.prod.yml up -d --no-deps api"
+            exit 1
+          fi
+
+          echo "Canary healthy — rolling out the rest"
+          ssh_run "cd /opt/metaxperts && IMAGE_TAG=$IMAGE_TAG docker compose -f infra/docker-compose.prod.yml up -d web worker ml && echo $IMAGE_TAG > .deployed_tag"
