@@ -28,7 +28,7 @@ export class CreateAccountDto {
   /** Group (header) accounts organise the tree and cannot be posted to; leaves are postable. */
   @IsOptional() @IsBoolean() isGroup?: boolean;
   /** Tag a detail account as a CASH or BANK control account (drives voucher rules + cash/bank books). */
-  @IsOptional() @IsIn(['NONE', 'CASH', 'BANK']) controlType?: string;
+  @IsOptional() @IsIn(['NONE', 'CASH', 'BANK', 'PAYABLE', 'RECEIVABLE']) controlType?: string;
   @IsOptional() @IsString() bankName?: string;
   @IsOptional() @IsString() accountNumber?: string;
 }
@@ -36,7 +36,7 @@ export class CreateAccountDto {
 /** Editable account fields (name + cash/bank tagging). Code/type/parent are structural and fixed. */
 export class UpdateAccountDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
-  @IsOptional() @IsIn(['NONE', 'CASH', 'BANK']) controlType?: string;
+  @IsOptional() @IsIn(['NONE', 'CASH', 'BANK', 'PAYABLE', 'RECEIVABLE']) controlType?: string;
   @IsOptional() @IsString() bankName?: string;
   @IsOptional() @IsString() accountNumber?: string;
 }

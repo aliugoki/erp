@@ -23,10 +23,11 @@ export function NewVendorDialog() {
   const [f, setF] = useState({ name: '', email: '', phone: '' });
 
   const create = useMutation({
-    mutationFn: () => apiPost('/finance/vendors', { name: f.name, email: f.email || undefined, phone: f.phone || undefined }),
-    onSuccess: () => {
-      toast.success('Vendor added', { description: f.name });
+    mutationFn: () => apiPost<{ accountCode: string | null }>('/finance/vendors', { name: f.name, email: f.email || undefined, phone: f.phone || undefined }),
+    onSuccess: (r) => {
+      toast.success('Vendor added', { description: r.accountCode ? `Ledger account ${r.accountCode} created` : f.name });
       qc.invalidateQueries({ queryKey: ['vendors'] });
+      qc.invalidateQueries({ queryKey: ['accounts'] });
       setOpen(false);
       setF({ name: '', email: '', phone: '' });
     },

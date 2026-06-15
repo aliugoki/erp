@@ -28,7 +28,7 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({
     code: '', name: '', type: 'ASSET' as AccountType, parentId: 'NONE', isGroup: false,
-    controlType: 'NONE' as 'NONE' | 'CASH' | 'BANK', bankName: '', accountNumber: '',
+    controlType: 'NONE' as 'NONE' | 'CASH' | 'BANK' | 'PAYABLE' | 'RECEIVABLE', bankName: '', accountNumber: '',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
 
@@ -45,7 +45,7 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
         name: f.name,
         type: f.type,
         isGroup: f.isGroup,
-        controlType: f.isGroup ? 'NONE' : f.controlType,
+        controlType: f.controlType,
         ...(f.controlType === 'BANK' ? { bankName: f.bankName, accountNumber: f.accountNumber } : {}),
         ...(f.parentId !== 'NONE' ? { parentId: f.parentId } : {}),
       }),
@@ -116,36 +116,47 @@ export function NewAccountDialog({ accounts }: { accounts: Account[] }) {
               <Label htmlFor="isGroup">Group account</Label>
               <p className="text-xs text-muted-foreground">A header you nest under — cannot be posted to.</p>
             </div>
-            <Switch id="isGroup" checked={f.isGroup} onCheckedChange={(v) => set('isGroup', v)} />
+            <Switch id="isGroup" checked={f.isGroup} onCheckedChange={(v) => setF((s) => ({ ...s, isGroup: v, controlType: 'NONE' }))} />
           </div>
-          {!f.isGroup ? (
-            <div className="space-y-3 rounded-lg border p-3">
-              <div className="space-y-2">
-                <Label>Cash / Bank control</Label>
-                <Select value={f.controlType} onValueChange={(v) => set('controlType', v as typeof f.controlType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">Ordinary account</SelectItem>
-                    <SelectItem value="CASH">Cash account</SelectItem>
-                    <SelectItem value="BANK">Bank account</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Cash/Bank accounts drive voucher rules (BRV/BPV/CRV/CPV) and the cash &amp; bank book.</p>
-              </div>
-              {f.controlType === 'BANK' ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="bn">Bank name</Label>
-                    <Input id="bn" value={f.bankName} onChange={(e) => set('bankName', e.target.value)} placeholder="HBL" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="an">Account #</Label>
-                    <Input id="an" value={f.accountNumber} onChange={(e) => set('accountNumber', e.target.value)} placeholder="0001-xxxxxxx" />
-                  </div>
-                </div>
-              ) : null}
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="space-y-2">
+              <Label>Control role</Label>
+              <Select value={f.controlType} onValueChange={(v) => set('controlType', v as typeof f.controlType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Ordinary account</SelectItem>
+                  {f.isGroup ? (
+                    <>
+                      <SelectItem value="PAYABLE">Payables control (vendors)</SelectItem>
+                      <SelectItem value="RECEIVABLE">Receivables control (customers)</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="CASH">Cash account</SelectItem>
+                      <SelectItem value="BANK">Bank account</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {f.isGroup
+                  ? 'A Payables/Receivables control group is where new vendor/customer ledger sub-accounts are created.'
+                  : 'Cash/Bank accounts drive voucher rules (BRV/BPV/CRV/CPV) and the cash & bank book.'}
+              </p>
             </div>
-          ) : null}
+            {!f.isGroup && f.controlType === 'BANK' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="bn">Bank name</Label>
+                  <Input id="bn" value={f.bankName} onChange={(e) => set('bankName', e.target.value)} placeholder="HBL" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="an">Account #</Label>
+                  <Input id="an" value={f.accountNumber} onChange={(e) => set('accountNumber', e.target.value)} placeholder="0001-xxxxxxx" />
+                </div>
+              </div>
+            ) : null}
+          </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create account'}</Button>

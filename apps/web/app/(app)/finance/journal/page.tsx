@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
 import { NewJournalDialog } from '@/components/finance/new-journal-dialog';
+import { TransactionDetailDialog } from '@/components/finance/transaction-detail-dialog';
 import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,7 @@ export default function JournalPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 animate-fade-up">
-      <PageHeader title="Finance" description="Journal — every balanced double-entry posting." action={<NewJournalDialog />} />
+      <PageHeader title="Finance" description="Transactions — every balanced double-entry posting." action={<NewJournalDialog />} />
       <FinanceTabs />
 
       <Card className="overflow-hidden">
@@ -117,24 +118,27 @@ export default function JournalPage() {
                     <TableCell className="text-center tabular-nums">{t.lineCount}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(t.total.amountMinor, t.total.currency)}</TableCell>
                     <TableCell className="text-right">
-                      {t.status === 'DRAFT' ? (
-                        <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" disabled={post.isPending} onClick={() => post.mutate(t.id)}>
-                            <Check className="size-4" /> Post
+                      <div className="flex justify-end gap-1">
+                        <TransactionDetailDialog txn={t} />
+                        {t.status === 'DRAFT' ? (
+                          <>
+                            <Button size="sm" variant="outline" disabled={post.isPending} onClick={() => post.mutate(t.id)}>
+                              <Check className="size-4" /> Post
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={del.isPending} onClick={() => del.mutate(t.id)}>
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </>
+                        ) : t.reversedById ? (
+                          <Badge variant="warning">Reversed</Badge>
+                        ) : t.reversesId ? (
+                          <Badge variant="secondary">Contra</Badge>
+                        ) : (
+                          <Button size="sm" variant="ghost" disabled={reverse.isPending} onClick={() => reverse.mutate(t.id)}>
+                            <RotateCcw className="size-4" /> Reverse
                           </Button>
-                          <Button size="sm" variant="ghost" disabled={del.isPending} onClick={() => del.mutate(t.id)}>
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      ) : t.reversedById ? (
-                        <Badge variant="warning">Reversed</Badge>
-                      ) : t.reversesId ? (
-                        <Badge variant="secondary">Contra</Badge>
-                      ) : (
-                        <Button size="sm" variant="ghost" disabled={reverse.isPending} onClick={() => reverse.mutate(t.id)}>
-                          <RotateCcw className="size-4" /> Reverse
-                        </Button>
-                      )}
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -97,7 +97,7 @@ export class FinanceService {
       }
       const isGroup = dto.isGroup ?? false;
       const controlType = (dto.controlType ?? 'NONE') as ControlType;
-      if (controlType !== 'NONE' && isGroup) {
+      if ((controlType === 'CASH' || controlType === 'BANK') && isGroup) {
         throw new UnprocessableEntityException('Only a postable (non-group) account can be a cash/bank account');
       }
       try {
@@ -123,7 +123,7 @@ export class FinanceService {
         [id],
       )) as Array<{ is_group: boolean }>;
       if (!existing[0]) throw new NotFoundException('Account not found');
-      if (dto.controlType && dto.controlType !== 'NONE' && existing[0].is_group) {
+      if ((dto.controlType === 'CASH' || dto.controlType === 'BANK') && existing[0].is_group) {
         throw new UnprocessableEntityException('Only a postable (non-group) account can be a cash/bank account');
       }
       const sets: string[] = [];
@@ -289,15 +289,38 @@ export class FinanceService {
   async getTransaction(id: string) {
     return this.tenantTx.run(async (m) => {
       const tx = (await m.query(
-        `SELECT id, description, voucher_type, voucher_no, occurred_on, reference FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT id, description, voucher_type, voucher_no, status, occurred_on, reference FROM finance_transaction WHERE id=$1 AND deleted_at IS NULL`,
         [id],
       )) as Row[];
       if (!tx[0]) throw new NotFoundException('Transaction not found');
       const entries = (await m.query(
-        `SELECT id, account_id, debit_minor, credit_minor, currency FROM finance_journal_entry WHERE transaction_id=$1 ORDER BY created_at`,
+        `SELECT je.id, je.account_id, a.code AS account_code, a.name AS account_name,
+                je.debit_minor, je.credit_minor, je.currency, cc.code AS cost_center_code
+           FROM finance_journal_entry je
+           LEFT JOIN finance_account a ON a.id = je.account_id
+           LEFT JOIN cost_center cc ON cc.id = je.cost_center_id
+          WHERE je.transaction_id=$1 ORDER BY je.created_at`,
         [id],
       )) as Row[];
-      return { ...tx[0], entries };
+      const r = tx[0]!;
+      return {
+        id: r.id,
+        description: r.description,
+        voucherType: r.voucher_type,
+        voucherNo: r.voucher_no,
+        status: r.status,
+        occurredOn: r.occurred_on,
+        reference: r.reference ?? null,
+        entries: entries.map((e) => ({
+          id: e.id,
+          accountId: e.account_id,
+          accountCode: e.account_code ?? null,
+          accountName: e.account_name ?? null,
+          costCenterCode: e.cost_center_code ?? null,
+          debit: money(e.debit_minor, e.currency as string),
+          credit: money(e.credit_minor, e.currency as string),
+        })),
+      };
     });
   }
 
@@ -1304,14 +1327,55 @@ export class FinanceService {
          RETURNING id, name, email, phone`,
         [dto.name, dto.email ?? null, dto.phone ?? null],
       )) as Row[];
-      return mapVendor(rows[0]!);
+      const vendor = rows[0]!;
+      // Subsidiary ledger: if a Payables CONTROL group is configured, give the vendor its own
+      // sub-account under it so it shows in (and posts through) the chart of accounts.
+      const acct = await this.ensureSubAccount(m, 'PAYABLE', vendor.name as string);
+      if (acct) {
+        await m.query(`UPDATE vendor SET account_id=$1, updated_at=now() WHERE id=$2`, [acct.id, vendor.id]);
+      }
+      return mapVendor({ ...vendor, account_id: acct?.id ?? null, account_code: acct?.code ?? null, account_name: acct?.name ?? null });
     });
+  }
+
+  /**
+   * Create a leaf ledger account for a subsidiary (vendor/customer) under the tenant's PAYABLE /
+   * RECEIVABLE control group, if one is configured. Returns the new account, or null when no control
+   * group exists or it is already at the 4-level cap.
+   */
+  private async ensureSubAccount(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    control: 'PAYABLE' | 'RECEIVABLE',
+    name: string,
+  ): Promise<{ id: string; code: string; name: string } | null> {
+    const ctrlRows = (await m.query(
+      `SELECT id, code, type, level FROM finance_account
+        WHERE control_type=$1 AND is_group=true AND deleted_at IS NULL
+        ORDER BY level DESC LIMIT 1`,
+      [control],
+    )) as Array<{ id: string; code: string; type: string; level: number }>;
+    const ctrl = ctrlRows[0];
+    if (!ctrl || Number(ctrl.level) >= MAX_ACCOUNT_LEVELS) return null;
+    const cnt = (await m.query(
+      `SELECT count(*)::int AS c FROM finance_account WHERE parent_id=$1 AND deleted_at IS NULL`,
+      [ctrl.id],
+    )) as Array<{ c: number }>;
+    const code = `${ctrl.code}-${String(Number(cnt[0]?.c ?? 0) + 1).padStart(4, '0')}`;
+    const acc = (await m.query(
+      `INSERT INTO finance_account (tenant_id, code, name, type, parent_id, is_group, level)
+       VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, false, $5)
+       RETURNING id, code, name`,
+      [code, name, ctrl.type, ctrl.id, Number(ctrl.level) + 1],
+    )) as Array<{ id: string; code: string; name: string }>;
+    return acc[0]!;
   }
 
   async listVendors() {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, name, email, phone FROM vendor WHERE deleted_at IS NULL ORDER BY name`,
+        `SELECT v.id, v.name, v.email, v.phone, v.account_id, a.code AS account_code, a.name AS account_name
+           FROM vendor v LEFT JOIN finance_account a ON a.id = v.account_id
+          WHERE v.deleted_at IS NULL ORDER BY v.name`,
       )) as Row[];
       return rows.map(mapVendor);
     });
@@ -1588,7 +1652,15 @@ function mapCostCenter(r: Row) {
 }
 
 function mapVendor(r: Row) {
-  return { id: r.id, name: r.name, email: r.email ?? null, phone: r.phone ?? null };
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email ?? null,
+    phone: r.phone ?? null,
+    accountId: r.account_id ?? null,
+    accountCode: r.account_code ?? null,
+    accountName: r.account_name ?? null,
+  };
 }
 
 function mapBill(r: Row) {

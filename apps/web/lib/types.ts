@@ -29,7 +29,7 @@ export interface Invoice {
 }
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
-export type ControlType = 'NONE' | 'CASH' | 'BANK';
+export type ControlType = 'NONE' | 'CASH' | 'BANK' | 'PAYABLE' | 'RECEIVABLE';
 
 export interface Account {
   id: string;
@@ -164,6 +164,29 @@ export interface Vendor {
   name: string;
   email: string | null;
   phone: string | null;
+  accountId: string | null;
+  accountCode: string | null;
+  accountName: string | null;
+}
+
+export interface TxnDetailLine {
+  id: string;
+  accountId: string;
+  accountCode: string | null;
+  accountName: string | null;
+  costCenterCode: string | null;
+  debit: Money;
+  credit: Money;
+}
+export interface TxnDetail {
+  id: string;
+  description: string;
+  voucherType: VoucherType;
+  voucherNo: string | null;
+  status: 'DRAFT' | 'POSTED';
+  occurredOn: string;
+  reference: string | null;
+  entries: TxnDetailLine[];
 }
 
 export type BillStatus = 'DRAFT' | 'RECEIVED' | 'PARTIALLY_PAID' | 'PAID' | 'VOID';

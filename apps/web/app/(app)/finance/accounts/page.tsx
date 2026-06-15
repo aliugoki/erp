@@ -60,7 +60,12 @@ export default function ChartOfAccountsPage() {
                         <span className="font-mono text-xs text-muted-foreground">{a.code}</span>
                         <span className={cn(a.isGroup && 'font-semibold')}>{a.name}</span>
                         {a.controlType !== 'NONE' ? (
-                          <Badge variant="secondary" className="ml-1">{a.controlType === 'BANK' ? `Bank${a.bankName ? ` · ${a.bankName}` : ''}` : 'Cash'}</Badge>
+                          <Badge variant="secondary" className="ml-1">
+                            {a.controlType === 'BANK' ? `Bank${a.bankName ? ` · ${a.bankName}` : ''}`
+                              : a.controlType === 'CASH' ? 'Cash'
+                              : a.controlType === 'PAYABLE' ? 'Payables control'
+                              : 'Receivables control'}
+                          </Badge>
                         ) : null}
                       </span>
                     </TableCell>

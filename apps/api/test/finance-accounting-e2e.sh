@@ -205,6 +205,17 @@ check "auto-match matches the 2000 deposit" "$(post "$MGR" finance/bank-statemen
 check "one imported line remains unmatched" "$(get "$MGR" "finance/bank-statements/$BANK" | python3 -c "import sys,json;print(sum(1 for s in json.load(sys.stdin)['data'] if not s['matched']))")" "1"
 check "bank now fully cleared (uncleared count 0)" "$(get "$MGR" "finance/reconciliation/$BANK" | jget data.unclearedCount)" "0"
 
+echo "== vendor → chart of accounts (subsidiary ledger) =="
+APCTRL=$(post "$MGR" finance/accounts '{"code":"2-09","name":"Sundry Creditors","type":"LIABILITY","isGroup":true,"controlType":"PAYABLE"}' | jget data.id)
+[ -n "$APCTRL" ] && echo "  ✅ payables control group created" && pass=$((pass+1)) || { echo "  ❌ payables control create failed"; fail=$((fail+1)); }
+VACC=$(post "$MGR" finance/vendors '{"name":"Globex Supplier"}' | jget data.accountCode)
+[ -n "$VACC" ] && echo "  ✅ vendor got ledger sub-account ($VACC)" && pass=$((pass+1)) || { echo "  ❌ vendor sub-account not created"; fail=$((fail+1)); }
+check "vendor account is a child of the payables control" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];p=next(a['id'] for a in d if a['code']=='2-09');print(any(a.get('parentId')==p and a['name']=='Globex Supplier' for a in d))")" "True"
+
+echo "== transaction detail (double-entry view) =="
+TX=$(get "$MGR" "finance/transactions?pageSize=1&status=POSTED" | python3 -c "import sys,json;print(json.load(sys.stdin)['data'][0]['id'])")
+check "transaction detail returns lines with account names" "$(get "$MGR" "finance/transactions/$TX" | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print(len(d['entries'])>=2 and all(e.get('accountCode') and e.get('accountName') for e in d['entries']))")" "True"
+
 echo "== fiscal period lock (run last — enabling periods restricts posting) =="
 P=$(post "$MGR" finance/periods '{"name":"Jan 2020","startDate":"2020-01-01","endDate":"2020-01-31"}' | jget data.id)
 check "posting today blocked (no open period covers it) -> 422" "$(code -XPOST "$B/finance/transactions" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"voucherType\":\"JV\",\"description\":\"today\",\"entries\":[{\"accountId\":\"$CASH\",\"debitMinor\":100},{\"accountId\":\"$REV\",\"creditMinor\":100}]}")" "422"

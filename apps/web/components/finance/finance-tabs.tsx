@@ -8,7 +8,7 @@ const TABS = [
   { href: '/finance', label: 'Invoices', icon: FileText, exact: true },
   { href: '/finance/payables', label: 'Payables', icon: Receipt, exact: false },
   { href: '/finance/accounts', label: 'Chart of Accounts', icon: ListTree, exact: false },
-  { href: '/finance/journal', label: 'Journal', icon: NotebookPen, exact: false },
+  { href: '/finance/journal', label: 'Transactions', icon: NotebookPen, exact: false },
   { href: '/finance/recurring', label: 'Recurring', icon: Repeat, exact: false },
   { href: '/finance/ledger', label: 'General Ledger', icon: BookOpen, exact: false },
   { href: '/finance/cash-book', label: 'Cash & Bank', icon: Landmark, exact: false },

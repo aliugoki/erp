@@ -98,9 +98,9 @@ export function frequencyInterval(f: Frequency): string {
   return { WEEKLY: '1 week', MONTHLY: '1 month', QUARTERLY: '3 months', YEARLY: '1 year' }[f];
 }
 
-/** How an account participates in cash/bank books and voucher validation. */
-export type ControlType = 'NONE' | 'CASH' | 'BANK';
-export const CONTROL_TYPES: ControlType[] = ['NONE', 'CASH', 'BANK'];
+/** How an account participates in cash/bank books, voucher validation, and subsidiary ledgers. */
+export type ControlType = 'NONE' | 'CASH' | 'BANK' | 'PAYABLE' | 'RECEIVABLE';
+export const CONTROL_TYPES: ControlType[] = ['NONE', 'CASH', 'BANK', 'PAYABLE', 'RECEIVABLE'];
 
 /** Thrown when a voucher's lines don't match its type's cash/bank rule. Mapped to HTTP 422. */
 export class VoucherValidationError extends Error {}
