@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { Account, CrmClient } from '@/lib/types';
+import type { Account, Customer } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -23,10 +23,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function NewInvoiceDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ number: '', description: '', quantity: '1', unitPrice: '', tax: '0', clientId: 'NONE', incomeAccountId: 'NONE' });
+  const [f, setF] = useState({ number: '', description: '', quantity: '1', unitPrice: '', tax: '0', customerId: 'NONE', incomeAccountId: 'NONE' });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
-  const { data: clients } = useQuery({ queryKey: ['crm-clients'], queryFn: () => apiGet<CrmClient[]>('/crm/clients'), enabled: open });
+  const { data: customers } = useQuery({ queryKey: ['customers'], queryFn: () => apiGet<Customer[]>('/finance/customers'), enabled: open });
   const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), enabled: open });
   const incomeAccts = (accounts ?? []).filter((a) => !a.isGroup && a.type === 'REVENUE');
 
@@ -39,15 +39,15 @@ export function NewInvoiceDialog() {
         number: f.number,
         lineItems: [{ description: f.description, quantity: Number(f.quantity), unitPriceMinor: Math.round(Number(f.unitPrice) * 100) }],
         taxMinor: Math.round(Number(f.tax) * 100),
-        ...(f.clientId !== 'NONE' ? { clientId: f.clientId } : {}),
-        ...(f.clientId !== 'NONE' && f.incomeAccountId !== 'NONE' ? { incomeAccountId: f.incomeAccountId } : {}),
+        ...(f.customerId !== 'NONE' ? { customerId: f.customerId } : {}),
+        ...(f.customerId !== 'NONE' && f.incomeAccountId !== 'NONE' ? { incomeAccountId: f.incomeAccountId } : {}),
       }),
     onSuccess: (r) => {
       toast.success('Invoice created', { description: r.journalNo ? `Posted to GL as ${r.journalNo}` : f.number });
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['transactions'] });
       setOpen(false);
-      setF({ number: '', description: '', quantity: '1', unitPrice: '', tax: '0', clientId: 'NONE', incomeAccountId: 'NONE' });
+      setF({ number: '', description: '', quantity: '1', unitPrice: '', tax: '0', customerId: 'NONE', incomeAccountId: 'NONE' });
     },
     onError: (e) => toast.error('Could not create invoice', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -94,18 +94,18 @@ export function NewInvoiceDialog() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Client <span className="text-xs text-muted-foreground">(for GL posting)</span></Label>
-              <Select value={f.clientId} onValueChange={set('clientId')}>
-                <SelectTrigger><SelectValue placeholder="No client" /></SelectTrigger>
+              <Label>Customer <span className="text-xs text-muted-foreground">(receivable)</span></Label>
+              <Select value={f.customerId} onValueChange={set('customerId')}>
+                <SelectTrigger><SelectValue placeholder="No customer" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NONE">— No client —</SelectItem>
-                  {(clients ?? []).map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                  <SelectItem value="NONE">— No customer —</SelectItem>
+                  {(customers ?? []).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Post to GL <span className="text-xs text-muted-foreground">(income)</span></Label>
-              <Select value={f.incomeAccountId} onValueChange={set('incomeAccountId')} disabled={f.clientId === 'NONE'}>
+              <Select value={f.incomeAccountId} onValueChange={set('incomeAccountId')} disabled={f.customerId === 'NONE'}>
                 <SelectTrigger><SelectValue placeholder="Don't post" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="NONE">— Don&apos;t post —</SelectItem>

@@ -20,6 +20,8 @@ export interface Employee {
 export interface Invoice {
   id: string;
   number: string;
+  customerId: string | null;
+  customerName: string | null;
   clientId: string | null;
   subtotal: Money;
   tax: Money;
@@ -162,6 +164,16 @@ export interface JournalTxn {
 }
 
 export interface Vendor {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  accountId: string | null;
+  accountCode: string | null;
+  accountName: string | null;
+}
+/** A billable customer (AR subsidiary) — mirrors Vendor; carries its own RECEIVABLE ledger account. */
+export interface Customer {
   id: string;
   name: string;
   email: string | null;

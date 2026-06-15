@@ -212,6 +212,9 @@ export class InvoiceLineDto {
 
 export class CreateInvoiceDto {
   @IsString() @MinLength(1) number!: string;
+  /** The billed customer (AR subsidiary). Its receivable ledger account is used when posting to the GL. */
+  @IsOptional() @IsUUID() customerId?: string;
+  /** Legacy: a CRM client as the receivable subsidiary (kept for back-compat; prefer customerId). */
   @IsOptional() @IsUUID() clientId?: string;
   @IsArray()
   @ArrayMinSize(1)
@@ -221,7 +224,7 @@ export class CreateInvoiceDto {
   @IsOptional() @IsInt() @Min(0) taxMinor?: number;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsISO8601() dueDate?: string;
-  /** Post the invoice to the GL: Dr the client's receivable / Cr this income account (needs clientId). */
+  /** Post the invoice to the GL: Dr the customer/client receivable / Cr this income account. */
   @IsOptional() @IsUUID() incomeAccountId?: string;
 }
 
@@ -233,6 +236,13 @@ export class PayInvoiceDto {
 // ── Accounts Payable (vendors / bills / payments) ───────────────────────────
 
 export class CreateVendorDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() phone?: string;
+}
+
+/** A billable customer (AR subsidiary) — gets its own RECEIVABLE ledger sub-account, like a vendor. */
+export class CreateCustomerDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
@@ -274,6 +284,7 @@ export class ListInvoicesQueryDto {
   @IsOptional() @IsISO8601() from?: string;
   @IsOptional() @IsISO8601() to?: string;
   @IsOptional() @IsUUID() clientId?: string;
+  @IsOptional() @IsUUID() customerId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) pageSize?: number;
 }

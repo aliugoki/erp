@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, CalendarRange, Coins, FileText, Landmark, ListChecks, ListTree, NotebookPen, PieChart, Receipt, Repeat } from 'lucide-react';
+import { BookOpen, CalendarRange, Coins, FileText, Landmark, ListChecks, ListTree, NotebookPen, PieChart, Receipt, Repeat, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/finance', label: 'Invoices', icon: FileText, exact: true },
+  { href: '/finance/customers', label: 'Customers', icon: Users, exact: false },
   { href: '/finance/payables', label: 'Payables', icon: Receipt, exact: false },
   { href: '/finance/accounts', label: 'Chart of Accounts', icon: ListTree, exact: false },
   { href: '/finance/journal', label: 'Transactions', icon: NotebookPen, exact: false },

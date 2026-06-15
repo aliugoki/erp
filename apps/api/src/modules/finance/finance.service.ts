@@ -26,6 +26,7 @@ import type {
   CreateRecurringDto,
   CreateTransactionDto,
   CreateVendorDto,
+  CreateCustomerDto,
   SetBudgetDto,
   LedgerQueryDto,
   ListBillsQueryDto,
@@ -1473,6 +1474,54 @@ export class FinanceService {
     });
   }
 
+  // ── Customers (AR subsidiary) ────────────────────────────────────────────────
+  async createCustomer(dto: CreateCustomerDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO customer (tenant_id, name, email, phone)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
+         RETURNING id, name, email, phone`,
+        [dto.name, dto.email ?? null, dto.phone ?? null],
+      )) as Row[];
+      const customer = rows[0]!;
+      // Subsidiary ledger: if a Receivables CONTROL group is configured, give the customer its own
+      // sub-account under it so it shows in (and posts through) the chart of accounts.
+      const acct = await this.ensureSubAccount(m, 'RECEIVABLE', customer.name as string);
+      if (acct) {
+        await m.query(`UPDATE customer SET account_id=$1, updated_at=now() WHERE id=$2`, [acct.id, customer.id]);
+      }
+      return mapCustomer({ ...customer, account_id: acct?.id ?? null, account_code: acct?.code ?? null, account_name: acct?.name ?? null });
+    });
+  }
+
+  async listCustomers() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT c.id, c.name, c.email, c.phone, c.account_id, a.code AS account_code, a.name AS account_name
+           FROM customer c LEFT JOIN finance_account a ON a.id = c.account_id
+          WHERE c.deleted_at IS NULL ORDER BY c.name`,
+      )) as Row[];
+      return rows.map(mapCustomer);
+    });
+  }
+
+  /** The customer's receivable ledger account, created under the RECEIVABLE control if not yet linked. */
+  private async customerReceivableAccount(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    customerId: string,
+  ): Promise<string> {
+    const c = (await m.query(
+      `SELECT account_id, name FROM customer WHERE id=$1 AND deleted_at IS NULL`,
+      [customerId],
+    )) as Array<{ account_id: string | null; name: string }>;
+    if (!c[0]) throw new BadRequestException('Customer not found in this tenant');
+    if (c[0].account_id) return c[0].account_id;
+    const acc = await this.ensureSubAccount(m, 'RECEIVABLE', c[0].name);
+    if (!acc) throw new UnprocessableEntityException('No Receivables control account configured — designate one first');
+    await m.query(`UPDATE customer SET account_id=$1, updated_at=now() WHERE id=$2`, [acc.id, customerId]);
+    return acc.id;
+  }
+
   async createBill(dto: CreateBillDto) {
     const totals = computeInvoiceTotals(dto.lineItems, dto.taxMinor ?? 0);
     const currency = dto.currency ?? 'PKR';
@@ -1669,11 +1718,12 @@ export class FinanceService {
       try {
         const rows = (await m.query(
           `INSERT INTO finance_invoice
-             (tenant_id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, due_date)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, $8)
-           RETURNING id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date::text AS due_date`,
+             (tenant_id, number, customer_id, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, due_date)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
+           RETURNING id, number, customer_id, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date::text AS due_date`,
           [
             dto.number,
+            dto.customerId ?? null,
             dto.clientId ?? null,
             JSON.stringify(lines),
             totals.subtotalMinor,
@@ -1686,14 +1736,17 @@ export class FinanceService {
         inv = rows[0]!;
       } catch (err) {
         if (isUnique(err)) throw new BadRequestException(`Invoice number "${dto.number}" already exists`);
+        if (isForeignKey(err)) throw new BadRequestException('Customer or client not found in this tenant');
         throw err;
       }
 
-      // Optional GL posting: Dr the client's receivable / Cr the income account (atomic with the invoice).
+      // Optional GL posting: Dr the customer/client receivable / Cr the income account (atomic with the invoice).
       let journalNo: string | null = null;
       if (dto.incomeAccountId) {
-        if (!dto.clientId) throw new UnprocessableEntityException('Posting an invoice to the GL needs a client');
-        const receivable = await this.ensureClientReceivable(m, dto.clientId);
+        if (!dto.customerId && !dto.clientId) throw new UnprocessableEntityException('Posting an invoice to the GL needs a customer');
+        const receivable = dto.customerId
+          ? await this.customerReceivableAccount(m, dto.customerId)
+          : await this.ensureClientReceivable(m, dto.clientId!);
         const txn = await this.postInTx(m, {
           description: `Invoice ${inv.number}`,
           voucherType: 'JV',
@@ -1728,20 +1781,23 @@ export class FinanceService {
 
   async listInvoices(query: ListInvoicesQueryDto): Promise<SuccessEnvelope<unknown[]>> {
     const { page, pageSize, limit, offset } = normalizePagination(query.page, query.pageSize);
-    const conditions = ['deleted_at IS NULL'];
+    // Conditions are prefixed `i.` so they resolve against the invoice alias in the customer join below.
+    const conditions = ['i.deleted_at IS NULL'];
     const params: unknown[] = [];
-    if (query.status) conditions.push(`status = $${params.push(query.status)}`);
-    if (query.clientId) conditions.push(`client_id = $${params.push(query.clientId)}`);
-    if (query.from) conditions.push(`created_at::date >= $${params.push(query.from)}`);
-    if (query.to) conditions.push(`created_at::date <= $${params.push(query.to)}`);
+    if (query.status) conditions.push(`i.status = $${params.push(query.status)}`);
+    if (query.clientId) conditions.push(`i.client_id = $${params.push(query.clientId)}`);
+    if (query.customerId) conditions.push(`i.customer_id = $${params.push(query.customerId)}`);
+    if (query.from) conditions.push(`i.created_at::date >= $${params.push(query.from)}`);
+    if (query.to) conditions.push(`i.created_at::date <= $${params.push(query.to)}`);
     const where = `WHERE ${conditions.join(' AND ')}`;
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date
-         FROM finance_invoice ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        `SELECT i.id, i.number, i.customer_id, i.client_id, c.name AS customer_name, i.line_items, i.subtotal_minor, i.tax_minor, i.total_minor, i.currency, i.status, i.due_date
+         FROM finance_invoice i LEFT JOIN customer c ON c.id = i.customer_id
+         ${where} ORDER BY i.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset],
       )) as Row[];
-      const count = (await m.query(`SELECT count(*)::int AS total FROM finance_invoice ${where}`, params)) as Array<{
+      const count = (await m.query(`SELECT count(*)::int AS total FROM finance_invoice i ${where}`, params)) as Array<{
         total: number;
       }>;
       return {
@@ -1754,8 +1810,9 @@ export class FinanceService {
   async getInvoice(id: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date
-         FROM finance_invoice WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT i.id, i.number, i.customer_id, i.client_id, c.name AS customer_name, i.line_items, i.subtotal_minor, i.tax_minor, i.total_minor, i.currency, i.status, i.due_date
+         FROM finance_invoice i LEFT JOIN customer c ON c.id = i.customer_id
+         WHERE i.id=$1 AND i.deleted_at IS NULL`,
         [id],
       )) as Row[];
       if (!rows[0]) throw new NotFoundException('Invoice not found');
@@ -1767,7 +1824,7 @@ export class FinanceService {
   async payInvoice(id: string, dto: PayInvoiceDto = {}) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, number, client_id, total_minor, currency, status FROM finance_invoice WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT id, number, customer_id, client_id, total_minor, currency, status FROM finance_invoice WHERE id=$1 AND deleted_at IS NULL`,
         [id],
       )) as Row[];
       const inv = rows[0];
@@ -1778,15 +1835,18 @@ export class FinanceService {
         await this.outbox.write(m, EVENT_TYPES.FINANCE_INVOICE_PAID, {
           invoiceId: inv.id,
           number: inv.number,
+          customerId: inv.customer_id,
           clientId: inv.client_id,
           totalMinor: Number(inv.total_minor),
           currency: inv.currency,
         });
 
-        // Optional GL posting: Dr cash·bank / Cr the client's receivable (atomic with the receipt).
+        // Optional GL posting: Dr cash·bank / Cr the customer/client receivable (atomic with the receipt).
         if (dto.paymentAccountId) {
-          if (!inv.client_id) throw new UnprocessableEntityException('Posting a receipt to the GL needs a client');
-          const receivable = await this.ensureClientReceivable(m, inv.client_id as string);
+          if (!inv.customer_id && !inv.client_id) throw new UnprocessableEntityException('Posting a receipt to the GL needs a customer');
+          const receivable = inv.customer_id
+            ? await this.customerReceivableAccount(m, inv.customer_id as string)
+            : await this.ensureClientReceivable(m, inv.client_id as string);
           const pa = (await m.query(`SELECT control_type FROM finance_account WHERE id=$1 AND deleted_at IS NULL`, [dto.paymentAccountId])) as Array<{ control_type: ControlType }>;
           const ctrl = pa[0]?.control_type ?? 'NONE';
           const voucherType: VoucherType = ctrl === 'BANK' ? 'BRV' : ctrl === 'CASH' ? 'CRV' : 'JV';
@@ -1902,6 +1962,8 @@ function mapInvoice(r: Row) {
   return {
     id: r.id,
     number: r.number,
+    customerId: r.customer_id ?? null,
+    customerName: r.customer_name ?? null,
     clientId: r.client_id ?? null,
     lineItems: r.line_items,
     subtotal: money(r.subtotal_minor),
@@ -1909,6 +1971,18 @@ function mapInvoice(r: Row) {
     total: money(r.total_minor),
     status: r.status,
     dueDate: r.due_date ?? null,
+  };
+}
+
+function mapCustomer(r: Row) {
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email ?? null,
+    phone: r.phone ?? null,
+    accountId: r.account_id ?? null,
+    accountCode: r.account_code ?? null,
+    accountName: r.account_name ?? null,
   };
 }
 

@@ -67,6 +67,7 @@ export default function FinancePage() {
           <TableHeader>
             <TableRow>
               <TableHead>Number</TableHead>
+              <TableHead>Customer</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Action</TableHead>
@@ -77,6 +78,7 @@ export default function FinancePage() {
               ? Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-14 rounded-full" /></TableCell>
                     <TableCell />
@@ -85,6 +87,7 @@ export default function FinancePage() {
               : rows.map((inv) => (
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.number}</TableCell>
+                    <TableCell>{inv.customerName ?? '—'}</TableCell>
                     <TableCell className="tabular-nums">{formatMoney(inv.total.amountMinor, inv.total.currency)}</TableCell>
                     <TableCell><Badge variant={STATUS[inv.status].variant}>{inv.status}</Badge></TableCell>
                     <TableCell className="text-right">

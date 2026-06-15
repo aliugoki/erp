@@ -31,6 +31,7 @@ import {
   CreateRecurringDto,
   CreateTransactionDto,
   CreateVendorDto,
+  CreateCustomerDto,
   SetBudgetDto,
   SetRateDto,
   LedgerQueryDto,
@@ -150,6 +151,18 @@ export class FinanceController {
   @HttpCode(HttpStatus.CREATED)
   createVendor(@Body() dto: CreateVendorDto) {
     return this.finance.createVendor(dto);
+  }
+
+  @Get('customers')
+  listCustomers() {
+    return this.finance.listCustomers();
+  }
+
+  @Post('customers')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createCustomer(@Body() dto: CreateCustomerDto) {
+    return this.finance.createCustomer(dto);
   }
 
   @Get('bills')

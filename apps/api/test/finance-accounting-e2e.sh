@@ -180,6 +180,20 @@ RRES=$(curl -s -XPATCH "$B/finance/invoices/$INVID/pay" -H "Authorization: Beare
 [ -n "$(echo "$RRES" | jget data.journalNo)" ] && echo "  ✅ receipt posted to GL ($(echo "$RRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ receipt did not post to GL"; fail=$((fail+1)); }
 check "client receivable cleared to 0 after receipt" "$(get "$MGR" "finance/ledger/$CRACC" | jget data.closing.amountMinor)" "0"
 
+echo "== customers (AR subsidiary, reflected in chart of accounts) =="
+CUST=$(post "$MGR" finance/customers '{"name":"Gamma Traders","email":"ar@gamma.test"}')
+CUSTID=$(echo "$CUST" | jget data.id)
+CACC=$(echo "$CUST" | jget data.accountId)
+check "customer gets a receivable ledger account (under the 1-90 control)" "$(echo "$CUST" | jget data.accountCode | cut -c1-4)" "1-90"
+check "customer account appears in the chart of accounts" "$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(any(a['name']=='Gamma Traders' for a in json.load(sys.stdin)['data']))")" "True"
+CINV=$(post "$MGR" finance/invoices "{\"number\":\"CUST-INV-1\",\"customerId\":\"$CUSTID\",\"lineItems\":[{\"description\":\"svc\",\"quantity\":1,\"unitPriceMinor\":50000}],\"incomeAccountId\":\"$REV\"}")
+CINVID=$(echo "$CINV" | jget data.id)
+check "invoice to a customer posts to the GL" "$(echo "$CINV" | jget data.journalNo | cut -d- -f1)" "JV"
+check "invoice carries the customer name" "$(get "$MGR" "finance/invoices/$CINVID" | jget data.customerName)" "Gamma Traders"
+check "customer receivable balance = 50000 after invoice" "$(get "$MGR" "finance/ledger/$CACC" | jget data.closing.amountMinor)" "50000"
+curl -s -o /dev/null -XPATCH "$B/finance/invoices/$CINVID/pay" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"paymentAccountId\":\"$CASH\"}"
+check "customer receivable clears to 0 after receipt into cash" "$(get "$MGR" "finance/ledger/$CACC" | jget data.closing.amountMinor)" "0"
+
 echo "== FX-aware GL (foreign-currency postings + revaluation) =="
 post "$MGR" finance/currencies '{"code":"PKR","name":"Pak Rupee","symbol":"Rs","isBase":true}' >/dev/null
 post "$MGR" finance/currencies '{"code":"GBP","name":"Pound Sterling","symbol":"£"}' >/dev/null
