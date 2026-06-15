@@ -37,11 +37,11 @@ get() { curl -s "$B/$2" -H "Authorization: Bearer $1"; }
 
 SA=$(login "acctsa@acme.test")
 T1=$(curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' \
-  -d "{\"name\":\"Acct Co\",\"adminEmail\":\"admin@acct.test\",\"adminPassword\":\"$PW\",\"plan\":\"business\"}" | jget data.tenant.id)
+  -d "{\"name\":\"Acct Co\",\"adminEmail\":\"admin@acct.test\",\"adminPassword\":\"$PW\",\"plan\":\"enterprise\"}" | jget data.tenant.id)
 psql "$OWNER_URL" -q >/dev/null 2>&1 <<SQL
 INSERT INTO users (tenant_id,email,password_hash,is_active,roles) VALUES ('$T1','acctmgr@acct.test','$HASH',true,'{FINANCE_MANAGER}');
 SQL
-MGR=$(login "acctmgr@acct.test")
+MGR=$(login "acctmgr@acct.test"); ADMIN=$(login "admin@acct.test")
 echo "tenant Acct Co=$T1"
 
 echo "== hierarchical chart of accounts =="
@@ -165,6 +165,20 @@ check "vendor payable balance = 80000 after bill" "$(get "$MGR" "finance/ledger/
 PRES=$(post "$MGR" "finance/bills/$BID/payments" "{\"amountMinor\":80000,\"paymentAccountId\":\"$CASH\"}")
 [ -n "$(echo "$PRES" | jget data.journalNo)" ] && echo "  ✅ payment posted to GL ($(echo "$PRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ payment did not post to GL"; fail=$((fail+1)); }
 check "vendor payable cleared to 0 after full payment" "$(get "$MGR" "finance/ledger/$VPACC" | jget data.closing.amountMinor)" "0"
+
+echo "== AR → GL posting (invoices/receipts hit the ledger) =="
+ARCTRL=$(post "$MGR" finance/accounts '{"code":"1-90","name":"Trade Debtors","type":"ASSET","isGroup":true,"controlType":"RECEIVABLE"}' | jget data.id)
+[ -n "$ARCTRL" ] && echo "  ✅ receivables control group created" && pass=$((pass+1)) || { echo "  ❌ receivables control failed"; fail=$((fail+1)); }
+CLID=$(post "$ADMIN" crm/clients '{"companyName":"Beta Client"}' | jget data.id)
+[ -n "$CLID" ] && echo "  ✅ CRM client created" && pass=$((pass+1)) || { echo "  ❌ crm client create failed (crm feature/role?)"; fail=$((fail+1)); }
+IRES=$(post "$MGR" finance/invoices "{\"number\":\"GLINV-1\",\"clientId\":\"$CLID\",\"lineItems\":[{\"description\":\"svc\",\"quantity\":1,\"unitPriceMinor\":90000}],\"incomeAccountId\":\"$REV\"}")
+INVID=$(echo "$IRES" | jget data.id)
+[ -n "$(echo "$IRES" | jget data.journalNo)" ] && echo "  ✅ invoice posted to GL ($(echo "$IRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ invoice did not post to GL"; fail=$((fail+1)); }
+CRACC=$(get "$MGR" finance/accounts | python3 -c "import sys,json;print(next((a['id'] for a in json.load(sys.stdin)['data'] if a['name']=='Beta Client'),''))")
+check "client receivable balance = 90000 after invoice" "$(get "$MGR" "finance/ledger/$CRACC" | jget data.closing.amountMinor)" "90000"
+RRES=$(curl -s -XPATCH "$B/finance/invoices/$INVID/pay" -H "Authorization: Bearer $MGR" -H 'Content-Type: application/json' -d "{\"paymentAccountId\":\"$CASH\"}")
+[ -n "$(echo "$RRES" | jget data.journalNo)" ] && echo "  ✅ receipt posted to GL ($(echo "$RRES" | jget data.journalNo))" && pass=$((pass+1)) || { echo "  ❌ receipt did not post to GL"; fail=$((fail+1)); }
+check "client receivable cleared to 0 after receipt" "$(get "$MGR" "finance/ledger/$CRACC" | jget data.closing.amountMinor)" "0"
 
 echo "== cash flow statement (direct method) =="
 check "cash flow reconciles (opening + net = closing)" "$(get "$MGR" finance/statements/cash-flow | jget data.reconciles)" "True"

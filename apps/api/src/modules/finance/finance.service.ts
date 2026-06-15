@@ -31,6 +31,7 @@ import type {
   ListBillsQueryDto,
   ListInvoicesQueryDto,
   ListTransactionsQueryDto,
+  PayInvoiceDto,
   PeriodQueryDto,
   ReconcileDto,
   UpdateAccountDto,
@@ -1585,12 +1586,13 @@ export class FinanceService {
       lineTotalMinor: l.quantity * l.unitPriceMinor,
     }));
     return this.tenantTx.run(async (m) => {
+      let inv: Row;
       try {
         const rows = (await m.query(
           `INSERT INTO finance_invoice
              (tenant_id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, due_date)
            VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, $8)
-           RETURNING id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date`,
+           RETURNING id, number, client_id, line_items, subtotal_minor, tax_minor, total_minor, currency, status, due_date::text AS due_date`,
           [
             dto.number,
             dto.clientId ?? null,
@@ -1602,12 +1604,47 @@ export class FinanceService {
             dto.dueDate ?? null,
           ],
         )) as Row[];
-        return mapInvoice(rows[0]!);
+        inv = rows[0]!;
       } catch (err) {
         if (isUnique(err)) throw new BadRequestException(`Invoice number "${dto.number}" already exists`);
         throw err;
       }
+
+      // Optional GL posting: Dr the client's receivable / Cr the income account (atomic with the invoice).
+      let journalNo: string | null = null;
+      if (dto.incomeAccountId) {
+        if (!dto.clientId) throw new UnprocessableEntityException('Posting an invoice to the GL needs a client');
+        const receivable = await this.ensureClientReceivable(m, dto.clientId);
+        const txn = await this.postInTx(m, {
+          description: `Invoice ${inv.number}`,
+          voucherType: 'JV',
+          entries: [
+            { accountId: receivable, debitMinor: totals.totalMinor },
+            { accountId: dto.incomeAccountId, creditMinor: totals.totalMinor },
+          ],
+        } as CreateTransactionDto);
+        await m.query(`UPDATE finance_invoice SET journal_id=$1 WHERE id=$2`, [txn.id, inv.id]);
+        journalNo = (txn.voucherNo ?? null) as string | null;
+      }
+      return { ...mapInvoice(inv), journalNo };
     });
+  }
+
+  /** The client's receivable ledger account, created lazily under the RECEIVABLE control on first use. */
+  private async ensureClientReceivable(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    clientId: string,
+  ): Promise<string> {
+    const c = (await m.query(
+      `SELECT account_id, company_name FROM crm_client WHERE id=$1 AND deleted_at IS NULL`,
+      [clientId],
+    )) as Array<{ account_id: string | null; company_name: string }>;
+    if (!c[0]) throw new BadRequestException('Client not found in this tenant');
+    if (c[0].account_id) return c[0].account_id;
+    const acc = await this.ensureSubAccount(m, 'RECEIVABLE', c[0].company_name);
+    if (!acc) throw new UnprocessableEntityException('No Receivables control account configured — designate one first');
+    await m.query(`UPDATE crm_client SET account_id=$1, updated_at=now() WHERE id=$2`, [acc.id, clientId]);
+    return acc.id;
   }
 
   async listInvoices(query: ListInvoicesQueryDto): Promise<SuccessEnvelope<unknown[]>> {
@@ -1648,7 +1685,7 @@ export class FinanceService {
   }
 
   /** Mark an invoice paid and emit `finance.invoice_paid` to the OUTBOX in the same transaction. */
-  async payInvoice(id: string) {
+  async payInvoice(id: string, dto: PayInvoiceDto = {}) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
         `SELECT id, number, client_id, total_minor, currency, status FROM finance_invoice WHERE id=$1 AND deleted_at IS NULL`,
@@ -1656,6 +1693,7 @@ export class FinanceService {
       )) as Row[];
       const inv = rows[0];
       if (!inv) throw new NotFoundException('Invoice not found');
+      let journalNo: string | null = null;
       if (inv.status !== 'PAID') {
         await m.query(`UPDATE finance_invoice SET status='PAID', paid_at=now(), updated_at=now() WHERE id=$1`, [id]);
         await this.outbox.write(m, EVENT_TYPES.FINANCE_INVOICE_PAID, {
@@ -1665,8 +1703,26 @@ export class FinanceService {
           totalMinor: Number(inv.total_minor),
           currency: inv.currency,
         });
+
+        // Optional GL posting: Dr cash·bank / Cr the client's receivable (atomic with the receipt).
+        if (dto.paymentAccountId) {
+          if (!inv.client_id) throw new UnprocessableEntityException('Posting a receipt to the GL needs a client');
+          const receivable = await this.ensureClientReceivable(m, inv.client_id as string);
+          const pa = (await m.query(`SELECT control_type FROM finance_account WHERE id=$1 AND deleted_at IS NULL`, [dto.paymentAccountId])) as Array<{ control_type: ControlType }>;
+          const ctrl = pa[0]?.control_type ?? 'NONE';
+          const voucherType: VoucherType = ctrl === 'BANK' ? 'BRV' : ctrl === 'CASH' ? 'CRV' : 'JV';
+          const txn = await this.postInTx(m, {
+            description: `Receipt of invoice ${inv.number}`,
+            voucherType,
+            entries: [
+              { accountId: dto.paymentAccountId, debitMinor: Number(inv.total_minor) },
+              { accountId: receivable, creditMinor: Number(inv.total_minor) },
+            ],
+          } as CreateTransactionDto);
+          journalNo = (txn.voucherNo ?? null) as string | null;
+        }
       }
-      return { id: inv.id, number: inv.number, status: 'PAID' };
+      return { id: inv.id, number: inv.number, status: 'PAID', journalNo };
     });
   }
 }

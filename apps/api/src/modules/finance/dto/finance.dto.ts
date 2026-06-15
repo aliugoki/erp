@@ -210,6 +210,13 @@ export class CreateInvoiceDto {
   @IsOptional() @IsInt() @Min(0) taxMinor?: number;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsISO8601() dueDate?: string;
+  /** Post the invoice to the GL: Dr the client's receivable / Cr this income account (needs clientId). */
+  @IsOptional() @IsUUID() incomeAccountId?: string;
+}
+
+export class PayInvoiceDto {
+  /** Post the receipt to the GL: Dr this cash·bank account / Cr the client's receivable. */
+  @IsOptional() @IsUUID() paymentAccountId?: string;
 }
 
 // ── Accounts Payable (vendors / bills / payments) ───────────────────────────

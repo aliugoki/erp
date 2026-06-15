@@ -169,6 +169,11 @@ export interface Vendor {
   accountName: string | null;
 }
 
+export interface CrmClient {
+  id: string;
+  companyName: string;
+}
+
 export interface TxnDetailLine {
   id: string;
   accountId: string;

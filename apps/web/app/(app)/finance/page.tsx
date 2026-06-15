@@ -1,15 +1,15 @@
 'use client';
 import { useState } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { ApiError, apiList, apiPatch } from '@/lib/api';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { apiList } from '@/lib/api';
 import type { Invoice } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { NewInvoiceDialog } from '@/components/finance/new-invoice-dialog';
+import { ReceiveInvoiceDialog } from '@/components/finance/receive-invoice-dialog';
 import { FinanceTabs } from '@/components/finance/finance-tabs';
-import { toast } from '@/components/ui/sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -25,7 +25,6 @@ const STATUS: Record<Invoice['status'], { variant: 'success' | 'secondary' | 'wa
 };
 
 export default function FinancePage() {
-  const qc = useQueryClient();
   const [status, setStatus] = useState('ALL');
   const [page, setPage] = useState(1);
   const pageSize = 8;
@@ -37,15 +36,6 @@ export default function FinancePage() {
     queryKey: ['invoices', status, page],
     queryFn: () => apiList<Invoice>(`/finance/invoices?${params.toString()}`),
     placeholderData: keepPreviousData,
-  });
-
-  const pay = useMutation({
-    mutationFn: (id: string) => apiPatch(`/finance/invoices/${id}/pay`),
-    onSuccess: () => {
-      toast.success('Invoice marked paid', { description: 'A finance.invoice_paid event was emitted.' });
-      qc.invalidateQueries({ queryKey: ['invoices'] });
-    },
-    onError: (e) => toast.error('Payment failed', { description: e instanceof ApiError ? e.message : '' }),
   });
 
   const rows = data?.data ?? [];
@@ -101,9 +91,7 @@ export default function FinancePage() {
                       {inv.status === 'PAID' || inv.status === 'VOID' ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
-                        <Button size="sm" variant="outline" disabled={pay.isPending} onClick={() => pay.mutate(inv.id)}>
-                          <CheckCircle2 className="size-4" /> Mark paid
-                        </Button>
+                        <ReceiveInvoiceDialog invoice={inv} />
                       )}
                     </TableCell>
                   </TableRow>

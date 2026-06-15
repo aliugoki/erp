@@ -36,6 +36,7 @@ import {
   LedgerQueryDto,
   ListBillsQueryDto,
   ListInvoicesQueryDto,
+  PayInvoiceDto,
   ListTransactionsQueryDto,
   PeriodQueryDto,
   ReconcileDto,
@@ -353,7 +354,7 @@ export class FinanceController {
 
   @Patch('invoices/:id/pay')
   @Roles(...WRITE)
-  payInvoice(@Param('id', ParseUUIDPipe) id: string) {
-    return this.finance.payInvoice(id);
+  payInvoice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PayInvoiceDto) {
+    return this.finance.payInvoice(id, dto);
   }
 }
