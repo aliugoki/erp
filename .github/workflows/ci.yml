@@ -1,0 +1,121 @@
+name: CI
+
+# Main pipeline (Chunk 9.3): static checks + unit + full e2e against the infra stack, plus an
+# advisory headless Claude Code review of the PR diff. Dependency/container scanning lives in
+# security.yml (Chunk 8.3); both run on every PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Static analysis + unit tests (fast, no services) ────────────────────────
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Apps import the BUILT shared/config dist (.d.ts/js), so build the libs before checks.
+      - run: pnpm --filter @metaxperts/shared --filter @metaxperts/config build
+      - run: pnpm -w typecheck
+      - run: pnpm -w lint
+      - run: pnpm -w test
+
+  # ── Full e2e against the real infra (Postgres+RLS, PgBouncer, Redis, RabbitMQ) ─
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - name: Install psql client (e2e scripts seed via psql)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start infra
+        run: docker compose -f infra/docker-compose.yml up -d postgres pgbouncer redis rabbitmq
+
+      - name: Write CI .env (non-secret test values)
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=test
+          API_PORT=3300
+          DATABASE_URL=postgresql://app_user:app_pass@127.0.0.1:6432/metaxperts
+          MIGRATION_DATABASE_URL=postgresql://metaxperts:metaxperts@127.0.0.1:55432/metaxperts
+          REDIS_URL=redis://127.0.0.1:6380
+          RABBITMQ_URL=amqp://metaxperts:metaxperts@127.0.0.1:5672
+          JWT_ACCESS_SECRET=ci_test_jwt_placeholder_secret
+          SERVICE_AUTH_SECRET=ci_test_service_placeholder_secret
+          CORS_ORIGINS=
+          EOF
+
+      - name: Wait for infra (Postgres, PgBouncer, Redis, RabbitMQ)
+        run: |
+          for i in $(seq 1 60); do
+            docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U metaxperts -d metaxperts && break
+            sleep 2
+          done
+          for port in 6432 6380 5672; do
+            for i in $(seq 1 45); do nc -z 127.0.0.1 $port && break || sleep 2; done
+          done
+          # RabbitMQ accepts TCP before it's ready for AMQP — give it a moment to finish booting.
+          for i in $(seq 1 30); do docker compose -f infra/docker-compose.yml exec -T rabbitmq rabbitmq-diagnostics -q ping && break || sleep 2; done
+
+      - name: Build (libs + api) + migrate
+        run: |
+          pnpm --filter @metaxperts/shared --filter @metaxperts/config --filter @app/api build
+          pnpm --filter @app/api migration:run
+
+      - name: e2e (api suite)
+        run: pnpm --filter @app/api test:e2e
+
+      - name: Infra logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail 100
+
+  # ── Advisory: headless Claude Code review of the diff vs CLAUDE.md (non-blocking) ─
+  claude-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Review diff against CLAUDE.md
+        continue-on-error: true # advisory only — never blocks the merge
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY not set — skipping advisory review."
+            exit 0
+          fi
+          npm i -g @anthropic-ai/claude-code
+          git diff "origin/$BASE...HEAD" > /tmp/diff.patch
+          PROMPT=$(printf '%s\n\n%s' \
+            "You are reviewing a PR against the conventions in CLAUDE.md (multi-tenant RLS scope on every business query; domain events only via the transactional outbox; reviewed idempotent migrations, never synchronize; money as integer minor units; RFC7807 problem+json errors; { data, meta } success envelope; guarded routes). List concrete likely violations as a short bullet list with file hints, or reply 'No convention issues found'. Be concise." \
+            "$(head -c 120000 /tmp/diff.patch)")
+          claude -p "$PROMPT" > /tmp/review.md 2>/dev/null || echo "Headless review unavailable." > /tmp/review.md
+          {
+            echo "### 🤖 Claude Code — CLAUDE.md convention review (advisory)";
+            echo;
+            cat /tmp/review.md;
+          } > /tmp/comment.md
+          gh pr comment "$PR" --body-file /tmp/comment.md || true
