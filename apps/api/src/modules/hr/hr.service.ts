@@ -12,7 +12,7 @@ import type {
   UpdateEmployeeDto,
 } from './dto/hr.dto';
 import type { DepartmentView, EmployeeRow, EmployeeView, PositionView } from './hr.types';
-import { buildEmployeeWhere, mapEmployeeRow, normalizePagination } from './hr.util';
+import { buildEmployeeWhere, mapEmployeeRow, normalizePagination, returningRows } from './hr.util';
 
 const EMP_COLS =
   'id, employee_code, first_name, last_name, email, phone, department_id, position_id, join_date, salary_amount_minor, salary_currency, status';
@@ -174,11 +174,13 @@ export class HrService {
     return this.tenantTx.run(async (m) => {
       if (sets.length === 0) return this.getEmployeeWith(m, id);
       sets.push('updated_at = now()');
-      const rows = (await m.query(
-        `UPDATE hr_employee SET ${sets.join(', ')} WHERE id = $${params.length + 1} AND deleted_at IS NULL
-         RETURNING ${EMP_COLS}`,
-        [...params, id],
-      )) as EmployeeRow[];
+      const rows = returningRows<EmployeeRow>(
+        await m.query(
+          `UPDATE hr_employee SET ${sets.join(', ')} WHERE id = $${params.length + 1} AND deleted_at IS NULL
+           RETURNING ${EMP_COLS}`,
+          [...params, id],
+        ),
+      );
       if (!rows[0]) throw new NotFoundException('Employee not found');
       return mapEmployeeRow(rows[0]);
     });
@@ -223,11 +225,10 @@ export class HrService {
 
   private async softDelete(table: string, id: string): Promise<void> {
     await this.tenantTx.run(async (m) => {
-      const res = (await m.query(
-        `UPDATE ${table} SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-        [id],
-      )) as unknown[];
-      if (res.length === 0) throw new NotFoundException('Not found');
+      const rows = returningRows(
+        await m.query(`UPDATE ${table} SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id`, [id]),
+      );
+      if (rows.length === 0) throw new NotFoundException('Not found');
     });
   }
 }

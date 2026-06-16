@@ -26,6 +26,7 @@ import {
   inclusiveDays,
   nextHrDocNo,
   proratedBasicMinor,
+  returningRows,
 } from './hr.util';
 
 type Row = Record<string, unknown>;
@@ -503,11 +504,13 @@ export class HrEnterpriseService {
 
   async submitReview(id: string) {
     return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
-        `UPDATE hr_performance_review SET status='SUBMITTED', submitted_at=now(), updated_at=now()
-         WHERE id=$1 AND deleted_at IS NULL AND status='DRAFT' RETURNING ${REVIEW_COLS}`,
-        [id],
-      )) as Row[];
+      const rows = returningRows<Row>(
+        await m.query(
+          `UPDATE hr_performance_review SET status='SUBMITTED', submitted_at=now(), updated_at=now()
+           WHERE id=$1 AND deleted_at IS NULL AND status='DRAFT' RETURNING ${REVIEW_COLS}`,
+          [id],
+        ),
+      );
       if (!rows[0]) throw new NotFoundException('Review not found or already submitted');
       return mapReview(rows[0]);
     });
@@ -562,10 +565,12 @@ export class HrEnterpriseService {
     sets.push('updated_at = now()');
     params.push(id);
     return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
-        `UPDATE hr_goal SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL RETURNING ${GOAL_COLS}`,
-        params,
-      )) as Row[];
+      const rows = returningRows<Row>(
+        await m.query(
+          `UPDATE hr_goal SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL RETURNING ${GOAL_COLS}`,
+          params,
+        ),
+      );
       if (!rows[0]) throw new NotFoundException('Goal not found');
       return mapGoal(rows[0]);
     });

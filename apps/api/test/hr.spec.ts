@@ -11,6 +11,7 @@ import {
   mapEmployeeRow,
   normalizePagination,
   proratedBasicMinor,
+  returningRows,
   type PayComponent,
 } from '../src/modules/hr/hr.util';
 import { HrService } from '../src/modules/hr/hr.service';
@@ -89,6 +90,18 @@ describe('hr.util', () => {
     expect(proratedBasicMinor(10_000_000, 0, 26, false)).toBe(10_000_000);
     // zero working days guarded → full basic
     expect(proratedBasicMinor(10_000_000, 5, 0, true)).toBe(10_000_000);
+  });
+
+  it('returningRows unwraps the UPDATE…RETURNING [rows, count] shape', () => {
+    const row = { id: 'p1', status: 'ACTIVE' };
+    // UPDATE/DELETE … RETURNING → [rows, affectedCount]
+    expect(returningRows([[row], 1])).toEqual([row]);
+    // SELECT/INSERT … RETURNING → plain rows array (passes through)
+    expect(returningRows([row])).toEqual([row]);
+    expect(returningRows([])).toEqual([]);
+    // a two-row SELECT must NOT be mistaken for the [rows, count] shape
+    const two = [{ id: 'a' }, { id: 'b' }];
+    expect(returningRows(two)).toEqual(two);
   });
 });
 

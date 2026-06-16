@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { returningRows } from './hr.util';
 import type {
   CreateEducationDto,
   CreateExperienceDto,
@@ -69,10 +70,12 @@ export class HrProfileService {
     params.push(id);
     return this.tenantTx.run(async (m) => {
       try {
-        const rows = (await m.query(
-          `UPDATE hr_employee SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL RETURNING id`,
-          params,
-        )) as Row[];
+        const rows = returningRows<Row>(
+          await m.query(
+            `UPDATE hr_employee SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL RETURNING id`,
+            params,
+          ),
+        );
         if (!rows[0]) throw new NotFoundException('Employee not found');
       } catch (err) {
         if ((err as { code?: string })?.code === '23503') throw new BadRequestException('Unknown reporting manager for this tenant');
@@ -128,11 +131,10 @@ export class HrProfileService {
 
   private async softDelete(table: string, id: string) {
     await this.tenantTx.run(async (m) => {
-      const res = (await m.query(
-        `UPDATE ${table} SET deleted_at = now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
-        [id],
-      )) as unknown[];
-      if (res.length === 0) throw new NotFoundException('Not found');
+      const rows = returningRows(
+        await m.query(`UPDATE ${table} SET deleted_at = now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [id]),
+      );
+      if (rows.length === 0) throw new NotFoundException('Not found');
     });
   }
 }

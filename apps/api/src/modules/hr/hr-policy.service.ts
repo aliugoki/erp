@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { returningRows } from './hr.util';
 import type { CreateCustomFieldDto, CreatePolicyDto } from './dto/hr.dto';
 
 type Row = Record<string, unknown>;
@@ -45,11 +46,10 @@ export class HrPolicyService {
 
   async deleteCustomField(id: string) {
     await this.tenantTx.run(async (m) => {
-      const res = (await m.query(
-        `UPDATE hr_custom_field SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
-        [id],
-      )) as unknown[];
-      if (res.length === 0) throw new NotFoundException('Custom field not found');
+      const rows = returningRows(
+        await m.query(`UPDATE hr_custom_field SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [id]),
+      );
+      if (rows.length === 0) throw new NotFoundException('Custom field not found');
     });
   }
 
@@ -94,11 +94,13 @@ export class HrPolicyService {
 
   async updatePolicyStatus(id: string, status: string) {
     return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
-        `UPDATE hr_policy SET status=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL
-         RETURNING id, name, category, description, effective_date, status, version`,
-        [id, status],
-      )) as Row[];
+      const rows = returningRows<Row>(
+        await m.query(
+          `UPDATE hr_policy SET status=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL
+           RETURNING id, name, category, description, effective_date, status, version`,
+          [id, status],
+        ),
+      );
       if (!rows[0]) throw new NotFoundException('Policy not found');
       return mapPolicy(rows[0]);
     });

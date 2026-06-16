@@ -3,6 +3,17 @@ import type { EmployeeRow, EmployeeView } from './hr.types';
 /** Minimal structural manager type so helpers stay DB-driver-agnostic. */
 type Mgr = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
 
+/** Normalize a TypeORM `manager.query()` result to the rows array. For `UPDATE`/`DELETE … RETURNING`
+ * the driver returns `[rows, affectedCount]` (not just `rows`, as it does for `SELECT`/`INSERT …
+ * RETURNING`), so a naive `rows[0]` would be the inner array. This unwraps that shape; other shapes
+ * (already a rows array) pass through unchanged. */
+export function returningRows<T = Record<string, unknown>>(result: unknown): T[] {
+  if (Array.isArray(result) && result.length === 2 && Array.isArray(result[0]) && typeof result[1] === 'number') {
+    return result[0] as T[];
+  }
+  return (result ?? []) as T[];
+}
+
 /** Allocate the next per-tenant, per-type HR document number (e.g. LEAVE-0001, PAYRUN-0003). */
 export async function nextHrDocNo(m: Mgr, prefix: string, docType: string): Promise<string> {
   const seq = (await m.query(
