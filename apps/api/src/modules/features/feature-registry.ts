@@ -54,11 +54,14 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
   {
     key: 'crm',
     name: 'CRM',
-    description: 'Clients, contacts, deals, pipeline.',
+    description: 'Accounts, contacts, leads, opportunities, activities, sales reports.',
     features: [
       { key: 'crm.contacts', name: 'Contacts' },
       { key: 'crm.deals', name: 'Deals' },
       { key: 'crm.pipeline', name: 'Pipeline' },
+      { key: 'crm.leads', name: 'Leads' },
+      { key: 'crm.activities', name: 'Activities' },
+      { key: 'crm.reports', name: 'Sales reports' },
     ],
   },
   {
@@ -106,6 +109,9 @@ const BUSINESS = [
   'inventory.low_stock',
   'crm.deals',
   'crm.pipeline',
+  'crm.leads',
+  'crm.activities',
+  'crm.reports',
   'reporting',
   'reporting.dashboards',
   'notifications.email',

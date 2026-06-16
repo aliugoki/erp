@@ -188,6 +188,111 @@ export interface CrmClient {
   companyName: string;
 }
 
+// ── Enterprise CRM ────────────────────────────────────────────────────────────
+export interface CrmAccount {
+  id: string;
+  accountNo: string | null;
+  companyName: string;
+  industry: string | null;
+  website: string | null;
+  status: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  ownerId: string | null;
+  annualRevenueMinor: number | string | null;
+}
+
+export interface CrmContact {
+  id: string;
+  clientId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+}
+
+export interface Deal {
+  id: string;
+  clientId: string;
+  title: string;
+  value: Money;
+  stage: string;
+  expectedCloseDate: string | null;
+  assignedTo: string | null;
+  probability: number;
+  ownerId: string | null;
+  source: string | null;
+  weighted: Money;
+}
+
+export interface PipelineStage {
+  stage: string;
+  count: number;
+  total: Money;
+  weighted: Money;
+}
+
+export interface Lead {
+  id: string;
+  leadNo: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  source: string | null;
+  status: string;
+  rating: string;
+  estValue: Money;
+  ownerId: string | null;
+  notes: string | null;
+  convertedClientId: string | null;
+  convertedDealId: string | null;
+  convertedAt: string | null;
+}
+
+export interface Activity {
+  id: string;
+  type: string;
+  subject: string;
+  body: string | null;
+  dueAt: string | null;
+  completed: boolean;
+  completedAt: string | null;
+  clientId: string | null;
+  contactId: string | null;
+  dealId: string | null;
+  leadId: string | null;
+  ownerId: string | null;
+  outcome: string | null;
+  createdAt: string | null;
+}
+
+export interface ForecastReport {
+  stages: { stage: string; count: number; total: Money; weighted: Money }[];
+  openTotal: Money;
+  weightedTotal: Money;
+}
+
+export interface WinLossReport {
+  won: { count: number; value: Money };
+  lost: { count: number; value: Money };
+  winRate: number;
+}
+
+export interface SalesByOwnerRow {
+  ownerId: string | null;
+  wonCount: number;
+  wonValue: Money;
+}
+
+export interface LeadFunnelRow {
+  status: string;
+  count: number;
+}
+
 export interface TxnDetailLine {
   id: string;
   accountId: string;

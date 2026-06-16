@@ -35,12 +35,24 @@ export interface CrmDealClosedV1 {
   assignedTo?: string | null;
 }
 
+export interface CrmLeadConvertedV1 {
+  leadId: string;
+  /** The account (crm_client) the lead became. */
+  clientId: string;
+  /** The opportunity created from the lead, if one was requested. */
+  dealId?: string | null;
+  valueMinor: number;
+  currency: string;
+  ownerId?: string | null;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
   FINANCE_INVOICE_PAID: 'finance.invoice_paid.v1',
   HR_EMPLOYEE_CREATED: 'hr.employee_created.v1',
   CRM_DEAL_CLOSED: 'crm.deal_closed.v1',
+  CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -49,6 +61,7 @@ export interface EventPayloads {
   'finance.invoice_paid.v1': FinanceInvoicePaidV1;
   'hr.employee_created.v1': HrEmployeeCreatedV1;
   'crm.deal_closed.v1': CrmDealClosedV1;
+  'crm.lead_converted.v1': CrmLeadConvertedV1;
 }
 
 export type EventType = keyof EventPayloads;

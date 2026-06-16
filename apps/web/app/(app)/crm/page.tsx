@@ -1,27 +1,14 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, Target, Trophy } from 'lucide-react';
+import { Briefcase, Gauge, Target, Trophy } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import type { Deal, PipelineStage } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
 import { StatCard } from '@/components/stat-card';
+import { CrmTabs } from '@/components/crm/crm-tabs';
+import { NewDealDialog } from '@/components/crm/new-deal-dialog';
 import { Badge } from '@/components/ui/badge';
-
-interface Money {
-  amountMinor: number;
-  currency: string;
-}
-interface PipelineStage {
-  stage: string;
-  count: number;
-  total: Money;
-}
-interface Deal {
-  id: string;
-  title: string;
-  value: Money;
-  stage: string;
-}
 
 const STAGE_LABEL: Record<string, string> = {
   LEAD: 'Lead',
@@ -57,15 +44,17 @@ export default function CrmPipelinePage() {
 
   const isOpen = (s: string) => s !== 'CLOSED_WON' && s !== 'CLOSED_LOST';
   const openValue = stages.filter((s) => isOpen(s.stage)).reduce((sum, s) => sum + s.total.amountMinor, 0);
+  const weightedValue = stages.filter((s) => isOpen(s.stage)).reduce((sum, s) => sum + s.weighted.amountMinor, 0);
   const wonValue = byStage.CLOSED_WON?.total.amountMinor ?? 0;
   const openCount = stages.filter((s) => isOpen(s.stage)).reduce((sum, s) => sum + s.count, 0);
   const currency = stages[0]?.total.currency ?? 'PKR';
 
   return (
     <div className="space-y-6 animate-fade-up">
-      <PageHeader title="Sales Pipeline" description="Deals grouped by stage, with live totals." />
+      <PageHeader title="CRM" description="Deals grouped by stage, with live totals and a weighted forecast." action={<NewDealDialog />} />
+      <CrmTabs />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Briefcase} label="Open deals" value={openCount} accent="primary" delayMs={0} />
         <StatCard
           icon={Target}
@@ -76,12 +65,20 @@ export default function CrmPipelinePage() {
           delayMs={70}
         />
         <StatCard
+          icon={Gauge}
+          label="Weighted forecast"
+          value={Math.round(weightedValue / 100)}
+          format={(v) => `${currency} ${v.toLocaleString()}`}
+          accent="primary"
+          delayMs={140}
+        />
+        <StatCard
           icon={Trophy}
           label="Won value"
           value={Math.round(wonValue / 100)}
           format={(v) => `${currency} ${v.toLocaleString()}`}
           accent="success"
-          delayMs={140}
+          delayMs={210}
         />
       </div>
 

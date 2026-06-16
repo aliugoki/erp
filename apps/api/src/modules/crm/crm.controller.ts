@@ -75,6 +75,6 @@ export class CrmController {
   @Patch('deals/:id/stage')
   @Roles(...WRITE)
   updateStage(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealStageDto) {
-    return this.crm.updateStage(id, dto.stage);
+    return this.crm.updateStage(id, dto.stage, dto.lostReason ?? null);
   }
 }
