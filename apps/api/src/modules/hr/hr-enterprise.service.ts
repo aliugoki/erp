@@ -20,6 +20,9 @@ import { type PayComponent, computePayslip, inclusiveDays, nextHrDocNo } from '.
 
 type Row = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
+/** Format a DB `date` value (the driver may hand back a Date object or a string) as YYYY-MM-DD. */
+const toDateStr = (v: unknown): string =>
+  v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 
 /** Enterprise HCM: leave, payroll, performance, lifecycle and HR reports. Core employee/department
  * CRUD stays in {@link HrService}; this service layers the HCM workflows on top. Raw SQL through the
@@ -150,22 +153,25 @@ export class HrEnterpriseService {
       );
 
       if (approve) {
-        const year = Number(String(req.start_date).slice(0, 4));
+        // Derive everything (incl. the year) from the request row in SQL — the `date` column comes
+        // back from the driver as a Date object, so parsing the year in JS is fragile.
         await m.query(
           `INSERT INTO hr_leave_balance (tenant_id, employee_id, leave_type_id, year, entitled_days, used_days)
-           SELECT current_setting('app.tenant_id')::uuid, $1, $2, $3, COALESCE(lt.days_per_year,0), $4
-           FROM hr_leave_type lt WHERE lt.id = $2
+           SELECT current_setting('app.tenant_id')::uuid, lr.employee_id, lr.leave_type_id,
+                  EXTRACT(YEAR FROM lr.start_date)::int, COALESCE(lt.days_per_year, 0), lr.days
+           FROM hr_leave_request lr JOIN hr_leave_type lt ON lt.id = lr.leave_type_id
+           WHERE lr.id = $1
            ON CONFLICT (tenant_id, employee_id, leave_type_id, year)
            DO UPDATE SET used_days = hr_leave_balance.used_days + EXCLUDED.used_days, updated_at = now()`,
-          [req.employee_id, req.leave_type_id, year, req.days],
+          [id],
         );
         await this.outbox.write(m, EVENT_TYPES.HR_LEAVE_APPROVED, {
           leaveRequestId: id,
           employeeId: req.employee_id as string,
           leaveTypeId: req.leave_type_id as string,
           days: num(req.days),
-          startDate: String(req.start_date),
-          endDate: String(req.end_date),
+          startDate: toDateStr(req.start_date),
+          endDate: toDateStr(req.end_date),
           approverId: approverId ?? null,
         });
       }
