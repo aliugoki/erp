@@ -17,6 +17,7 @@ import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   CreateAttendanceDto,
   CreateDepartmentDto,
+  CreateDesignationDto,
   CreateEmployeeDto,
   CreatePositionDto,
   ListEmployeesQueryDto,
@@ -94,6 +95,26 @@ export class HrController {
   @HttpCode(HttpStatus.CREATED)
   createPosition(@Body() dto: CreatePositionDto) {
     return this.hr.createPosition(dto);
+  }
+
+  // Designations (managed list for the employee form dropdown)
+  @Get('designations')
+  listDesignations() {
+    return this.hr.listDesignations();
+  }
+
+  @Post('designations')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createDesignation(@Body() dto: CreateDesignationDto) {
+    return this.hr.createDesignation(dto);
+  }
+
+  @Delete('designations/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteDesignation(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hr.deleteDesignation(id);
   }
 
   // Attendance

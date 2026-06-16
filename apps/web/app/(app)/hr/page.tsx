@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
 import { HrTabs } from '@/components/hr/hr-tabs';
 import { NewEmployeeDialog } from '@/components/hr/new-employee-dialog';
+import { ManageOrgDialog } from '@/components/hr/manage-org-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,7 +49,7 @@ export default function HrPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
-      <PageHeader title="Human Resources" description="Manage your people." action={<NewEmployeeDialog />} />
+      <PageHeader title="Human Resources" description="Manage your people." action={<div className="flex gap-2"><ManageOrgDialog /><NewEmployeeDialog /></div>} />
       <HrTabs />
 
       <Card className="overflow-hidden">

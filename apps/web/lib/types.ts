@@ -143,6 +143,90 @@ export interface AttendanceDayRow {
   employeeCode: string;
   status: string | null;
   late: boolean;
+  checkIn: string | null;
+  checkOut: string | null;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  managerId: string | null;
+  parentDepartmentId: string | null;
+}
+export interface Designation {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+// ── AI Insights ───────────────────────────────────────────────────────────────
+export interface AiSummary {
+  nextMonthSales: Money;
+  hotLeads: number;
+  reorderProducts: number;
+  atRiskEmployees: number;
+}
+export interface SalesForecast {
+  currency: string;
+  history: { month: string; valueMinor: number }[];
+  forecastMinor: number[];
+}
+export interface LeadScore {
+  id: string;
+  name: string;
+  company: string | null;
+  rating: string;
+  estValue: Money;
+  score: number;
+  band: string;
+}
+export interface InventoryDemand {
+  id: string;
+  sku: string;
+  name: string;
+  onHand: number;
+  avgDailyDemand: number;
+  forecast30: number;
+  daysToStockout: number | null;
+  reorder: boolean;
+}
+export interface AttritionRisk {
+  employeeId: string;
+  employeeName: string;
+  tenureDays: number;
+  absenceRatePct: number;
+  score: number;
+  band: string;
+}
+export interface AnomalyReport {
+  series: { month: string; valueMinor: number }[];
+  anomalies: { index: number; value: number; z: number; month: string }[];
+}
+
+// ── Report builder ──────────────────────────────────────────────────────────────
+export interface ReportDataset {
+  key: string;
+  label: string;
+  columns: { key: string; label: string; money: boolean }[];
+  filterable: string[];
+  groupable: string[];
+}
+export interface ReportPreset {
+  key: string;
+  name: string;
+  source: string;
+}
+export interface ReportResult {
+  columns: { key: string; label: string; money?: boolean }[];
+  rows: Record<string, unknown>[];
+}
+export interface SavedReport {
+  id: string;
+  name: string;
+  source: string;
+  columns: string[];
+  filters: { column: string; value: string }[];
+  groupBy: string | null;
 }
 
 export interface AttendanceSummaryRow {

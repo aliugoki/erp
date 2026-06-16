@@ -72,9 +72,22 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
   {
     key: 'reporting',
     name: 'Reporting',
-    description: 'Cross-module dashboards and reports.',
+    description: 'Cross-module dashboards, preset and custom reports.',
     dependsOn: [],
-    features: [{ key: 'reporting.dashboards', name: 'Dashboards' }],
+    features: [
+      { key: 'reporting.dashboards', name: 'Dashboards' },
+      { key: 'reporting.custom', name: 'Custom report builder' },
+    ],
+  },
+  {
+    key: 'ai',
+    name: 'AI Insights',
+    description: 'ML-powered forecasting, scoring and anomaly detection across modules.',
+    features: [
+      { key: 'ai.forecasting', name: 'Forecasting' },
+      { key: 'ai.scoring', name: 'Lead & attrition scoring' },
+      { key: 'ai.anomalies', name: 'Anomaly detection' },
+    ],
   },
   {
     key: 'notifications',
@@ -124,6 +137,11 @@ const BUSINESS = [
   'crm.reports',
   'reporting',
   'reporting.dashboards',
+  'reporting.custom',
+  'ai',
+  'ai.forecasting',
+  'ai.scoring',
+  'ai.anomalies',
   'notifications.email',
 ];
 

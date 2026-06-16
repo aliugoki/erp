@@ -21,10 +21,12 @@ const STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'warning' | 'se
 const today = () => new Date().toISOString().slice(0, 10);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+interface DraftRow { status: string; checkIn: string; checkOut: string }
+
 export default function AttendancePage() {
   const qc = useQueryClient();
   const [date, setDate] = useState(today);
-  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [draft, setDraft] = useState<Record<string, DraftRow>>({});
   const [year, setYear] = useState('2026');
   const [month, setMonth] = useState('6');
 
@@ -34,16 +36,24 @@ export default function AttendancePage() {
     queryFn: () => apiGet<AttendanceSummaryRow[]>(`/hr/attendance-summary?year=${year}&month=${month}`),
   });
 
-  // Seed the editable draft from whatever is already logged for the day.
   useEffect(() => {
-    if (day.data) setDraft(Object.fromEntries(day.data.map((r) => [r.employeeId, r.status ?? 'PRESENT'])));
+    if (day.data) {
+      setDraft(Object.fromEntries(day.data.map((r) => [r.employeeId, { status: r.status ?? 'PRESENT', checkIn: r.checkIn ?? '', checkOut: r.checkOut ?? '' }])));
+    }
   }, [day.data]);
+
+  const setRow = (id: string, patch: Partial<DraftRow>) => setDraft((s) => ({ ...s, [id]: { ...s[id]!, ...patch } }));
 
   const save = useMutation({
     mutationFn: () =>
       apiPost('/hr/attendance-bulk', {
         date,
-        entries: Object.entries(draft).map(([employeeId, status]) => ({ employeeId, status })),
+        entries: Object.entries(draft).map(([employeeId, d]) => ({
+          employeeId,
+          status: d.status,
+          checkIn: d.checkIn ? `${date}T${d.checkIn}:00` : undefined,
+          checkOut: d.checkOut ? `${date}T${d.checkOut}:00` : undefined,
+        })),
       }),
     onSuccess: () => {
       toast.success('Attendance saved', { description: date });
@@ -57,7 +67,7 @@ export default function AttendancePage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
-      <PageHeader title="Human Resources" description="Log daily attendance — it feeds payroll proration." />
+      <PageHeader title="Human Resources" description="Log daily attendance with timings — it feeds payroll proration." />
       <HrTabs />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -72,22 +82,27 @@ export default function AttendancePage() {
             </Button>
           </div>
           <Table>
-            <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Status</TableHead><TableHead>In</TableHead><TableHead>Out</TableHead></TableRow></TableHeader>
             <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.employeeId}>
-                  <TableCell>
-                    <p className="font-medium">{r.employeeName}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{r.employeeCode}</p>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Select value={draft[r.employeeId] ?? 'PRESENT'} onValueChange={(v) => setDraft((s) => ({ ...s, [r.employeeId]: v }))}>
-                      <SelectTrigger className="ml-auto h-8 w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace('_', ' ').toLowerCase()}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {rows.map((r) => {
+                const d = draft[r.employeeId] ?? { status: 'PRESENT', checkIn: '', checkOut: '' };
+                return (
+                  <TableRow key={r.employeeId}>
+                    <TableCell>
+                      <p className="font-medium">{r.employeeName}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{r.employeeCode}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={d.status} onValueChange={(v) => setRow(r.employeeId, { status: v })}>
+                        <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                        <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s.replace('_', ' ').toLowerCase()}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell><Input type="time" value={d.checkIn} onChange={(e) => setRow(r.employeeId, { checkIn: e.target.value })} className="h-8 w-28" /></TableCell>
+                    <TableCell><Input type="time" value={d.checkOut} onChange={(e) => setRow(r.employeeId, { checkOut: e.target.value })} className="h-8 w-28" /></TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           {rows.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">No active employees.</p> : null}

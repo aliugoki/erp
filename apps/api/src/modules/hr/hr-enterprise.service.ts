@@ -329,11 +329,11 @@ export class HrEnterpriseService {
     return this.tenantTx.run(async (m) => {
       for (const entry of dto.entries) {
         await m.query(
-          `INSERT INTO hr_attendance (tenant_id, employee_id, date, status, late)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4)
+          `INSERT INTO hr_attendance (tenant_id, employee_id, date, status, late, check_in, check_out)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6)
            ON CONFLICT (tenant_id, employee_id, date) WHERE deleted_at IS NULL
-           DO UPDATE SET status=EXCLUDED.status, late=EXCLUDED.late, updated_at=now()`,
-          [entry.employeeId, dto.date, entry.status, entry.late ?? false],
+           DO UPDATE SET status=EXCLUDED.status, late=EXCLUDED.late, check_in=EXCLUDED.check_in, check_out=EXCLUDED.check_out, updated_at=now()`,
+          [entry.employeeId, dto.date, entry.status, entry.late ?? false, entry.checkIn ?? null, entry.checkOut ?? null],
         );
       }
       return { date: dto.date, saved: dto.entries.length };
@@ -351,12 +351,16 @@ export class HrEnterpriseService {
          WHERE e.deleted_at IS NULL AND e.status='ACTIVE' ORDER BY e.first_name`,
         [date],
       )) as Row[];
+      const toTime = (v: unknown): string | null =>
+        v instanceof Date ? v.toISOString().slice(11, 16) : v ? String(v).slice(11, 16) : null;
       return rows.map((r) => ({
         employeeId: r.employee_id as string,
         employeeName: [r.first_name, r.last_name].filter(Boolean).join(' '),
         employeeCode: r.employee_code as string,
         status: (r.status as string) ?? null,
         late: (r.late as boolean) ?? false,
+        checkIn: toTime(r.check_in),
+        checkOut: toTime(r.check_out),
       }));
     });
   }

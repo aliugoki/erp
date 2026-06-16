@@ -109,6 +109,11 @@ export class CreatePositionDto {
   @IsOptional() @IsString() description?: string;
 }
 
+export class CreateDesignationDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsString() description?: string;
+}
+
 export class CreateAttendanceDto {
   @IsUUID() employeeId!: string;
   @IsISO8601() date!: string;
@@ -178,6 +183,8 @@ export class BulkAttendanceEntryDto {
   @IsUUID() employeeId!: string;
   @IsIn(['PRESENT', 'ABSENT', 'LEAVE', 'HALF_DAY']) status!: string;
   @IsOptional() @IsBoolean() late?: boolean;
+  @IsOptional() @IsISO8601() checkIn?: string;
+  @IsOptional() @IsISO8601() checkOut?: string;
 }
 
 export class BulkAttendanceDto {

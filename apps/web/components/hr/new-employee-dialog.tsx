@@ -1,8 +1,9 @@
 'use client';
 import { type FormEvent, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { ApiError, apiPost } from '@/lib/api';
+import { ApiError, apiGet, apiPost } from '@/lib/api';
+import type { Department, Designation } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,9 +22,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function NewEmployeeDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const EMPTY = { firstName: '', lastName: '', email: '', phone: '', salary: '', status: 'ACTIVE', designation: '', employmentType: '', joinDate: '', city: '' };
+  const EMPTY = { firstName: '', lastName: '', email: '', phone: '', salary: '', status: 'ACTIVE', designation: '', departmentId: '', employmentType: '', joinDate: '', city: '' };
   const [form, setForm] = useState(EMPTY);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const departments = useQuery({ queryKey: ['departments'], queryFn: () => apiGet<Department[]>('/hr/departments') });
+  const designations = useQuery({ queryKey: ['designations'], queryFn: () => apiGet<Designation[]>('/hr/designations') });
 
   const create = useMutation({
     mutationFn: () =>
@@ -35,6 +39,7 @@ export function NewEmployeeDialog() {
         ...(form.salary ? { salary: { amountMinor: Math.round(Number(form.salary) * 100), currency: 'PKR' } } : {}),
         status: form.status,
         ...(form.designation ? { designation: form.designation } : {}),
+        ...(form.departmentId ? { departmentId: form.departmentId } : {}),
         ...(form.employmentType ? { employmentType: form.employmentType } : {}),
         ...(form.joinDate ? { joinDate: form.joinDate } : {}),
         ...(form.city ? { city: form.city } : {}),
@@ -88,18 +93,32 @@ export function NewEmployeeDialog() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="dg">Designation</Label>
-              <Input id="dg" value={form.designation} onChange={(e) => set('designation')(e.target.value)} placeholder="Software Engineer" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="et">Employment type</Label>
-              <Select value={form.employmentType} onValueChange={set('employmentType')}>
-                <SelectTrigger id="et"><SelectValue placeholder="—" /></SelectTrigger>
+              <Label htmlFor="dept">Department</Label>
+              <Select value={form.departmentId} onValueChange={set('departmentId')}>
+                <SelectTrigger id="dept"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
-                  {['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN', 'PROBATION'].map((t) => <SelectItem key={t} value={t}>{t.replace('_', ' ').toLowerCase()}</SelectItem>)}
+                  {(departments.data ?? []).map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="dg">Designation</Label>
+              <Select value={form.designation} onValueChange={set('designation')}>
+                <SelectTrigger id="dg"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {(designations.data ?? []).map((d) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="et">Employment type</Label>
+            <Select value={form.employmentType} onValueChange={set('employmentType')}>
+              <SelectTrigger id="et"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN', 'PROBATION'].map((t) => <SelectItem key={t} value={t}>{t.replace('_', ' ').toLowerCase()}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">

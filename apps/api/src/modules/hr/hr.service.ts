@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import { type SuccessEnvelope, paginationMeta } from '@metaxperts/shared';
@@ -6,6 +6,7 @@ import { TenantTransactionService } from '../../common/tenant/tenant-transaction
 import type {
   CreateAttendanceDto,
   CreateDepartmentDto,
+  CreateDesignationDto,
   CreateEmployeeDto,
   CreatePositionDto,
   ListEmployeesQueryDto,
@@ -68,6 +69,38 @@ export class HrService {
       )) as Array<Record<string, string | null>>;
       return rows.map((r) => ({ id: r.id!, title: r.title!, description: r.description ?? null }));
     });
+  }
+
+  // ── Designations (managed list) ─────────────────────────────────────────────
+  async createDesignation(dto: CreateDesignationDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO hr_designation (tenant_id, name, description)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2)
+           RETURNING id, name, description`,
+          [dto.name, dto.description ?? null],
+        )) as Array<Record<string, string | null>>;
+        const r = rows[0]!;
+        return { id: r.id!, name: r.name!, description: r.description ?? null };
+      } catch (err) {
+        if ((err as { code?: string })?.code === '23505') throw new BadRequestException(`Designation "${dto.name}" already exists`);
+        throw err;
+      }
+    });
+  }
+
+  async listDesignations() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, name, description FROM hr_designation WHERE deleted_at IS NULL ORDER BY name`,
+      )) as Array<Record<string, string | null>>;
+      return rows.map((r) => ({ id: r.id!, name: r.name!, description: r.description ?? null }));
+    });
+  }
+
+  async deleteDesignation(id: string): Promise<void> {
+    await this.softDelete('hr_designation', id);
   }
 
   // ── Employees ──────────────────────────────────────────────────────────────
