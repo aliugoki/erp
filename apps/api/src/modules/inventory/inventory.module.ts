@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { InventoryCategoriesService } from './inventory-categories.service';
 import { InventoryController } from './inventory.controller';
 import { InventoryDocsController } from './inventory-docs.controller';
 import { InventoryDocsService } from './inventory-docs.service';
@@ -6,6 +7,6 @@ import { InventoryService } from './inventory.service';
 
 @Module({
   controllers: [InventoryController, InventoryDocsController],
-  providers: [InventoryService, InventoryDocsService],
+  providers: [InventoryService, InventoryDocsService, InventoryCategoriesService],
 })
 export class InventoryModule {}

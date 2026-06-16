@@ -1,10 +1,12 @@
 'use client';
 import { type FormEvent, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { ApiError, apiPost } from '@/lib/api';
+import { ApiError, apiGet, apiPost } from '@/lib/api';
+import type { Category } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -17,17 +19,26 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const NO_CATEGORY = '__none__';
+
 export function NewProductDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ sku: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
+  const [categoryId, setCategoryId] = useState(NO_CATEGORY);
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => apiGet<Category[]>('/inventory/categories'),
+  });
 
   const create = useMutation({
     mutationFn: () =>
       apiPost('/inventory/products', {
         sku: f.sku,
         name: f.name,
+        categoryId: categoryId === NO_CATEGORY ? undefined : categoryId,
         minStock: Number(f.minStock) || 0,
         costPriceMinor: Math.round((Number(f.costPrice) || 0) * 100),
         sellPriceMinor: Math.round((Number(f.sellPrice) || 0) * 100),
@@ -37,6 +48,7 @@ export function NewProductDialog() {
       qc.invalidateQueries({ queryKey: ['products'] });
       setOpen(false);
       setF({ sku: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
+      setCategoryId(NO_CATEGORY);
     },
     onError: (e) => toast.error('Could not add product', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -72,6 +84,23 @@ export function NewProductDialog() {
           <div className="space-y-2">
             <Label htmlFor="nm">Name</Label>
             <Input id="nm" value={f.name} onChange={(e) => set('name')(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cat">Category</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger id="cat">
+                <SelectValue placeholder="No category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_CATEGORY}>No category</SelectItem>
+                {(categories ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {' '.repeat((c.level - 1) * 2)}
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">

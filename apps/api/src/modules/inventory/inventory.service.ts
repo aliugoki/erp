@@ -17,7 +17,18 @@ import {
 } from './inventory.util';
 
 const PRODUCT_COLS =
-  'id, sku, name, category, unit, cost_price_minor, sell_price_minor, currency, min_stock, on_hand';
+  'id, sku, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock, on_hand';
+
+/** Product SELECT that walks up to three category levels so each row carries its full top→leaf
+ * category path (c1 = the product's own category, c2 = its parent, c3 = its grandparent). */
+const PRODUCT_SELECT = `
+  SELECT p.id, p.sku, p.name, p.category, p.category_id, p.unit, p.cost_price_minor, p.sell_price_minor,
+         p.currency, p.min_stock, p.on_hand,
+         c1.name AS category_name, c2.name AS parent_name, c3.name AS grandparent_name
+  FROM inventory_product p
+  LEFT JOIN inventory_category c1 ON c1.id = p.category_id
+  LEFT JOIN inventory_category c2 ON c2.id = c1.parent_id
+  LEFT JOIN inventory_category c3 ON c3.id = c2.parent_id`;
 
 @Injectable()
 export class InventoryService {
@@ -50,13 +61,14 @@ export class InventoryService {
       try {
         const rows = (await m.query(
           `INSERT INTO inventory_product
-             (tenant_id, sku, name, category, unit, cost_price_minor, sell_price_minor, currency, min_stock)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8)
+             (tenant_id, sku, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9)
            RETURNING ${PRODUCT_COLS}`,
           [
             dto.sku,
             dto.name,
             dto.category ?? null,
+            dto.categoryId ?? null,
             dto.unit ?? 'unit',
             dto.costPriceMinor ?? 0,
             dto.sellPriceMinor ?? 0,
@@ -67,6 +79,7 @@ export class InventoryService {
         return mapProductRow(rows[0]!);
       } catch (err) {
         if (isUnique(err)) throw new BadRequestException(`SKU "${dto.sku}" already exists`);
+        if (isForeignKey(err)) throw new BadRequestException('Unknown category for this tenant');
         throw err;
       }
     });
@@ -75,7 +88,7 @@ export class InventoryService {
   async listProducts() {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT ${PRODUCT_COLS} FROM inventory_product WHERE deleted_at IS NULL ORDER BY name`,
+        `${PRODUCT_SELECT} WHERE p.deleted_at IS NULL ORDER BY p.name`,
       )) as ProductRow[];
       return rows.map(mapProductRow);
     });
@@ -85,7 +98,7 @@ export class InventoryService {
   async listLowStock() {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT ${PRODUCT_COLS} FROM inventory_product WHERE deleted_at IS NULL AND on_hand < min_stock ORDER BY (min_stock - on_hand) DESC`,
+        `${PRODUCT_SELECT} WHERE p.deleted_at IS NULL AND p.on_hand < p.min_stock ORDER BY (p.min_stock - p.on_hand) DESC`,
       )) as ProductRow[];
       return rows.map(mapProductRow);
     });
@@ -94,11 +107,29 @@ export class InventoryService {
   async getProduct(id: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT ${PRODUCT_COLS} FROM inventory_product WHERE id=$1 AND deleted_at IS NULL`,
+        `${PRODUCT_SELECT} WHERE p.id=$1 AND p.deleted_at IS NULL`,
         [id],
       )) as ProductRow[];
       if (!rows[0]) throw new NotFoundException('Product not found');
       return mapProductRow(rows[0]);
+    });
+  }
+
+  /** Re-classify a product into a category (or clear it with `categoryId = null`). */
+  async setProductCategory(id: string, categoryId: string | null) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const updated = (await m.query(
+          `UPDATE inventory_product SET category_id=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
+          [id, categoryId ?? null],
+        )) as Array<{ id: string }>;
+        if (!updated[0]) throw new NotFoundException('Product not found');
+      } catch (err) {
+        if (isForeignKey(err)) throw new BadRequestException('Unknown category for this tenant');
+        throw err;
+      }
+      const rows = (await m.query(`${PRODUCT_SELECT} WHERE p.id=$1 AND p.deleted_at IS NULL`, [id])) as ProductRow[];
+      return mapProductRow(rows[0]!);
     });
   }
 

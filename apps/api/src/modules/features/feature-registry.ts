@@ -46,6 +46,7 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
     description: 'Products, warehouses, stock movements.',
     features: [
       { key: 'inventory.products', name: 'Products' },
+      { key: 'inventory.categories', name: 'Categories' },
       { key: 'inventory.warehouses', name: 'Warehouses' },
       { key: 'inventory.low_stock', name: 'Low-stock alerts' },
     ],
@@ -101,6 +102,7 @@ const BUSINESS = [
   'finance.reports',
   'inventory',
   'inventory.products',
+  'inventory.categories',
   'inventory.low_stock',
   'crm.deals',
   'crm.pipeline',

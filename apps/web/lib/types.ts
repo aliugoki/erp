@@ -368,6 +368,24 @@ export interface Product {
   sellPrice: Money;
   minStock: number;
   onHand: number;
+  categoryId: string | null;
+  /** Names from the top of the category tree down to the product's category. */
+  categoryPath: string[];
+}
+
+// ── Inventory: product categories (3-level tree) ─────────────────────────────
+export interface Category {
+  id: string;
+  name: string;
+  code: string | null;
+  parentId: string | null;
+  level: number;
+  childCount: number;
+  productCount: number;
+}
+
+export interface CategoryNode extends Category {
+  children: CategoryNode[];
 }
 
 // ── Inventory: enterprise documents ──────────────────────────────────────────

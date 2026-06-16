@@ -67,6 +67,9 @@ export default function InventoryPage() {
                           <div>
                             <p className="font-medium">{p.name}</p>
                             <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>
+                            {p.categoryPath.length > 0 ? (
+                              <p className="text-xs text-muted-foreground">{p.categoryPath.join(' › ')}</p>
+                            ) : null}
                           </div>
                         </div>
                       </TableCell>
