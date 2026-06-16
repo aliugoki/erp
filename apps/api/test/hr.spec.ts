@@ -3,7 +3,14 @@
  * transaction — no DB. The DB integration (CRUD, filters, tenant isolation) is covered by hr-e2e.sh.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { buildEmployeeWhere, mapEmployeeRow, normalizePagination } from '../src/modules/hr/hr.util';
+import {
+  buildEmployeeWhere,
+  computePayslip,
+  inclusiveDays,
+  mapEmployeeRow,
+  normalizePagination,
+  type PayComponent,
+} from '../src/modules/hr/hr.util';
 import { HrService } from '../src/modules/hr/hr.service';
 import type { EmployeeRow } from '../src/modules/hr/hr.types';
 
@@ -32,6 +39,34 @@ describe('hr.util', () => {
     };
     expect(mapEmployeeRow(base).salary).toEqual({ amountMinor: 15000000, currency: 'PKR' });
     expect(mapEmployeeRow({ ...base, salary_amount_minor: null }).salary).toBeNull();
+  });
+
+  it('inclusiveDays counts both endpoints (a one-day leave = 1)', () => {
+    expect(inclusiveDays('2026-06-01', '2026-06-01')).toBe(1);
+    expect(inclusiveDays('2026-06-01', '2026-06-05')).toBe(5);
+    expect(inclusiveDays('2026-06-30', '2026-07-02')).toBe(3); // across month boundary
+  });
+
+  it('computePayslip: earnings add to gross, deductions cut net, percent is off basic', () => {
+    const components: PayComponent[] = [
+      { code: 'HRA', name: 'House Rent', type: 'EARNING', calc: 'PCT_OF_BASIC', valueMinor: 0, percent: 50 },
+      { code: 'MED', name: 'Medical', type: 'EARNING', calc: 'FIXED', valueMinor: 500_000, percent: 0 },
+      { code: 'TAX', name: 'Income Tax', type: 'DEDUCTION', calc: 'PCT_OF_BASIC', valueMinor: 0, percent: 10 },
+    ];
+    const slip = computePayslip(10_000_000, components); // basic = 100,000.00
+    expect(slip.basicMinor).toBe(10_000_000);
+    expect(slip.grossMinor).toBe(10_000_000 + 5_000_000 + 500_000); // +50% HRA +5,000 medical
+    expect(slip.deductionMinor).toBe(1_000_000); // 10% tax off basic
+    expect(slip.netMinor).toBe(slip.grossMinor - slip.deductionMinor);
+    expect(slip.lines.map((l) => l.code)).toEqual(['BASIC', 'HRA', 'MED', 'TAX']);
+  });
+
+  it('computePayslip skips zero-value components and keeps just basic', () => {
+    const slip = computePayslip(5_000_000, [
+      { code: 'X', name: 'Zero', type: 'EARNING', calc: 'FIXED', valueMinor: 0, percent: 0 },
+    ]);
+    expect(slip.lines).toHaveLength(1);
+    expect(slip.netMinor).toBe(5_000_000);
   });
 });
 

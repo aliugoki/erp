@@ -17,6 +17,111 @@ export interface Employee {
   status: 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED';
 }
 
+// ── Enterprise HR (HCM) ───────────────────────────────────────────────────────
+export interface LeaveType {
+  id: string;
+  name: string;
+  code: string | null;
+  daysPerYear: number;
+  paid: boolean;
+  color: string | null;
+}
+
+export interface LeaveRequest {
+  id: string;
+  leaveNo: string;
+  employeeId: string;
+  leaveTypeId: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason: string | null;
+  status: string;
+  approverId: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  employeeName?: string | null;
+  typeName?: string | null;
+}
+
+export interface SalaryComponent {
+  id: string;
+  name: string;
+  code: string;
+  type: string;
+  calc: string;
+  valueMinor: number;
+  percent: number;
+  active: boolean;
+}
+
+export interface PayrollRun {
+  id: string;
+  runNo: string;
+  periodYear: number;
+  periodMonth: number;
+  status: string;
+  employeeCount: number;
+  totalGross: Money;
+  totalDeduction: Money;
+  totalNet: Money;
+  runAt: string | null;
+}
+
+export interface Payslip {
+  id: string;
+  payslipNo: string;
+  runId: string;
+  employeeId: string;
+  basic: Money;
+  gross: Money;
+  deduction: Money;
+  net: Money;
+  employeeName?: string | null;
+  employeeCode?: string | null;
+  lines?: { code: string; name: string; type: string; amountMinor: number }[];
+}
+
+export interface PerformanceReview {
+  id: string;
+  reviewNo: string;
+  employeeId: string;
+  period: string;
+  reviewerId: string | null;
+  rating: number | null;
+  strengths: string | null;
+  improvements: string | null;
+  status: string;
+  submittedAt: string | null;
+  employeeName?: string | null;
+}
+
+export interface Goal {
+  id: string;
+  employeeId: string;
+  title: string;
+  description: string | null;
+  targetDate: string | null;
+  status: string;
+  progress: number;
+}
+
+export interface HeadcountReport {
+  total: number;
+  byDepartment: { department: string; count: number }[];
+  byStatus: { status: string; count: number }[];
+}
+
+export interface PayrollSummary {
+  latest: PayrollRun | null;
+  byComponent: { name: string; type: string; totalMinor: number }[];
+}
+
+export interface LeaveSummary {
+  pendingCount: number;
+  byType: { name: string; approvedDays: number; approvedCount: number }[];
+}
+
 export interface Invoice {
   id: string;
   number: string;

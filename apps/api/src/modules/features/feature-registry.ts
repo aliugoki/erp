@@ -23,11 +23,15 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
   {
     key: 'hr',
     name: 'Human Resources',
-    description: 'Employees, departments, positions, attendance.',
+    description: 'Employees, departments, leave, payroll, performance, HR reports.',
     features: [
       { key: 'hr.employees', name: 'Employees' },
       { key: 'hr.departments', name: 'Departments' },
       { key: 'hr.attendance', name: 'Attendance' },
+      { key: 'hr.leave', name: 'Leave management' },
+      { key: 'hr.payroll', name: 'Payroll' },
+      { key: 'hr.performance', name: 'Performance' },
+      { key: 'hr.reports', name: 'HR reports' },
     ],
   },
   {
@@ -100,6 +104,10 @@ const BUSINESS = [
   ...STARTER,
   'hr.departments',
   'hr.attendance',
+  'hr.leave',
+  'hr.payroll',
+  'hr.performance',
+  'hr.reports',
   'finance',
   'finance.invoicing',
   'finance.reports',

@@ -25,6 +25,25 @@ export interface HrEmployeeCreatedV1 {
   departmentId: string | null;
 }
 
+export interface HrLeaveApprovedV1 {
+  leaveRequestId: string;
+  employeeId: string;
+  leaveTypeId: string;
+  days: number;
+  startDate: string;
+  endDate: string;
+  approverId?: string | null;
+}
+
+export interface HrPayrollRunCompletedV1 {
+  runId: string;
+  periodYear: number;
+  periodMonth: number;
+  employeeCount: number;
+  totalNetMinor: number;
+  currency: string;
+}
+
 export interface CrmDealClosedV1 {
   dealId: string;
   title: string;
@@ -51,6 +70,8 @@ export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
   FINANCE_INVOICE_PAID: 'finance.invoice_paid.v1',
   HR_EMPLOYEE_CREATED: 'hr.employee_created.v1',
+  HR_LEAVE_APPROVED: 'hr.leave_approved.v1',
+  HR_PAYROLL_RUN_COMPLETED: 'hr.payroll_run_completed.v1',
   CRM_DEAL_CLOSED: 'crm.deal_closed.v1',
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
 } as const;
@@ -60,6 +81,8 @@ export interface EventPayloads {
   'inventory.low_stock.v1': InventoryLowStockV1;
   'finance.invoice_paid.v1': FinanceInvoicePaidV1;
   'hr.employee_created.v1': HrEmployeeCreatedV1;
+  'hr.leave_approved.v1': HrLeaveApprovedV1;
+  'hr.payroll_run_completed.v1': HrPayrollRunCompletedV1;
   'crm.deal_closed.v1': CrmDealClosedV1;
   'crm.lead_converted.v1': CrmLeadConvertedV1;
 }
