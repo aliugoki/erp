@@ -4,6 +4,8 @@ import { EVENT_TYPES } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type {
+  AttendanceQueryDto,
+  BulkAttendanceDto,
   CreateDocumentDto,
   CreateGoalDto,
   CreateLeaveRequestDto,
@@ -13,10 +15,18 @@ import type {
   CreateSalaryComponentDto,
   DecideLeaveDto,
   LifecycleEventDto,
+  LogAttendanceDto,
   SetLeaveBalanceDto,
   UpdateGoalDto,
 } from './dto/hr.dto';
-import { type PayComponent, computePayslip, inclusiveDays, nextHrDocNo } from './hr.util';
+import {
+  type PayComponent,
+  attendancePayableDays,
+  computePayslip,
+  inclusiveDays,
+  nextHrDocNo,
+  proratedBasicMinor,
+} from './hr.util';
 
 type Row = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -207,9 +217,12 @@ export class HrEnterpriseService {
   }
 
   // ── Payroll: runs ───────────────────────────────────────────────────────────
-  /** Generate a monthly payroll run: a payslip (+lines) per active, salaried employee, computed from
-   * their basic salary and the tenant's active components. One run per (year, month). */
+  /** Generate a monthly payroll run: a payslip (+lines) per active, salaried employee. Basic pay is
+   * **pro-rated by that month's attendance** (present/paid-leave = 1 day, half-day = 0.5, absent = 0)
+   * against `workingDays`; components are then computed off the pro-rated basic. Employees with no
+   * attendance recorded for the month are paid in full. One run per (year, month). */
   async createPayrollRun(dto: CreatePayrollRunDto) {
+    const workingDays = dto.workingDays ?? 26;
     return this.tenantTx.run(async (m) => {
       const employees = (await m.query(
         `SELECT id, salary_amount_minor, salary_currency FROM hr_employee
@@ -234,9 +247,9 @@ export class HrEnterpriseService {
       let runId: string;
       try {
         const runRows = (await m.query(
-          `INSERT INTO hr_payroll_run (tenant_id, run_no, period_year, period_month, currency, run_at)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4, now()) RETURNING id`,
-          [runNo, dto.year, dto.month, currency],
+          `INSERT INTO hr_payroll_run (tenant_id, run_no, period_year, period_month, currency, working_days, run_at)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5, now()) RETURNING id`,
+          [runNo, dto.year, dto.month, currency, workingDays],
         )) as Row[];
         runId = runRows[0]!.id as string;
       } catch (err) {
@@ -248,12 +261,24 @@ export class HrEnterpriseService {
       let deduction = 0;
       let net = 0;
       for (const e of employees) {
-        const slip = computePayslip(num(e.salary_amount_minor), components);
+        const att = (await m.query(
+          `SELECT status FROM hr_attendance
+           WHERE employee_id=$1 AND deleted_at IS NULL
+             AND EXTRACT(YEAR FROM date)=$2 AND EXTRACT(MONTH FROM date)=$3`,
+          [e.id, dto.year, dto.month],
+        )) as Array<{ status: string }>;
+        const hasAttendance = att.length > 0;
+        const payableDays = attendancePayableDays(att);
+        const fullBasic = num(e.salary_amount_minor);
+        const basic = proratedBasicMinor(fullBasic, payableDays, workingDays, hasAttendance);
+
+        const slip = computePayslip(basic, components);
         const payslipNo = await nextHrDocNo(m, 'PAYSLIP', 'PAYSLIP');
         const psRows = (await m.query(
-          `INSERT INTO hr_payslip (tenant_id, payslip_no, run_id, employee_id, basic_minor, gross_minor, deduction_minor, net_minor, currency)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-          [payslipNo, runId, e.id, slip.basicMinor, slip.grossMinor, slip.deductionMinor, slip.netMinor, currency],
+          `INSERT INTO hr_payslip
+             (tenant_id, payslip_no, run_id, employee_id, basic_minor, gross_minor, deduction_minor, net_minor, currency, working_days, payable_days)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [payslipNo, runId, e.id, slip.basicMinor, slip.grossMinor, slip.deductionMinor, slip.netMinor, currency, workingDays, hasAttendance ? payableDays : workingDays],
         )) as Row[];
         const payslipId = psRows[0]!.id as string;
         for (const line of slip.lines) {
@@ -273,6 +298,95 @@ export class HrEnterpriseService {
         [runId, gross, deduction, net, employees.length],
       );
       return this.getRunWith(m, runId);
+    });
+  }
+
+  // ── Attendance ────────────────────────────────────────────────────────────────
+  /** Log (upsert) one employee's attendance for a day. */
+  async logAttendance(dto: LogAttendanceDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = (await m.query(
+          `INSERT INTO hr_attendance (tenant_id, employee_id, date, status, check_in, check_out, late, notes)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (tenant_id, employee_id, date) WHERE deleted_at IS NULL
+           DO UPDATE SET status=EXCLUDED.status, check_in=EXCLUDED.check_in, check_out=EXCLUDED.check_out,
+                         late=EXCLUDED.late, notes=EXCLUDED.notes, updated_at=now()
+           RETURNING id, employee_id, date, status, check_in, check_out, late, notes`,
+          [dto.employeeId, dto.date, dto.status, dto.checkIn ?? null, dto.checkOut ?? null, dto.late ?? false, dto.notes ?? null],
+        )) as Row[];
+        return mapAttendance(rows[0]!);
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown employee for this tenant');
+        throw err;
+      }
+    });
+  }
+
+  /** Mark a whole day's attendance for many employees at once (upsert). */
+  async bulkLogAttendance(dto: BulkAttendanceDto) {
+    return this.tenantTx.run(async (m) => {
+      for (const entry of dto.entries) {
+        await m.query(
+          `INSERT INTO hr_attendance (tenant_id, employee_id, date, status, late)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4)
+           ON CONFLICT (tenant_id, employee_id, date) WHERE deleted_at IS NULL
+           DO UPDATE SET status=EXCLUDED.status, late=EXCLUDED.late, updated_at=now()`,
+          [entry.employeeId, dto.date, entry.status, entry.late ?? false],
+        );
+      }
+      return { date: dto.date, saved: dto.entries.length };
+    });
+  }
+
+  /** Every employee's attendance status for a given day (the daily logging grid). */
+  async dayAttendance(date: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT e.id AS employee_id, e.first_name, e.last_name, e.employee_code,
+                a.id, a.status, a.check_in, a.check_out, a.late, a.notes
+         FROM hr_employee e
+         LEFT JOIN hr_attendance a ON a.employee_id = e.id AND a.date = $1 AND a.deleted_at IS NULL
+         WHERE e.deleted_at IS NULL AND e.status='ACTIVE' ORDER BY e.first_name`,
+        [date],
+      )) as Row[];
+      return rows.map((r) => ({
+        employeeId: r.employee_id as string,
+        employeeName: [r.first_name, r.last_name].filter(Boolean).join(' '),
+        employeeCode: r.employee_code as string,
+        status: (r.status as string) ?? null,
+        late: (r.late as boolean) ?? false,
+      }));
+    });
+  }
+
+  /** Monthly attendance summary per employee: present / half / leave / absent day counts + payable. */
+  async attendanceSummary(q: AttendanceQueryDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT e.id AS employee_id, e.first_name, e.last_name,
+                count(*) FILTER (WHERE a.status='PRESENT')::int AS present,
+                count(*) FILTER (WHERE a.status='HALF_DAY')::int AS half_day,
+                count(*) FILTER (WHERE a.status='LEAVE')::int AS leave,
+                count(*) FILTER (WHERE a.status='ABSENT')::int AS absent
+         FROM hr_employee e
+         LEFT JOIN hr_attendance a ON a.employee_id = e.id AND a.deleted_at IS NULL
+            AND EXTRACT(YEAR FROM a.date)=$1 AND EXTRACT(MONTH FROM a.date)=$2
+         WHERE e.deleted_at IS NULL AND e.status='ACTIVE'
+         GROUP BY e.id, e.first_name, e.last_name ORDER BY e.first_name`,
+        [q.year, q.month],
+      )) as Row[];
+      return rows.map((r) => {
+        const present = num(r.present);
+        const half = num(r.half_day);
+        const leave = num(r.leave);
+        return {
+          employeeId: r.employee_id as string,
+          employeeName: [r.first_name, r.last_name].filter(Boolean).join(' '),
+          present, halfDay: half, leave, absent: num(r.absent),
+          payableDays: present + leave + half * 0.5,
+        };
+      });
     });
   }
 
@@ -317,7 +431,7 @@ export class HrEnterpriseService {
   async listPayslips(runId: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT p.id, p.payslip_no, p.run_id, p.employee_id, p.basic_minor, p.gross_minor, p.deduction_minor, p.net_minor, p.currency,
+        `SELECT p.id, p.payslip_no, p.run_id, p.employee_id, p.basic_minor, p.gross_minor, p.deduction_minor, p.net_minor, p.currency, p.working_days, p.payable_days,
                 e.first_name, e.last_name, e.employee_code
          FROM hr_payslip p LEFT JOIN hr_employee e ON e.id = p.employee_id
          WHERE p.run_id = $1 AND p.deleted_at IS NULL ORDER BY e.first_name`,
@@ -334,7 +448,7 @@ export class HrEnterpriseService {
   async getPayslip(id: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, payslip_no, run_id, employee_id, basic_minor, gross_minor, deduction_minor, net_minor, currency
+        `SELECT id, payslip_no, run_id, employee_id, basic_minor, gross_minor, deduction_minor, net_minor, currency, working_days, payable_days
          FROM hr_payslip WHERE id=$1 AND deleted_at IS NULL`,
         [id],
       )) as Row[];
@@ -621,7 +735,7 @@ const LEAVE_REQ_COLS =
 const LEAVE_REQ_COLS_R =
   'r.id, r.leave_no, r.employee_id, r.leave_type_id, r.start_date, r.end_date, r.days, r.reason, r.status, r.approver_id, r.decided_at, r.decision_note';
 const RUN_COLS =
-  'id, run_no, period_year, period_month, status, currency, total_gross_minor, total_deduction_minor, total_net_minor, employee_count, run_at';
+  'id, run_no, period_year, period_month, status, currency, total_gross_minor, total_deduction_minor, total_net_minor, employee_count, working_days, run_at';
 const REVIEW_COLS =
   'id, review_no, employee_id, period, reviewer_id, rating, strengths, improvements, status, submitted_at';
 const REVIEW_COLS_R =
@@ -658,7 +772,7 @@ function mapRun(r: Row) {
   const currency = (r.currency as string) ?? 'PKR';
   return {
     id: r.id as string, runNo: r.run_no as string, periodYear: num(r.period_year), periodMonth: num(r.period_month),
-    status: r.status as string, employeeCount: num(r.employee_count),
+    status: r.status as string, employeeCount: num(r.employee_count), workingDays: num(r.working_days),
     totalGross: { amountMinor: num(r.total_gross_minor), currency },
     totalDeduction: { amountMinor: num(r.total_deduction_minor), currency },
     totalNet: { amountMinor: num(r.total_net_minor), currency },
@@ -673,6 +787,17 @@ function mapPayslip(r: Row) {
     gross: { amountMinor: num(r.gross_minor), currency },
     deduction: { amountMinor: num(r.deduction_minor), currency },
     net: { amountMinor: num(r.net_minor), currency },
+    workingDays: r.working_days === undefined ? null : num(r.working_days),
+    payableDays: r.payable_days === undefined ? null : num(r.payable_days),
+  };
+}
+function mapAttendance(r: Row) {
+  return {
+    id: r.id as string, employeeId: r.employee_id as string,
+    date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : (r.date as string),
+    status: r.status as string,
+    checkIn: (r.check_in as string) ?? null, checkOut: (r.check_out as string) ?? null,
+    late: (r.late as boolean) ?? false, notes: (r.notes as string) ?? null,
   };
 }
 function mapReview(r: Row) {

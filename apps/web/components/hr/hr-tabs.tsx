@@ -1,14 +1,16 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, Target, Users, Wallet } from 'lucide-react';
+import { BarChart3, CalendarCheck, CalendarDays, ScrollText, Target, Users, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/hr', label: 'Employees', icon: Users, exact: true },
+  { href: '/hr/attendance', label: 'Attendance', icon: CalendarCheck, exact: false },
   { href: '/hr/leave', label: 'Leave', icon: CalendarDays, exact: false },
   { href: '/hr/payroll', label: 'Payroll', icon: Wallet, exact: false },
   { href: '/hr/performance', label: 'Performance', icon: Target, exact: false },
+  { href: '/hr/policies', label: 'Policies', icon: ScrollText, exact: false },
   { href: '/hr/reports', label: 'HR Reports', icon: BarChart3, exact: false },
 ];
 

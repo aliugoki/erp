@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
 import { apiList } from '@/lib/api';
@@ -115,7 +116,7 @@ export default function HrPage() {
                           {initials(e)}
                         </span>
                         <div>
-                          <p className="font-medium">{e.firstName} {e.lastName}</p>
+                          <Link href={`/hr/employees/${e.id}`} className="font-medium hover:text-primary hover:underline">{e.firstName} {e.lastName}</Link>
                           {e.email ? <p className="text-xs text-muted-foreground">{e.email}</p> : null}
                         </div>
                       </div>

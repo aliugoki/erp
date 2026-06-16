@@ -15,6 +15,8 @@ import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { HrEnterpriseService } from './hr-enterprise.service';
 import {
+  AttendanceQueryDto,
+  BulkAttendanceDto,
   CreateDocumentDto,
   CreateGoalDto,
   CreateLeaveRequestDto,
@@ -24,6 +26,7 @@ import {
   CreateSalaryComponentDto,
   DecideLeaveDto,
   LifecycleEventDto,
+  LogAttendanceDto,
   SetLeaveBalanceDto,
   UpdateGoalDto,
 } from './dto/hr.dto';
@@ -186,6 +189,31 @@ export class HrEnterpriseController {
   @Get('documents/:employeeId')
   listDocuments(@Param('employeeId', ParseUUIDPipe) employeeId: string) {
     return this.hr.listDocuments(employeeId);
+  }
+
+  // ── Attendance (enterprise) ───────────────────────────────────────────────────
+  // Hyphenated paths so they don't collide with the core `attendance/:employeeId` route.
+  @Post('attendance-log')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  logAttendance(@Body() dto: LogAttendanceDto) {
+    return this.hr.logAttendance(dto);
+  }
+
+  @Post('attendance-bulk')
+  @Roles(...WRITE)
+  bulkAttendance(@Body() dto: BulkAttendanceDto) {
+    return this.hr.bulkLogAttendance(dto);
+  }
+
+  @Get('attendance-day')
+  dayAttendance(@Query('date') date: string) {
+    return this.hr.dayAttendance(date);
+  }
+
+  @Get('attendance-summary')
+  attendanceSummary(@Query() q: AttendanceQueryDto) {
+    return this.hr.attendanceSummary(q);
   }
 
   // ── Reports ───────────────────────────────────────────────────────────────────

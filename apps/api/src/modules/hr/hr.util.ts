@@ -44,6 +44,32 @@ export interface PayslipComputed {
   lines: PayslipLineComputed[];
 }
 
+/** Payable-day weight of one attendance record: present/paid-leave = 1, half-day = 0.5, absent = 0. */
+export function attendanceDayWeight(status: string): number {
+  if (status === 'PRESENT' || status === 'LEAVE') return 1;
+  if (status === 'HALF_DAY') return 0.5;
+  return 0; // ABSENT or unknown
+}
+
+/** Sum the payable days across a month's attendance records. */
+export function attendancePayableDays(records: Array<{ status: string }>): number {
+  return records.reduce((sum, r) => sum + attendanceDayWeight(r.status), 0);
+}
+
+/** Pro-rate a basic salary by attendance: basic × min(payableDays, workingDays) / workingDays (floored,
+ * integer minor units). With no working days configured, or no attendance recorded, the full basic is
+ * paid so payroll still works for tenants that don't track attendance. */
+export function proratedBasicMinor(
+  basicMinor: number,
+  payableDays: number,
+  workingDays: number,
+  hasAttendance: boolean,
+): number {
+  if (!hasAttendance || workingDays <= 0) return basicMinor;
+  const capped = Math.min(payableDays, workingDays);
+  return Math.floor((basicMinor * capped) / workingDays);
+}
+
 /** Compute a payslip from a basic salary and the tenant's active components. Earnings add to gross,
  * deductions subtract to net; percent components are taken off basic. Integer minor units throughout
  * (percent uses floor). Zero/negative component amounts are skipped so the slip stays clean. */

@@ -25,7 +25,27 @@ export class MoneyDto {
   currency!: string;
 }
 
-export class CreateEmployeeDto {
+/** Optional personal/contact/job profile fields shared by create + profile update. */
+export class EmployeeProfileFieldsDto {
+  @IsOptional() @IsISO8601() dateOfBirth?: string;
+  @IsOptional() @IsIn(['MALE', 'FEMALE', 'OTHER']) gender?: string;
+  @IsOptional() @IsString() maritalStatus?: string;
+  @IsOptional() @IsString() nationalId?: string;
+  @IsOptional() @IsString() bloodGroup?: string;
+  @IsOptional() @IsString() nationality?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() country?: string;
+  @IsOptional() @IsString() emergencyContactName?: string;
+  @IsOptional() @IsString() emergencyContactPhone?: string;
+  @IsOptional() @IsString() designation?: string;
+  @IsOptional() @IsIn(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN', 'PROBATION']) employmentType?: string;
+  @IsOptional() @IsUUID() reportingTo?: string;
+  @IsOptional() @IsISO8601() confirmationDate?: string;
+  @IsOptional() @IsString() workLocation?: string;
+}
+
+export class CreateEmployeeDto extends EmployeeProfileFieldsDto {
   @IsString() @MinLength(1) firstName!: string;
   @IsString() @MinLength(1) lastName!: string;
   @IsOptional() @IsEmail() email?: string;
@@ -37,6 +57,26 @@ export class CreateEmployeeDto {
   @IsOptional() @IsIn(['ACTIVE', 'ON_LEAVE', 'TERMINATED']) status?: string;
   /** Optional explicit code; auto-generated if omitted. */
   @IsOptional() @IsString() employeeCode?: string;
+}
+
+/** Update the extended profile (personal/contact/job) of an existing employee. */
+export class UpdateEmployeeProfileDto extends EmployeeProfileFieldsDto {}
+
+export class CreateEducationDto {
+  @IsString() @MinLength(1) degree!: string;
+  @IsOptional() @IsString() institution?: string;
+  @IsOptional() @IsString() fieldOfStudy?: string;
+  @IsOptional() @IsInt() @Min(1900) @Max(2100) startYear?: number;
+  @IsOptional() @IsInt() @Min(1900) @Max(2100) endYear?: number;
+  @IsOptional() @IsString() grade?: string;
+}
+
+export class CreateExperienceDto {
+  @IsString() @MinLength(1) company!: string;
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsISO8601() startDate?: string;
+  @IsOptional() @IsISO8601() endDate?: string;
+  @IsOptional() @IsString() description?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -119,6 +159,62 @@ export class CreateSalaryComponentDto {
 export class CreatePayrollRunDto {
   @IsInt() @Min(2000) @Max(2100) year!: number;
   @IsInt() @Min(1) @Max(12) month!: number;
+  /** Standard working days the month is pro-rated against (default 26). */
+  @IsOptional() @IsInt() @Min(1) @Max(31) workingDays?: number;
+}
+
+// ── Attendance ──────────────────────────────────────────────────────────────────
+export class LogAttendanceDto {
+  @IsUUID() employeeId!: string;
+  @IsISO8601() date!: string;
+  @IsIn(['PRESENT', 'ABSENT', 'LEAVE', 'HALF_DAY']) status!: string;
+  @IsOptional() @IsISO8601() checkIn?: string;
+  @IsOptional() @IsISO8601() checkOut?: string;
+  @IsOptional() @IsBoolean() late?: boolean;
+  @IsOptional() @IsString() notes?: string;
+}
+
+export class BulkAttendanceEntryDto {
+  @IsUUID() employeeId!: string;
+  @IsIn(['PRESENT', 'ABSENT', 'LEAVE', 'HALF_DAY']) status!: string;
+  @IsOptional() @IsBoolean() late?: boolean;
+}
+
+export class BulkAttendanceDto {
+  @IsISO8601() date!: string;
+  @ValidateNested({ each: true }) @Type(() => BulkAttendanceEntryDto) entries!: BulkAttendanceEntryDto[];
+}
+
+export class AttendanceQueryDto {
+  @IsInt() @Min(2000) @Max(2100) @Type(() => Number) year!: number;
+  @IsInt() @Min(1) @Max(12) @Type(() => Number) month!: number;
+}
+
+// ── Policy module + custom fields ─────────────────────────────────────────────────
+export class CreateCustomFieldDto {
+  @IsString() @MinLength(1) label!: string;
+  @IsString() @MinLength(1) fieldKey!: string;
+  @IsIn(['TEXT', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT']) fieldType!: string;
+  @IsOptional() @IsString({ each: true }) options?: string[];
+  @IsOptional() @IsBoolean() required?: boolean;
+  @IsOptional() @IsInt() sortOrder?: number;
+}
+
+export class PolicyFieldValueDto {
+  @IsUUID() fieldId!: string;
+  @IsOptional() @IsString() value?: string;
+}
+
+export class CreatePolicyDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsIn(['LEAVE', 'ATTENDANCE', 'CONDUCT', 'BENEFITS', 'PAYROLL', 'OTHER']) category!: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsISO8601() effectiveDate?: string;
+  @IsOptional() @ValidateNested({ each: true }) @Type(() => PolicyFieldValueDto) fields?: PolicyFieldValueDto[];
+}
+
+export class UpdatePolicyStatusDto {
+  @IsIn(['DRAFT', 'ACTIVE', 'ARCHIVED']) status!: string;
 }
 
 // ── Performance ───────────────────────────────────────────────────────────────────

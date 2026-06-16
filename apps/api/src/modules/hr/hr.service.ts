@@ -77,8 +77,12 @@ export class HrService {
       const rows = (await m.query(
         `INSERT INTO hr_employee
            (tenant_id, employee_code, first_name, last_name, email, phone, department_id, position_id,
-            join_date, salary_amount_minor, salary_currency, status)
-         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            join_date, salary_amount_minor, salary_currency, status,
+            date_of_birth, gender, marital_status, national_id, blood_group, nationality, address, city,
+            country, emergency_contact_name, emergency_contact_phone, designation, employment_type,
+            reporting_to, confirmation_date, work_location)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                 $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
          RETURNING ${EMP_COLS}`,
         [
           code,
@@ -92,6 +96,22 @@ export class HrService {
           dto.salary?.amountMinor ?? null,
           dto.salary?.currency ?? 'PKR',
           dto.status ?? 'ACTIVE',
+          dto.dateOfBirth ?? null,
+          dto.gender ?? null,
+          dto.maritalStatus ?? null,
+          dto.nationalId ?? null,
+          dto.bloodGroup ?? null,
+          dto.nationality ?? null,
+          dto.address ?? null,
+          dto.city ?? null,
+          dto.country ?? null,
+          dto.emergencyContactName ?? null,
+          dto.emergencyContactPhone ?? null,
+          dto.designation ?? null,
+          dto.employmentType ?? null,
+          dto.reportingTo ?? null,
+          dto.confirmationDate ?? null,
+          dto.workLocation ?? null,
         ],
       )) as EmployeeRow[];
       return mapEmployeeRow(rows[0]!);

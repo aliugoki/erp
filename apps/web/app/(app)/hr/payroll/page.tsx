@@ -101,13 +101,14 @@ export default function PayrollPage() {
           <div className="border-b p-4"><p className="font-medium">Payslips</p></div>
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Payslip</TableHead><TableHead>Employee</TableHead><TableHead className="text-right">Basic</TableHead><TableHead className="text-right">Gross</TableHead><TableHead className="text-right">Deductions</TableHead><TableHead className="text-right">Net</TableHead></TableRow>
+              <TableRow><TableHead>Payslip</TableHead><TableHead>Employee</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">Basic</TableHead><TableHead className="text-right">Gross</TableHead><TableHead className="text-right">Deductions</TableHead><TableHead className="text-right">Net</TableHead></TableRow>
             </TableHeader>
             <TableBody>
               {(payslips ?? []).map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.payslipNo}</TableCell>
                   <TableCell className="font-medium">{p.employeeName ?? p.employeeCode ?? '—'}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">{p.payableDays ?? '—'}/{p.workingDays ?? '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(p.basic.amountMinor, p.basic.currency)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(p.gross.amountMinor, p.gross.currency)}</TableCell>
                   <TableCell className="text-right tabular-nums text-destructive">{formatMoney(p.deduction.amountMinor, p.deduction.currency)}</TableCell>

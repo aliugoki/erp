@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -19,9 +20,10 @@ export function RunPayrollDialog() {
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState('2026');
   const [month, setMonth] = useState('6');
+  const [workingDays, setWorkingDays] = useState('26');
 
   const run = useMutation({
-    mutationFn: () => apiPost('/hr/payroll/runs', { year: Number(year), month: Number(month) }),
+    mutationFn: () => apiPost('/hr/payroll/runs', { year: Number(year), month: Number(month), workingDays: Number(workingDays) || 26 }),
     onSuccess: () => {
       toast.success('Payroll generated', { description: `${MONTHS[Number(month) - 1]} ${year}` });
       qc.invalidateQueries({ queryKey: ['payroll-runs'] });
@@ -62,6 +64,10 @@ export function RunPayrollDialog() {
                 <SelectContent>{YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="wd">Working days (basic is pro-rated by attendance against this)</Label>
+            <Input id="wd" type="number" min="1" max="31" value={workingDays} onChange={(e) => setWorkingDays(e.target.value)} />
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

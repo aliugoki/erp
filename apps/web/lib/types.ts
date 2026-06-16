@@ -62,6 +62,7 @@ export interface PayrollRun {
   periodMonth: number;
   status: string;
   employeeCount: number;
+  workingDays: number;
   totalGross: Money;
   totalDeduction: Money;
   totalNet: Money;
@@ -77,9 +78,103 @@ export interface Payslip {
   gross: Money;
   deduction: Money;
   net: Money;
+  workingDays?: number | null;
+  payableDays?: number | null;
   employeeName?: string | null;
   employeeCode?: string | null;
   lines?: { code: string; name: string; type: string; amountMinor: number }[];
+}
+
+// ── Employee profile / attendance / policy ────────────────────────────────────
+export interface EmployeeEducation {
+  id: string;
+  degree: string;
+  institution: string | null;
+  fieldOfStudy: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  grade: string | null;
+}
+
+export interface EmployeeExperience {
+  id: string;
+  company: string;
+  title: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  description: string | null;
+}
+
+export interface EmployeeProfile {
+  id: string;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  departmentId: string | null;
+  positionId: string | null;
+  joinDate: string | null;
+  salary: Money | null;
+  status: string;
+  dateOfBirth: string | null;
+  gender: string | null;
+  maritalStatus: string | null;
+  nationalId: string | null;
+  bloodGroup: string | null;
+  nationality: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  designation: string | null;
+  employmentType: string | null;
+  reportingTo: string | null;
+  confirmationDate: string | null;
+  workLocation: string | null;
+  education: EmployeeEducation[];
+  experience: EmployeeExperience[];
+}
+
+export interface AttendanceDayRow {
+  employeeId: string;
+  employeeName: string;
+  employeeCode: string;
+  status: string | null;
+  late: boolean;
+}
+
+export interface AttendanceSummaryRow {
+  employeeId: string;
+  employeeName: string;
+  present: number;
+  halfDay: number;
+  leave: number;
+  absent: number;
+  payableDays: number;
+}
+
+export interface CustomField {
+  id: string;
+  entity: string;
+  label: string;
+  fieldKey: string;
+  fieldType: string;
+  options: string[] | null;
+  required: boolean;
+  sortOrder: number;
+}
+
+export interface Policy {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  effectiveDate: string | null;
+  status: string;
+  version: number;
+  fields?: { fieldId: string; label: string; fieldKey: string; fieldType: string; value: string | null }[];
 }
 
 export interface PerformanceReview {

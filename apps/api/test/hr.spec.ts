@@ -4,11 +4,13 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
+  attendancePayableDays,
   buildEmployeeWhere,
   computePayslip,
   inclusiveDays,
   mapEmployeeRow,
   normalizePagination,
+  proratedBasicMinor,
   type PayComponent,
 } from '../src/modules/hr/hr.util';
 import { HrService } from '../src/modules/hr/hr.service';
@@ -67,6 +69,26 @@ describe('hr.util', () => {
     ]);
     expect(slip.lines).toHaveLength(1);
     expect(slip.netMinor).toBe(5_000_000);
+  });
+
+  it('attendancePayableDays weights present/leave=1, half=0.5, absent=0', () => {
+    const records = [
+      { status: 'PRESENT' }, { status: 'PRESENT' }, { status: 'HALF_DAY' },
+      { status: 'LEAVE' }, { status: 'ABSENT' },
+    ];
+    expect(attendancePayableDays(records)).toBe(3.5); // 2 + 0.5 + 1 + 0
+    expect(attendancePayableDays([])).toBe(0);
+  });
+
+  it('proratedBasicMinor scales basic by attendance, full pay when untracked', () => {
+    // 26 working days, present 13 → half pay
+    expect(proratedBasicMinor(10_000_000, 13, 26, true)).toBe(5_000_000);
+    // payable capped at working days (no overpay)
+    expect(proratedBasicMinor(10_000_000, 30, 26, true)).toBe(10_000_000);
+    // no attendance recorded → full basic
+    expect(proratedBasicMinor(10_000_000, 0, 26, false)).toBe(10_000_000);
+    // zero working days guarded → full basic
+    expect(proratedBasicMinor(10_000_000, 5, 0, true)).toBe(10_000_000);
   });
 });
 
