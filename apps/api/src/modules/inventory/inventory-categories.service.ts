@@ -131,8 +131,12 @@ export class InventoryCategoriesService {
     });
   }
 
-  /** Soft-delete a leaf category. Refuses while it still has sub-categories or products attached, so
-   * a delete never silently orphans a sub-tree or unlinks stock. */
+  /** Permanently delete a leaf category. Refuses while it still has sub-categories or products
+   * attached, so a delete never orphans a sub-tree or unlinks stock. Unlike the transactional
+   * entities (which soft-delete for audit), a category is guarded reference data with no dependents
+   * at delete time and nothing to audit — so the row is physically removed. That keeps the unique
+   * sibling-name slot free (a deleted name can be reused immediately) and means the delete is
+   * actually reflected in the table, not just hidden behind `deleted_at`. */
   async removeCategory(id: string): Promise<{ id: string; deleted: true }> {
     return this.tenantTx.run(async (m) => {
       const cat = (await m.query(
@@ -153,7 +157,7 @@ export class InventoryCategoriesService {
       )) as Array<{ n: number }>;
       if (products[0]!.n > 0) throw new BadRequestException('Reassign the products in this category first');
 
-      await m.query(`UPDATE inventory_category SET deleted_at = now() WHERE id = $1`, [id]);
+      await m.query(`DELETE FROM inventory_category WHERE id = $1`, [id]);
       return { id, deleted: true };
     });
   }
