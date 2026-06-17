@@ -90,6 +90,16 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
     ],
   },
   {
+    key: 'assets',
+    name: 'Fixed Assets',
+    description: 'Asset register, depreciation runs, disposal, and maintenance.',
+    features: [
+      { key: 'assets.register', name: 'Asset register' },
+      { key: 'assets.depreciation', name: 'Depreciation' },
+      { key: 'assets.maintenance', name: 'Maintenance' },
+    ],
+  },
+  {
     key: 'crm',
     name: 'CRM',
     description: 'Accounts, contacts, leads, opportunities, activities, sales reports.',
@@ -178,6 +188,10 @@ const BUSINESS = [
   'production.workcenters',
   'production.orders',
   'production.attributes',
+  'assets',
+  'assets.register',
+  'assets.depreciation',
+  'assets.maintenance',
   'crm.leads',
   'crm.activities',
   'crm.reports',

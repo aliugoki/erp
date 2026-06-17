@@ -95,6 +95,16 @@ export interface ProductionOrderCompletedV1 {
   currency: string;
 }
 
+export interface AssetDepreciationPostedV1 {
+  runId: string;
+  runNo: string;
+  /** Period end date (YYYY-MM-DD) the depreciation belongs to. */
+  period: string;
+  assetCount: number;
+  totalMinor: number;
+  currency: string;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -106,6 +116,7 @@ export const EVENT_TYPES = {
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
   POS_SALE_COMPLETED: 'pos.sale_completed.v1',
   PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
+  ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -119,6 +130,7 @@ export interface EventPayloads {
   'crm.lead_converted.v1': CrmLeadConvertedV1;
   'pos.sale_completed.v1': PosSaleCompletedV1;
   'production.order_completed.v1': ProductionOrderCompletedV1;
+  'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -131,4 +143,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'notifications', 'orders'] as const;

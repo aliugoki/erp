@@ -1139,3 +1139,83 @@ export interface NotificationPreference {
   inApp: boolean;
   email: boolean;
 }
+
+// ── Fixed Assets ──────────────────────────────────────────────────────────────
+export interface AssetCategory {
+  id: string;
+  name: string;
+  code: string | null;
+  method: string;
+  usefulLifeMonths: number;
+  salvagePct: number;
+  status: string;
+}
+export interface AssetDepreciationEntry {
+  id: string;
+  period: string | null;
+  amount: Money;
+  accumulatedAfter: Money;
+  bookValueAfter: Money;
+  method: string;
+}
+export interface AssetMaintenance {
+  id: string;
+  assetId: string;
+  assetName?: string | null;
+  maintDate: string | null;
+  type: string;
+  description: string | null;
+  cost: Money;
+  vendor: string | null;
+  nextDueDate: string | null;
+}
+export interface Asset {
+  id: string;
+  assetNo: string;
+  name: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  description: string | null;
+  status: string;
+  acquisitionDate: string | null;
+  acquisitionCost: Money;
+  salvageValue: Money;
+  usefulLifeMonths: number;
+  method: string;
+  depreciationStart: string | null;
+  accumulatedDepreciation: Money;
+  bookValue: Money;
+  location: string | null;
+  custodianEmployeeId: string | null;
+  custodianName: string | null;
+  serialNo: string | null;
+  supplier: string | null;
+  disposalDate: string | null;
+  disposalProceeds: Money | null;
+  disposalGain: Money | null;
+  notes: string | null;
+  depreciation?: AssetDepreciationEntry[];
+  maintenance?: AssetMaintenance[];
+}
+export interface AssetDepreciationRun {
+  id: string;
+  runNo: string;
+  period: string | null;
+  status: string;
+  assetCount: number;
+  total: Money;
+  notes: string | null;
+}
+export interface AssetScheduleRow {
+  period: number;
+  amount: Money;
+  accumulated: Money;
+  bookValue: Money;
+}
+export interface AssetRegisterRow {
+  category: string;
+  count: number;
+  cost: Money;
+  accumulated: Money;
+  bookValue: Money;
+}

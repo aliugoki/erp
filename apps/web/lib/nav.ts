@@ -3,6 +3,7 @@ import {
   BarChart3,
   Bell,
   Boxes,
+  Building2,
   Factory,
   LayoutDashboard,
   ScanLine,
@@ -25,6 +26,7 @@ export interface NavItem {
 export const MODULE_NAV: Record<string, NavItem> = {
   hr: { key: 'hr', label: 'Human Resources', href: '/hr', icon: Users },
   finance: { key: 'finance', label: 'Finance', href: '/finance', icon: Wallet },
+  assets: { key: 'assets', label: 'Fixed Assets', href: '/assets', icon: Building2 },
   inventory: { key: 'inventory', label: 'Inventory', href: '/inventory', icon: Warehouse },
   production: { key: 'production', label: 'Manufacturing', href: '/production', icon: Factory },
   pos: { key: 'pos', label: 'Point of Sale', href: '/pos', icon: ScanLine },
