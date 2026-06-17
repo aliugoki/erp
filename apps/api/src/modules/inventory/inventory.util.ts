@@ -31,6 +31,8 @@ export interface ProductRow {
   category_name?: string | null;
   parent_name?: string | null;
   grandparent_name?: string | null;
+  primary_image_id?: string | null;
+  image_count?: string | number | null;
 }
 
 export interface ProductView {
@@ -47,6 +49,9 @@ export interface ProductView {
   /** The category names from the top of the tree down to the product's category, e.g.
    * `['Electronics', 'Phones', 'Smartphones']`. Empty when the product has no category. */
   categoryPath: string[];
+  /** Id of the product-image row used as the thumbnail (served via the images endpoint); null if none. */
+  primaryImageId: string | null;
+  imageCount: number;
 }
 
 /** Build the top→leaf category path for a product from its three joined ancestor name columns.
@@ -73,5 +78,7 @@ export function mapProductRow(r: ProductRow): ProductView {
     onHand: r.on_hand,
     categoryId: r.category_id ?? null,
     categoryPath: buildCategoryPath(r.grandparent_name, r.parent_name, r.category_name),
+    primaryImageId: r.primary_image_id ?? null,
+    imageCount: Number(r.image_count ?? 0),
   };
 }

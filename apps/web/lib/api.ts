@@ -131,6 +131,15 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   return (json.data ?? (json as T)) as T;
 }
 
+/** Fetch a protected binary (e.g. a product image) as a Blob, attaching the bearer token — so it can
+ * be shown via an object URL in an <img> (which can't send Authorization headers itself). */
+export async function apiBlob(path: string): Promise<Blob> {
+  const tokens = getTokens();
+  const res = await raw(path, { method: 'GET' }, tokens?.accessToken);
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return res.blob();
+}
+
 export const apiGet = <T>(path: string) => apiFetch<T>(path);
 export const apiPost = <T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }) =>
   apiFetch<T>(path, {

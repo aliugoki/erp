@@ -1019,6 +1019,18 @@ export interface Product {
   categoryId: string | null;
   /** Names from the top of the category tree down to the product's category. */
   categoryPath: string[];
+  primaryImageId?: string | null;
+  imageCount?: number;
+}
+
+export interface ProductImage {
+  id: string;
+  attachmentId: string;
+  sort: number;
+  isPrimary: boolean;
+  contentType: string;
+  byteSize: number;
+  fileName: string | null;
 }
 
 // ── Inventory: product categories (3-level tree) ─────────────────────────────

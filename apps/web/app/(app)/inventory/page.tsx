@@ -12,6 +12,9 @@ import { NewProductDialog } from '@/components/inventory/new-product-dialog';
 import { MovementDialog } from '@/components/inventory/movement-dialog';
 import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog';
 import { InventoryTabs } from '@/components/inventory/inventory-tabs';
+import { ProductImagesDialog } from '@/components/inventory/product-images-dialog';
+import { AuthImage } from '@/components/auth-image';
+import { ImagePlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export default function InventoryPage() {
   const [moving, setMoving] = useState<Product | null>(null);
+  const [imaging, setImaging] = useState<Product | null>(null);
   const { data: products, isLoading } = useQuery({ queryKey: ['products'], queryFn: () => apiGet<Product[]>('/inventory/products') });
 
   const list = products ?? [];
@@ -64,6 +68,9 @@ export default function InventoryPage() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           {low ? <span className="size-2 shrink-0 animate-glow-pulse rounded-full bg-warning shadow-[0_0_10px_hsl(var(--warning))]" /> : <span className="size-2 shrink-0 rounded-full bg-success/60" />}
+                          <button className="shrink-0" onClick={() => setImaging(p)} title="Product images" aria-label="Product images">
+                            <AuthImage path={p.primaryImageId ? `/inventory/products/${p.id}/images/${p.primaryImageId}` : null} alt={p.name} className="size-10 rounded-md border" />
+                          </button>
                           <div>
                             <p className="font-medium">{p.name}</p>
                             <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>
@@ -80,7 +87,12 @@ export default function InventoryPage() {
                       </TableCell>
                       <TableCell className="tabular-nums">{formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency)}</TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => setMoving(p)}>Move stock</Button>
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setImaging(p)} title="Images">
+                            <ImagePlus className="h-4 w-4" />{p.imageCount ? <span className="ml-1 text-xs">{p.imageCount}</span> : null}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setMoving(p)}>Move stock</Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -96,6 +108,12 @@ export default function InventoryPage() {
       </Card>
 
       <MovementDialog product={moving} onClose={() => setMoving(null)} />
+      <ProductImagesDialog
+        productId={imaging?.id ?? null}
+        productName={imaging?.name}
+        open={!!imaging}
+        onOpenChange={(v) => !v && setImaging(null)}
+      />
     </div>
   );
 }

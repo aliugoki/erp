@@ -3,16 +3,24 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  StreamableFile,
+  UnsupportedMediaTypeException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
+import type { UploadedFileLike } from '../storage/storage.service';
 import {
   CreateCategoryDto,
   CreateMovementDto,
@@ -109,6 +117,46 @@ export class InventoryController {
   @Get('products/:id/movements')
   movements(@Param('id', ParseUUIDPipe) id: string) {
     return this.inventory.listMovements(id);
+  }
+
+  // ── Product images ────────────────────────────────────────────────────────────
+  @Get('products/:id/images')
+  listImages(@Param('id', ParseUUIDPipe) id: string) {
+    return this.inventory.listProductImages(id);
+  }
+
+  /** Upload an image for a product — multipart `file` field (image, ≤8 MiB). */
+  @Post('products/:id/images')
+  @Roles(...WRITE)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
+    if (!file) throw new UnsupportedMediaTypeException('A multipart "file" field is required');
+    return this.inventory.addProductImage(id, file);
+  }
+
+  /** Stream a product image's bytes (raw image; not enveloped). */
+  @Get('products/:id/images/:imageId')
+  @Header('Cache-Control', 'private, max-age=3600')
+  async getImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+  ): Promise<StreamableFile> {
+    const img = await this.inventory.getProductImage(id, imageId);
+    if (!img) throw new NotFoundException('Image not found');
+    return new StreamableFile(img.data, { type: img.contentType, length: img.byteSize });
+  }
+
+  @Patch('products/:id/images/:imageId/primary')
+  @Roles(...WRITE)
+  setPrimaryImage(@Param('id', ParseUUIDPipe) id: string, @Param('imageId', ParseUUIDPipe) imageId: string) {
+    return this.inventory.setPrimaryImage(id, imageId);
+  }
+
+  @Delete('products/:id/images/:imageId')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteImage(@Param('id', ParseUUIDPipe) id: string, @Param('imageId', ParseUUIDPipe) imageId: string) {
+    return this.inventory.removeProductImage(id, imageId);
   }
 
   @Post('movements')
