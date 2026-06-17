@@ -20,6 +20,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { PosModule } from './modules/pos/pos.module';
+import { ProductionModule } from './modules/production/production.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
@@ -65,6 +66,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     SalesModule,
     StorageModule,
     PosModule,
+    ProductionModule,
     NotificationsModule,
     ReportingModule,
     RealtimeModule,

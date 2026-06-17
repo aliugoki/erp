@@ -81,6 +81,20 @@ export interface PosSaleCompletedV1 {
   lineCount: number;
 }
 
+export interface ProductionOrderCompletedV1 {
+  orderId: string;
+  orderNo: string;
+  /** Finished-good product produced. */
+  productId: string;
+  producedQty: number;
+  materialCostMinor: number;
+  operationCostMinor: number;
+  overheadMinor: number;
+  totalCostMinor: number;
+  unitCostMinor: number;
+  currency: string;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -91,6 +105,7 @@ export const EVENT_TYPES = {
   CRM_DEAL_CLOSED: 'crm.deal_closed.v1',
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
   POS_SALE_COMPLETED: 'pos.sale_completed.v1',
+  PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -103,6 +118,7 @@ export interface EventPayloads {
   'crm.deal_closed.v1': CrmDealClosedV1;
   'crm.lead_converted.v1': CrmLeadConvertedV1;
   'pos.sale_completed.v1': PosSaleCompletedV1;
+  'production.order_completed.v1': ProductionOrderCompletedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -115,4 +131,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'notifications', 'orders'] as const;

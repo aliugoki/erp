@@ -14,6 +14,7 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith('/finance')) return 'Finance';
   if (pathname.startsWith('/inventory')) return 'Inventory';
   if (pathname.startsWith('/pos')) return 'Point of Sale';
+  if (pathname.startsWith('/production')) return 'Manufacturing';
   return 'MetaXperts ERP';
 }
 

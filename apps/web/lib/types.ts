@@ -610,6 +610,127 @@ export interface PosDailySummary {
   tenders: { method: string; amountMinor: number }[];
 }
 
+// ── Manufacturing / Production ────────────────────────────────────────────────
+export interface WorkCenter {
+  id: string;
+  name: string;
+  code: string | null;
+  costPerHour: Money;
+  status: string;
+  notes: string | null;
+}
+export interface BomLine {
+  id?: string;
+  componentProductId: string;
+  componentName?: string | null;
+  quantity: number;
+  scrapPct: number;
+  componentCost?: Money;
+  notes?: string | null;
+}
+export interface BomOperation {
+  id?: string;
+  workCenterId: string | null;
+  workCenterName?: string | null;
+  sequence: number;
+  name: string;
+  runMinutes: number;
+  notes?: string | null;
+}
+export interface Bom {
+  id: string;
+  bomNo: string;
+  productId: string;
+  productName?: string | null;
+  name: string;
+  outputQty: number;
+  version: number;
+  status: string;
+  overheadPct: number;
+  notes: string | null;
+  lines?: BomLine[];
+  operations?: BomOperation[];
+}
+export interface ProductionAttribute {
+  id: string;
+  attrKey: string;
+  label: string;
+  dataType: string;
+  options: string | null;
+  required: boolean;
+  sort: number;
+}
+export interface OrderMaterial {
+  id: string;
+  componentProductId: string;
+  componentName: string | null;
+  requiredQty: number;
+  issuedQty: number;
+  onHand?: number;
+  unitCost: Money;
+  cost: Money;
+}
+export interface OrderOperation {
+  id: string;
+  workCenterId: string | null;
+  workCenterName: string | null;
+  sequence: number;
+  name: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+  cost: Money;
+  status: string;
+}
+export interface OrderAttribute {
+  attributeId: string;
+  attrKey: string;
+  label: string;
+  dataType: string;
+  options: string | null;
+  required: boolean;
+  value: string | null;
+}
+export interface ProductionOrder {
+  id: string;
+  orderNo: string;
+  productId: string;
+  productName: string | null;
+  bomId: string | null;
+  warehouseId: string | null;
+  plannedQty: number;
+  producedQty: number;
+  status: string;
+  priority: string;
+  overheadPct: number;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+  materialCost: Money;
+  operationCost: Money;
+  overhead: Money;
+  totalCost: Money;
+  unitCost: Money;
+  notes: string | null;
+  materials?: OrderMaterial[];
+  operations?: OrderOperation[];
+  attributes?: OrderAttribute[];
+}
+export interface ProductionOutputRow {
+  productId: string;
+  productName: string | null;
+  orders: number;
+  producedQty: number;
+  totalCost: Money;
+}
+export interface MaterialShortage {
+  componentProductId: string;
+  componentName: string | null;
+  needed: number;
+  onHand: number;
+  shortBy: number;
+}
+
 // ── Enterprise CRM ────────────────────────────────────────────────────────────
 export interface CrmAccount {
   id: string;
