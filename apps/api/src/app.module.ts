@@ -22,6 +22,7 @@ import { SalesModule } from './modules/sales/sales.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProductionModule } from './modules/production/production.module';
 import { AssetsModule } from './modules/assets/assets.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
@@ -69,6 +70,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     PosModule,
     ProductionModule,
     AssetsModule,
+    ProjectsModule,
     NotificationsModule,
     ReportingModule,
     RealtimeModule,

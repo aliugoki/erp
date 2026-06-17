@@ -1224,3 +1224,96 @@ export interface AssetGlConfig {
   expenseAccountId: string | null;
   accumulatedAccountId: string | null;
 }
+
+// ── Projects & Timesheets ─────────────────────────────────────────────────────
+export interface ProjectMember {
+  id: string;
+  employeeId: string;
+  employeeName: string | null;
+  role: string | null;
+  costRate: Money;
+  billRate: Money;
+}
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  name: string;
+  assigneeEmployeeId: string | null;
+  assigneeName: string | null;
+  status: string;
+  priority: string;
+  estimateMinutes: number;
+  dueDate: string | null;
+  sort: number;
+  description: string | null;
+}
+export interface ProjectTimeEntry {
+  id: string;
+  projectId: string;
+  taskId: string | null;
+  employeeId: string;
+  employeeName: string | null;
+  entryDate: string | null;
+  minutes: number;
+  billable: boolean;
+  status: string;
+  cost: Money;
+  bill: Money;
+  description: string | null;
+}
+export interface ProjectExpense {
+  id: string;
+  projectId: string;
+  expenseDate: string | null;
+  category: string | null;
+  amount: Money;
+  billable: boolean;
+  employeeId: string | null;
+  description: string | null;
+}
+export interface ProjectCosting {
+  budget: Money;
+  laborCost: Money;
+  expenseCost: Money;
+  totalCost: Money;
+  billable: Money;
+  remaining: Money;
+  hours: number;
+}
+export interface Project {
+  id: string;
+  projectNo: string;
+  name: string;
+  code: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  managerEmployeeId: string | null;
+  managerName: string | null;
+  status: string;
+  billingType: string;
+  startDate: string | null;
+  endDate: string | null;
+  budget: Money;
+  description: string | null;
+  members?: ProjectMember[];
+  tasks?: ProjectTask[];
+  costing?: ProjectCosting;
+}
+export interface PortfolioRow {
+  id: string;
+  projectNo: string;
+  name: string;
+  status: string;
+  budget: Money;
+  cost: Money;
+  billable: Money;
+  remaining: Money;
+  hours: number;
+}
+export interface TimesheetRow {
+  employeeId: string;
+  employeeName: string | null;
+  hours: number;
+  cost: Money;
+  billable: Money;
+}

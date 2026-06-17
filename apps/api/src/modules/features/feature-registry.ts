@@ -100,6 +100,16 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
     ],
   },
   {
+    key: 'projects',
+    name: 'Projects',
+    description: 'Projects, tasks, timesheets, and project costing.',
+    features: [
+      { key: 'projects.tasks', name: 'Tasks' },
+      { key: 'projects.timesheets', name: 'Timesheets' },
+      { key: 'projects.costing', name: 'Costing' },
+    ],
+  },
+  {
     key: 'crm',
     name: 'CRM',
     description: 'Accounts, contacts, leads, opportunities, activities, sales reports.',
@@ -192,6 +202,10 @@ const BUSINESS = [
   'assets.register',
   'assets.depreciation',
   'assets.maintenance',
+  'projects',
+  'projects.tasks',
+  'projects.timesheets',
+  'projects.costing',
   'crm.leads',
   'crm.activities',
   'crm.reports',
