@@ -11,14 +11,15 @@ import { NewBomDialog } from '@/components/production/new-bom-dialog';
 import { NewOrderDialog } from '@/components/production/new-order-dialog';
 import { NewWorkCenterDialog } from '@/components/production/new-work-center-dialog';
 import { OrderDetailDialog } from '@/components/production/order-detail-dialog';
+import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
 import { PageHeader } from '@/components/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-const TABS = ['orders', 'boms', 'work-centers', 'attributes'] as const;
+const TABS = ['orders', 'boms', 'work-centers', 'attributes', 'costing'] as const;
 type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = { orders: 'Orders', boms: 'BOMs', 'work-centers': 'Work centers', attributes: 'Attributes' };
+const TAB_LABEL: Record<Tab, string> = { orders: 'Orders', boms: 'BOMs', 'work-centers': 'Work centers', attributes: 'Attributes', costing: 'Costing → GL' };
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   DRAFT: 'outline', PLANNED: 'secondary', RELEASED: 'secondary', IN_PROGRESS: 'default', COMPLETED: 'default', CANCELLED: 'destructive',
   ACTIVE: 'default', ARCHIVED: 'outline',
@@ -174,6 +175,22 @@ export default function ProductionPage() {
               </Td>
             </tr>
           )}
+        />
+      ) : null}
+
+      {tab === 'costing' ? (
+        <GlAccountsCard
+          title="Production → general ledger"
+          description="When set, completing an order posts Dr finished-goods inventory; Cr raw materials, labour, and overhead. Requires background reactions enabled."
+          getPath="/production/gl-config"
+          putPath="/production/gl-config"
+          queryKey="production-gl-config"
+          slots={[
+            { key: 'fgInventoryAccountId', label: 'Finished goods (Dr)', types: ['ASSET'], required: true },
+            { key: 'rawMaterialsAccountId', label: 'Raw materials (Cr)', types: ['ASSET'], required: true },
+            { key: 'laborAccountId', label: 'Labour applied (Cr)' },
+            { key: 'overheadAccountId', label: 'Overhead applied (Cr)' },
+          ]}
         />
       ) : null}
 

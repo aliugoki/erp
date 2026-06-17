@@ -25,6 +25,7 @@ import type {
   UpdateWorkCenterDto,
 } from './dto/production.dto';
 import {
+  type ProductionGlAccounts,
   mapAttribute,
   mapBom,
   mapBomLine,
@@ -534,6 +535,52 @@ export class ProductionService {
         shortBy: Number(r.needed) - Number(r.on_hand),
       }));
     });
+  }
+
+  // ── GL posting config ─────────────────────────────────────────────────────────
+  async getGlConfig(): Promise<ProductionGlAccounts> {
+    return this.tenantTx.run((m) => this.glConfigInTx(m));
+  }
+
+  async setGlConfig(dto: Partial<Record<keyof ProductionGlAccounts, string>>): Promise<ProductionGlAccounts> {
+    return this.tenantTx.run(async (m) => {
+      try {
+        await m.query(
+          `INSERT INTO production_gl_config (tenant_id, fg_inventory_account_id, raw_materials_account_id, labor_account_id, overhead_account_id)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4)
+           ON CONFLICT (tenant_id) DO UPDATE SET fg_inventory_account_id=EXCLUDED.fg_inventory_account_id, raw_materials_account_id=EXCLUDED.raw_materials_account_id,
+             labor_account_id=EXCLUDED.labor_account_id, overhead_account_id=EXCLUDED.overhead_account_id, updated_at=now()`,
+          [dto.fgInventoryAccountId ?? null, dto.rawMaterialsAccountId ?? null, dto.laborAccountId ?? null, dto.overheadAccountId ?? null],
+        );
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown finance account for this tenant');
+        throw err;
+      }
+      return this.glConfigInTx(m);
+    });
+  }
+
+  /** Read the production GL config inside an existing tenant transaction (used by the GL consumer). */
+  async glConfigInTx(m: Mgr): Promise<ProductionGlAccounts> {
+    const rows = (await m.query(
+      `SELECT fg_inventory_account_id, raw_materials_account_id, labor_account_id, overhead_account_id
+       FROM production_gl_config WHERE deleted_at IS NULL LIMIT 1`,
+    )) as Row[];
+    const r = rows[0] ?? {};
+    return {
+      fgInventoryAccountId: (r.fg_inventory_account_id as string) ?? null,
+      rawMaterialsAccountId: (r.raw_materials_account_id as string) ?? null,
+      laborAccountId: (r.labor_account_id as string) ?? null,
+      overheadAccountId: (r.overhead_account_id as string) ?? null,
+    };
+  }
+
+  /** The order's completion date (for the voucher), read inside the consumer's tenant transaction. */
+  async producedAtInTx(m: Mgr, orderId: string): Promise<string | null> {
+    const rows = (await m.query(`SELECT COALESCE(actual_end::date, current_date) AS d FROM production_order WHERE id=$1 AND deleted_at IS NULL`, [orderId])) as Row[];
+    const d = rows[0]?.d;
+    if (!d) return null;
+    return d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
   }
 
   // ── Internals ───────────────────────────────────────────────────────────────

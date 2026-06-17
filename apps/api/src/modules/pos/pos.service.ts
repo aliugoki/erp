@@ -24,6 +24,7 @@ import type {
   UpdateRegisterDto,
 } from './dto/pos.dto';
 import {
+  type PosGlAccounts,
   type PosLineInput,
   changeMinor,
   computeSaleTotals,
@@ -501,6 +502,65 @@ export class PosService {
         revenueMinor: Number(r.revenue_minor),
       }));
     });
+  }
+
+  // ── GL posting config ─────────────────────────────────────────────────────────
+  async getGlConfig(): Promise<PosGlAccounts> {
+    return this.tenantTx.run((m) => this.glConfigInTx(m));
+  }
+
+  async setGlConfig(dto: Partial<Record<keyof PosGlAccounts, string>>): Promise<PosGlAccounts> {
+    return this.tenantTx.run(async (m) => {
+      try {
+        await m.query(
+          `INSERT INTO pos_gl_config (tenant_id, clearing_account_id, revenue_account_id, tax_account_id, cogs_account_id, inventory_account_id)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5)
+           ON CONFLICT (tenant_id) DO UPDATE SET clearing_account_id=EXCLUDED.clearing_account_id, revenue_account_id=EXCLUDED.revenue_account_id,
+             tax_account_id=EXCLUDED.tax_account_id, cogs_account_id=EXCLUDED.cogs_account_id, inventory_account_id=EXCLUDED.inventory_account_id, updated_at=now()`,
+          [dto.clearingAccountId ?? null, dto.revenueAccountId ?? null, dto.taxAccountId ?? null, dto.cogsAccountId ?? null, dto.inventoryAccountId ?? null],
+        );
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown finance account for this tenant');
+        throw err;
+      }
+      return this.glConfigInTx(m);
+    });
+  }
+
+  /** Read the POS GL config inside an existing tenant transaction (used by the GL consumer). */
+  async glConfigInTx(m: Mgr): Promise<PosGlAccounts> {
+    const rows = (await m.query(
+      `SELECT clearing_account_id, revenue_account_id, tax_account_id, cogs_account_id, inventory_account_id
+       FROM pos_gl_config WHERE deleted_at IS NULL LIMIT 1`,
+    )) as Row[];
+    const r = rows[0] ?? {};
+    return {
+      clearingAccountId: (r.clearing_account_id as string) ?? null,
+      revenueAccountId: (r.revenue_account_id as string) ?? null,
+      taxAccountId: (r.tax_account_id as string) ?? null,
+      cogsAccountId: (r.cogs_account_id as string) ?? null,
+      inventoryAccountId: (r.inventory_account_id as string) ?? null,
+    };
+  }
+
+  /** A completed sale's GL-relevant figures, read inside the consumer's tenant transaction. */
+  async saleForGlInTx(m: Mgr, saleId: string): Promise<{ saleNo: string; type: 'SALE' | 'RETURN'; totalMinor: number; taxMinor: number; cogsMinor: number; occurredOn: string } | null> {
+    const rows = (await m.query(
+      `SELECT sale_no, type, total_minor, tax_minor, cogs_minor, sold_at FROM pos_sale WHERE id=$1 AND deleted_at IS NULL`,
+      [saleId],
+    )) as Row[];
+    const r = rows[0];
+    if (!r) return null;
+    const soldAt = r.sold_at;
+    const occurredOn = soldAt instanceof Date ? soldAt.toISOString().slice(0, 10) : String(soldAt).slice(0, 10);
+    return {
+      saleNo: r.sale_no as string,
+      type: r.type as 'SALE' | 'RETURN',
+      totalMinor: Number(r.total_minor),
+      taxMinor: Number(r.tax_minor),
+      cogsMinor: Number(r.cogs_minor),
+      occurredOn,
+    };
   }
 
   // ── Internals ───────────────────────────────────────────────────────────────

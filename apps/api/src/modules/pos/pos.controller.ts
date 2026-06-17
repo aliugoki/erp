@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -23,6 +24,7 @@ import {
   CreateSaleDto,
   OpenShiftDto,
   RefundSaleDto,
+  SetPosGlConfigDto,
   TerminalChargeDto,
   UpdateRegisterDto,
 } from './dto/pos.dto';
@@ -161,5 +163,19 @@ export class PosController {
   @Roles(Role.SALES_REP, Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   topProducts(@Query('limit') limit?: string) {
     return this.pos.topProducts(limit ? Number(limit) : 10);
+  }
+
+  // ── GL posting config ───────────────────────────────────────────────────────
+  @Get('gl-config')
+  @Roles(Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  getGlConfig() {
+    return this.pos.getGlConfig();
+  }
+
+  @Put('gl-config')
+  @Roles(Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  setGlConfig(@Body() dto: SetPosGlConfigDto) {
+    return this.pos.setGlConfig(dto);
   }
 }

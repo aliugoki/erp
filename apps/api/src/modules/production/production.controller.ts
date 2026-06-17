@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -22,6 +23,7 @@ import {
   CreateOrderDto,
   CreateWorkCenterDto,
   IssueMaterialsDto,
+  SetProductionGlConfigDto,
   UpdateBomDto,
   UpdateOrderDto,
   UpdateWorkCenterDto,
@@ -193,5 +195,19 @@ export class ProductionController {
   @Get('reports/shortages')
   shortages() {
     return this.production.materialShortages();
+  }
+
+  // ── GL posting config ───────────────────────────────────────────────────────
+  @Get('gl-config')
+  @Roles(Role.FINANCE_MANAGER, Role.INVENTORY_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  getGlConfig() {
+    return this.production.getGlConfig();
+  }
+
+  @Put('gl-config')
+  @Roles(Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  setGlConfig(@Body() dto: SetProductionGlConfigDto) {
+    return this.production.setGlConfig(dto);
   }
 }

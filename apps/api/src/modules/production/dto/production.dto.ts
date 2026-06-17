@@ -116,6 +116,14 @@ export class IssueMaterialsDto {
   /** Omit to issue every line's remaining required quantity. */
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => IssueMaterialDto) materials?: IssueMaterialDto[];
 }
+/** Map the GL accounts a completed production order posts to. */
+export class SetProductionGlConfigDto {
+  @IsOptional() @IsUUID() fgInventoryAccountId?: string;
+  @IsOptional() @IsUUID() rawMaterialsAccountId?: string;
+  @IsOptional() @IsUUID() laborAccountId?: string;
+  @IsOptional() @IsUUID() overheadAccountId?: string;
+}
+
 export class OperationActualDto {
   @IsUUID() operationId!: string;
   @IsInt() @Min(0) actualMinutes!: number;

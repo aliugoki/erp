@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type PosGlAccounts,
   type PosLineInput,
   changeMinor,
   computeLine,
   computeSaleTotals,
   expectedCashMinor,
+  posSaleVoucher,
   simulateTerminalCharge,
   varianceMinor,
 } from '../src/modules/pos/pos.util';
+
+const sumDr = (e: { debitMinor?: number }[]) => e.reduce((s, x) => s + (x.debitMinor ?? 0), 0);
+const sumCr = (e: { creditMinor?: number }[]) => e.reduce((s, x) => s + (x.creditMinor ?? 0), 0);
 
 describe('pos.util', () => {
   it('computeLine: gross, clamped discount, integer tax on post-discount amount', () => {
@@ -67,5 +72,28 @@ describe('pos.util', () => {
     expect(['VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY']).toContain(a.scheme);
     // different inputs generally diverge
     expect(simulateTerminalCharge('SALE-000124', 275_000).reference).not.toBe(a.reference);
+  });
+
+  it('posSaleVoucher: balanced Dr clearing / Cr revenue+tax + Dr COGS / Cr inventory', () => {
+    const acc: PosGlAccounts = { clearingAccountId: 'clr', revenueAccountId: 'rev', taxAccountId: 'tax', cogsAccountId: 'cogs', inventoryAccountId: 'inv' };
+    const v = posSaleVoucher(acc, { saleNo: 'SALE-000001', type: 'SALE', totalMinor: 275_000, taxMinor: 25_000, cogsMinor: 120_000, occurredOn: '2026-06-30' })!;
+    expect(v.voucherType).toBe('JV');
+    expect(sumDr(v.entries)).toBe(sumCr(v.entries)); // balanced
+    expect(sumDr(v.entries)).toBe(275_000 + 120_000);
+    expect(v.entries.find((e) => e.accountId === 'rev')!.creditMinor).toBe(250_000); // total − tax
+    expect(v.entries.find((e) => e.accountId === 'clr')!.debitMinor).toBe(275_000);
+  });
+
+  it('posSaleVoucher: a RETURN reverses every line and folds tax into revenue when no tax account', () => {
+    const acc: PosGlAccounts = { clearingAccountId: 'clr', revenueAccountId: 'rev', taxAccountId: null, cogsAccountId: null, inventoryAccountId: null };
+    const v = posSaleVoucher(acc, { saleNo: 'RET-000001', type: 'RETURN', totalMinor: 100_000, taxMinor: 10_000, cogsMinor: 0, occurredOn: '2026-06-30' })!;
+    expect(v.entries.find((e) => e.accountId === 'clr')!.creditMinor).toBe(100_000); // reversed: clearing credited
+    expect(v.entries.find((e) => e.accountId === 'rev')!.debitMinor).toBe(100_000); // tax folded into revenue
+    expect(sumDr(v.entries)).toBe(sumCr(v.entries));
+  });
+
+  it('posSaleVoucher: null without the minimum accounts or with a zero total', () => {
+    expect(posSaleVoucher({ clearingAccountId: null, revenueAccountId: 'r', taxAccountId: null, cogsAccountId: null, inventoryAccountId: null }, { saleNo: 's', type: 'SALE', totalMinor: 100, taxMinor: 0, cogsMinor: 0, occurredOn: '2026-06-30' })).toBeNull();
+    expect(posSaleVoucher({ clearingAccountId: 'c', revenueAccountId: 'r', taxAccountId: null, cogsAccountId: null, inventoryAccountId: null }, { saleNo: 's', type: 'SALE', totalMinor: 0, taxMinor: 0, cogsMinor: 0, occurredOn: '2026-06-30' })).toBeNull();
   });
 });

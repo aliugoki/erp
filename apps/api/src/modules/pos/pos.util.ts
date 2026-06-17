@@ -113,6 +113,50 @@ export function simulateTerminalCharge(reference: string, amountMinor: number): 
   };
 }
 
+// ── GL posting ──────────────────────────────────────────────────────────────
+export interface PosGlAccounts {
+  clearingAccountId: string | null;
+  revenueAccountId: string | null;
+  taxAccountId: string | null;
+  cogsAccountId: string | null;
+  inventoryAccountId: string | null;
+}
+export interface GlEntry {
+  accountId: string;
+  debitMinor?: number;
+  creditMinor?: number;
+}
+export interface GlVoucher {
+  description: string;
+  voucherType: 'JV';
+  occurredOn: string;
+  reference: string;
+  entries: GlEntry[];
+}
+
+/**
+ * Build the GL voucher for a completed POS sale: Dr clearing (total), Cr revenue (total − tax) [+ Cr
+ * tax], and Dr COGS / Cr inventory for the cost side. A RETURN reverses every line. Returns null when
+ * the minimum accounts (clearing + revenue) aren't set or the total is zero, so the caller skips
+ * posting. Always balanced: Σ debit = total (+ cogs) = Σ credit.
+ */
+export function posSaleVoucher(
+  a: PosGlAccounts,
+  sale: { saleNo: string; type: 'SALE' | 'RETURN'; totalMinor: number; taxMinor: number; cogsMinor: number; occurredOn: string },
+): GlVoucher | null {
+  if (!a.clearingAccountId || !a.revenueAccountId || sale.totalMinor <= 0) return null;
+  const ret = sale.type === 'RETURN';
+  const drSide = (accountId: string, amount: number): GlEntry => (ret ? { accountId, creditMinor: amount } : { accountId, debitMinor: amount });
+  const crSide = (accountId: string, amount: number): GlEntry => (ret ? { accountId, debitMinor: amount } : { accountId, creditMinor: amount });
+  const taxEff = a.taxAccountId ? sale.taxMinor : 0;
+  const entries: GlEntry[] = [drSide(a.clearingAccountId, sale.totalMinor), crSide(a.revenueAccountId, sale.totalMinor - taxEff)];
+  if (taxEff > 0 && a.taxAccountId) entries.push(crSide(a.taxAccountId, taxEff));
+  if (sale.cogsMinor > 0 && a.cogsAccountId && a.inventoryAccountId) {
+    entries.push(drSide(a.cogsAccountId, sale.cogsMinor), crSide(a.inventoryAccountId, sale.cogsMinor));
+  }
+  return { description: `POS ${sale.saleNo}`, voucherType: 'JV', occurredOn: sale.occurredOn, reference: sale.saleNo, entries };
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 const money = (amountMinor: unknown, currency: unknown): Money => ({

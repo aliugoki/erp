@@ -19,6 +19,7 @@ import { ApiError, apiGet, apiPost } from '@/lib/api';
 import { type CartLine, type Tender, cartTotals, nextKey } from '@/lib/pos';
 import type { CrmClient, PosRegister, PosSale, PosShift, Product } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
 import { NewRegisterDialog } from '@/components/pos/new-register-dialog';
 import { PaymentDialog } from '@/components/pos/payment-dialog';
 import { ReceiptDialog } from '@/components/pos/receipt-dialog';
@@ -477,6 +478,21 @@ export default function PosPage() {
         onOpenChange={(v) => !v && setReturnSale(null)}
         sale={returnSale}
         onDone={(ret) => { setReturnSale(null); setReceipt(ret); invalidate(); }}
+      />
+
+      <GlAccountsCard
+        title="POS → general ledger (admin)"
+        description="When set, each completed sale posts Dr clearing; Cr revenue (+ tax), and Dr COGS / Cr inventory. Requires background reactions enabled."
+        getPath="/pos/gl-config"
+        putPath="/pos/gl-config"
+        queryKey="pos-gl-config"
+        slots={[
+          { key: 'clearingAccountId', label: 'Clearing / cash (Dr)', required: true },
+          { key: 'revenueAccountId', label: 'Sales revenue (Cr)', types: ['REVENUE'], required: true },
+          { key: 'taxAccountId', label: 'Tax payable (Cr)', types: ['LIABILITY'] },
+          { key: 'cogsAccountId', label: 'COGS (Dr)', types: ['EXPENSE'] },
+          { key: 'inventoryAccountId', label: 'Inventory (Cr)', types: ['ASSET'] },
+        ]}
       />
     </div>
   );

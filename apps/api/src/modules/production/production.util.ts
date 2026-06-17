@@ -68,6 +68,59 @@ export function bomStandardCost(i: StdCostInputs): CostBreakdown {
   return rollUpCost(materialMinor, operationMinor, i.overheadPct, i.outputQty);
 }
 
+// ── GL posting ──────────────────────────────────────────────────────────────
+export interface ProductionGlAccounts {
+  fgInventoryAccountId: string | null;
+  rawMaterialsAccountId: string | null;
+  laborAccountId: string | null;
+  overheadAccountId: string | null;
+}
+export interface GlEntry {
+  accountId: string;
+  debitMinor?: number;
+  creditMinor?: number;
+}
+export interface GlVoucher {
+  description: string;
+  voucherType: 'JV';
+  occurredOn: string;
+  reference: string;
+  entries: GlEntry[];
+}
+
+/**
+ * Build the GL voucher for a completed production order: Dr finished-goods inventory (total), and a
+ * credit for each non-zero cost component (raw materials, labour, overhead) to its account. Returns
+ * null when the FG account is unset, the total is zero, or a non-zero component has no account (so the
+ * caller skips rather than post an unbalanced voucher). Balanced: total = material + operation + overhead.
+ */
+export function productionVoucher(
+  a: ProductionGlAccounts,
+  p: { orderNo: string; producedAt: string; materialMinor: number; operationMinor: number; overheadMinor: number; totalMinor: number },
+): GlVoucher | null {
+  if (!a.fgInventoryAccountId || p.totalMinor <= 0) return null;
+  const components: Array<[number, string | null]> = [
+    [p.materialMinor, a.rawMaterialsAccountId],
+    [p.operationMinor, a.laborAccountId],
+    [p.overheadMinor, a.overheadAccountId],
+  ];
+  const credits: GlEntry[] = [];
+  for (const [amount, accountId] of components) {
+    if (amount > 0) {
+      if (!accountId) return null; // a real cost with nowhere to credit → can't balance
+      credits.push({ accountId, creditMinor: amount });
+    }
+  }
+  if (credits.length === 0) return null;
+  return {
+    description: `Production ${p.orderNo}`,
+    voucherType: 'JV',
+    occurredOn: p.producedAt,
+    reference: p.orderNo,
+    entries: [{ accountId: a.fgInventoryAccountId, debitMinor: p.totalMinor }, ...credits],
+  };
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 const money = (amountMinor: unknown, currency: unknown): Money => ({

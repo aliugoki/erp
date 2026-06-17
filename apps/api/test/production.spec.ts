@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type ProductionGlAccounts,
   bomStandardCost,
   operationCostMinor,
+  productionVoucher,
   rollUpCost,
   scaledRequiredQty,
 } from '../src/modules/production/production.util';
@@ -45,5 +47,23 @@ describe('production.util', () => {
     expect(c.overheadMinor).toBe(18_000); // 10% of 180,000
     expect(c.totalMinor).toBe(198_000);
     expect(c.unitMinor).toBe(19_800); // 198,000 / 10
+  });
+
+  it('productionVoucher: Dr FG / Cr material+labour+overhead, balanced, zero components skipped', () => {
+    const acc: ProductionGlAccounts = { fgInventoryAccountId: 'fg', rawMaterialsAccountId: 'raw', laborAccountId: 'lab', overheadAccountId: 'oh' };
+    const v = productionVoucher(acc, { orderNo: 'MO-1', producedAt: '2026-06-30', materialMinor: 500_000, operationMinor: 50_000, overheadMinor: 50_000, totalMinor: 600_000 })!;
+    expect(v.entries.find((e) => e.accountId === 'fg')!.debitMinor).toBe(600_000);
+    const cr = v.entries.reduce((s, e) => s + (e.creditMinor ?? 0), 0);
+    const dr = v.entries.reduce((s, e) => s + (e.debitMinor ?? 0), 0);
+    expect(dr).toBe(cr); // balanced
+    // zero overhead omits that credit line
+    const v2 = productionVoucher(acc, { orderNo: 'MO-2', producedAt: '2026-06-30', materialMinor: 500_000, operationMinor: 0, overheadMinor: 0, totalMinor: 500_000 })!;
+    expect(v2.entries).toHaveLength(2);
+  });
+
+  it('productionVoucher: null without an FG account or with a non-zero component lacking an account', () => {
+    expect(productionVoucher({ fgInventoryAccountId: null, rawMaterialsAccountId: 'raw', laborAccountId: null, overheadAccountId: null }, { orderNo: 'm', producedAt: '2026-06-30', materialMinor: 100, operationMinor: 0, overheadMinor: 0, totalMinor: 100 })).toBeNull();
+    // operation cost but no labour account → can't balance → null
+    expect(productionVoucher({ fgInventoryAccountId: 'fg', rawMaterialsAccountId: 'raw', laborAccountId: null, overheadAccountId: null }, { orderNo: 'm', producedAt: '2026-06-30', materialMinor: 100, operationMinor: 50, overheadMinor: 0, totalMinor: 150 })).toBeNull();
   });
 });

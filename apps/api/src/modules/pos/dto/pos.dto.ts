@@ -39,6 +39,15 @@ export class UpdateRegisterDto {
   @IsOptional() @IsString() cardTerminalUrl?: string;
 }
 
+/** Map the GL accounts a completed POS sale posts to. */
+export class SetPosGlConfigDto {
+  @IsOptional() @IsUUID() clearingAccountId?: string;
+  @IsOptional() @IsUUID() revenueAccountId?: string;
+  @IsOptional() @IsUUID() taxAccountId?: string;
+  @IsOptional() @IsUUID() cogsAccountId?: string;
+  @IsOptional() @IsUUID() inventoryAccountId?: string;
+}
+
 /** Initiate a charge on the register's card terminal (returns approval to attach as a CARD tender). */
 export class TerminalChargeDto {
   @IsInt() @Min(1) amountMinor!: number;
