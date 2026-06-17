@@ -30,6 +30,8 @@ docker compose -f infra/docker-compose.prod.yml up -d --build
 # 2. Run migrations (idempotent; safe to re-run). Point MIGRATION_DATABASE_URL at the DB.
 MIGRATION_DATABASE_URL=postgresql://metaxperts:<pw>@<db-host>:5432/metaxperts \
   pnpm --filter @app/api migration:run
+# …or, when the prod DB is only on the internal `erp-prod` network (default compose):
+bash infra/scripts/migrate-prod.sh   # runs migration:run from a throwaway container on that network
 
 # 3. (First deploy / demo) seed a tenant + sample data
 API_URL=http://<api-host>:3300 OWNER_URL=postgresql://metaxperts:<pw>@<db-host>:5432/metaxperts \
