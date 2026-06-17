@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
@@ -17,6 +17,17 @@ import {
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import { type CartLine, type Tender, cartTotals, nextKey } from '@/lib/pos';
+import {
+  enqueueSale,
+  loadActiveRegister,
+  loadCatalog,
+  loadShift,
+  saveActiveRegister,
+  saveCatalog,
+  saveShift,
+} from '@/lib/pos-offline';
+import { useOnline } from '@/lib/use-online';
+import { OfflineBar } from '@/components/pos/offline-bar';
 import type { CrmClient, PosRegister, PosSale, PosShift, Product } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
@@ -46,10 +57,11 @@ export default function PosPage() {
   const [returnSale, setReturnSale] = useState<PosSale | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
+  const online = useOnline();
   const registers = useQuery({ queryKey: ['pos-registers'], queryFn: () => apiGet<PosRegister[]>('/pos/registers') });
   const reg = (registers.data ?? []).find((r) => r.id === registerId) ?? registers.data?.[0];
-  const activeRegisterId = reg?.id ?? '';
-  const currency = reg?.currency ?? 'PKR';
+  // Offline, fall back to the last register used while online so the cashier can keep selling.
+  const activeRegisterId = reg?.id ?? (!online ? loadActiveRegister() ?? '' : '');
 
   const shiftQ = useQuery({
     queryKey: ['pos-shift', activeRegisterId],
@@ -57,8 +69,21 @@ export default function PosPage() {
     enabled: !!activeRegisterId,
   });
   const shift = shiftQ.data ?? null;
+  // The open shift either comes live from the server, or from the snapshot cached while online.
+  const cachedShift = activeRegisterId ? loadShift(activeRegisterId) : null;
+  const effShiftId = shift?.id ?? (!shift ? cachedShift?.shiftId : undefined) ?? null;
+  const offlineSelling = !shift && !!effShiftId; // selling against the cached shift
+  const currency = reg?.currency ?? cachedShift?.currency ?? 'PKR';
+  const effRegisterName = reg?.name ?? cachedShift?.registerName ?? 'POS';
 
   const products = useQuery({ queryKey: ['pos-products'], queryFn: () => apiGet<Product[]>('/inventory/products') });
+
+  // Cache catalogue + active register + open shift while online, so the till keeps working offline.
+  useEffect(() => { if (products.data?.length) saveCatalog(products.data); }, [products.data]);
+  useEffect(() => { if (online && activeRegisterId) saveActiveRegister(activeRegisterId); }, [online, activeRegisterId]);
+  useEffect(() => {
+    if (online && shift && reg) saveShift({ shiftId: shift.id, registerId: reg.id, registerName: reg.name, currency: reg.currency, warehouseId: reg.warehouseId });
+  }, [online, shift, reg]);
   const clients = useQuery({ queryKey: ['pos-clients'], queryFn: () => apiGet<CrmClient[]>('/crm/clients') });
   const sales = useQuery({
     queryKey: ['pos-sales', shift?.id],
@@ -69,7 +94,7 @@ export default function PosPage() {
   const totals = useMemo(() => cartTotals(cart, toMinorStr(orderDiscount)), [cart, orderDiscount]);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = products.data ?? [];
+    const list = products.data ?? loadCatalog(); // offline → cached catalogue
     if (!q) return list.slice(0, 60);
     return list.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 60);
   }, [products.data, search]);
@@ -106,7 +131,7 @@ export default function PosPage() {
   const onScan = () => {
     const code = search.trim().toLowerCase();
     if (!code) return;
-    const hit = (products.data ?? []).find((p) => p.sku.toLowerCase() === code);
+    const hit = (products.data ?? loadCatalog()).find((p) => p.sku.toLowerCase() === code);
     if (hit) {
       addProduct(hit);
       setSearch('');
@@ -138,30 +163,70 @@ export default function PosPage() {
   });
 
   // ── Sale ops ────────────────────────────────────────────────────────────────
+  const buildSalePayload = (tenders: Tender[]) => ({
+    registerId: activeRegisterId,
+    shiftId: effShiftId,
+    ...(clientId ? { clientId } : {}),
+    orderDiscountMinor: toMinorStr(orderDiscount),
+    lines: cart.map((l) => ({
+      ...(l.productId ? { productId: l.productId } : {}),
+      description: l.description,
+      quantity: l.quantity,
+      unitPriceMinor: l.unitPriceMinor,
+      ...(l.discountMinor ? { discountMinor: l.discountMinor } : {}),
+      ...(l.taxRate ? { taxRate: l.taxRate } : {}),
+    })),
+    payments: tenders,
+  });
+
+  /** A receipt to show/print immediately for an offline sale (the server number arrives on sync). */
+  const provisionalSale = (tenders: Tender[], saleNo: string): PosSale => {
+    const t = totals;
+    const paid = tenders.reduce((s, x) => s + x.amountMinor, 0);
+    const mny = (amountMinor: number) => ({ amountMinor, currency });
+    return {
+      id: saleNo, saleNo, registerId: activeRegisterId, shiftId: effShiftId ?? '', clientId: clientId || null,
+      customerName: null, type: 'SALE', originalSaleId: null, status: 'COMPLETED',
+      subtotal: mny(t.subtotalMinor), discount: mny(t.discountMinor), tax: mny(t.taxMinor), total: mny(t.totalMinor),
+      paid: mny(paid), change: mny(Math.max(0, paid - t.totalMinor)), cogs: mny(0), refunded: mny(0),
+      soldAt: new Date().toISOString(), notes: null,
+      lines: cart.map((l) => ({
+        id: l.key, productId: l.productId, description: l.description, quantity: l.quantity,
+        unitPrice: mny(l.unitPriceMinor), discount: mny(l.discountMinor), taxRate: l.taxRate,
+        tax: mny(0), lineTotal: mny(l.quantity * l.unitPriceMinor - l.discountMinor), returnedQty: 0,
+      })),
+      payments: tenders.map((x, i) => ({ id: `p${i}`, method: x.method, amount: mny(x.amountMinor), reference: x.reference ?? null, cardScheme: x.cardScheme ?? null, cardLast4: x.cardLast4 ?? null, paidAt: new Date().toISOString() })),
+    };
+  };
+
   const saleMut = useMutation({
-    mutationFn: (tenders: Tender[]) => {
-      if (resumingId) return apiPost<PosSale>(`/pos/sales/${resumingId}/complete`, { payments: tenders });
-      return apiPost<PosSale>('/pos/sales', {
-        registerId: activeRegisterId,
-        shiftId: shift?.id,
-        ...(clientId ? { clientId } : {}),
-        orderDiscountMinor: toMinorStr(orderDiscount),
-        lines: cart.map((l) => ({
-          ...(l.productId ? { productId: l.productId } : {}),
-          description: l.description,
-          quantity: l.quantity,
-          unitPriceMinor: l.unitPriceMinor,
-          ...(l.discountMinor ? { discountMinor: l.discountMinor } : {}),
-          ...(l.taxRate ? { taxRate: l.taxRate } : {}),
-        })),
-        payments: tenders,
-      });
+    mutationFn: async (tenders: Tender[]): Promise<{ sale: PosSale; offline: boolean }> => {
+      if (resumingId) {
+        if (!online) throw new Error('Reconnect to complete a parked sale');
+        return { sale: await apiPost<PosSale>(`/pos/sales/${resumingId}/complete`, { payments: tenders }), offline: false };
+      }
+      const payload = buildSalePayload(tenders);
+      const key = crypto.randomUUID();
+      const queueIt = () => {
+        const provisional = provisionalSale(tenders, `OFFLINE-${key.slice(0, 8).toUpperCase()}`);
+        enqueueSale({ key, payload, receipt: provisional, createdAt: Date.now(), status: 'pending' });
+        return { sale: provisional, offline: true };
+      };
+      if (!online) return queueIt();
+      try {
+        const sale = await apiPost<PosSale>('/pos/sales', payload, { idempotencyKey: key });
+        return { sale, offline: false };
+      } catch (e) {
+        if (!(e instanceof ApiError)) return queueIt(); // server unreachable → queue + serve the customer
+        throw e; // a real business rejection (e.g. insufficient stock) — surface it
+      }
     },
-    onSuccess: (sale) => {
+    onSuccess: ({ sale, offline }) => {
       setPayOpen(false);
       setReceipt(sale);
       clearSale();
-      invalidate();
+      if (offline) toast.message('Saved offline — will sync when reconnected');
+      else invalidate();
     },
     onError: fail,
   });
@@ -170,7 +235,7 @@ export default function PosPage() {
     mutationFn: () =>
       apiPost<PosSale>('/pos/sales', {
         registerId: activeRegisterId,
-        shiftId: shift?.id,
+        shiftId: effShiftId,
         park: true,
         ...(clientId ? { clientId } : {}),
         orderDiscountMinor: toMinorStr(orderDiscount),
@@ -247,32 +312,37 @@ export default function PosPage() {
           ) : null}
           <NewRegisterDialog />
         </div>
-        {shift ? (
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="h-8 gap-1 px-3">
-              <span className="size-2 rounded-full bg-success" /> {shift.shiftNo}
-            </Badge>
-            <div className="flex items-center gap-1">
-              <Input
-                className="h-8 w-28"
-                inputMode="decimal"
-                placeholder={`Count ${currency}`}
-                value={countedCash}
-                onChange={(e) => setCountedCash(e.target.value)}
-              />
-              <Button size="sm" variant="outline" disabled={!countedCash || closeShift.isPending} onClick={() => closeShift.mutate()}>
-                Close shift
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <OfflineBar onSynced={invalidate} />
+          {shift ? (
+            <>
+              <Badge variant="outline" className="h-8 gap-1 px-3">
+                <span className="size-2 rounded-full bg-success" /> {shift.shiftNo}
+              </Badge>
+              <div className="flex items-center gap-1">
+                <Input
+                  className="h-8 w-28"
+                  inputMode="decimal"
+                  placeholder={`Count ${currency}`}
+                  value={countedCash}
+                  onChange={(e) => setCountedCash(e.target.value)}
+                />
+                <Button size="sm" variant="outline" disabled={!countedCash || closeShift.isPending} onClick={() => closeShift.mutate()}>
+                  Close shift
+                </Button>
+              </div>
+            </>
+          ) : offlineSelling ? (
+            <Badge variant="outline" className="h-8 gap-1 px-3">{effRegisterName} · cached shift</Badge>
+          ) : null}
+        </div>
       </div>
 
       {noRegisters ? (
         <div className="rounded-xl border py-12 text-center text-sm text-muted-foreground">
           No registers yet. An administrator can add one in <span className="font-medium">Registers</span> (POST /pos/registers).
         </div>
-      ) : !shift ? (
+      ) : !effShiftId ? (
         <div className="mx-auto max-w-sm rounded-xl border p-6 text-center">
           <Banknote className="mx-auto mb-3 size-8 text-muted-foreground" />
           <h3 className="font-medium">Open a shift to start selling</h3>
@@ -472,7 +542,7 @@ export default function PosPage() {
           onConfirm={(tenders) => saleMut.mutate(tenders)}
         />
       ) : null}
-      <ReceiptDialog open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)} sale={receipt} registerName={reg?.name ?? 'POS'} />
+      <ReceiptDialog open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)} sale={receipt} registerName={effRegisterName} />
       <ReturnDialog
         open={!!returnSale}
         onOpenChange={(v) => !v && setReturnSale(null)}

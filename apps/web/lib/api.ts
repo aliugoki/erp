@@ -132,8 +132,12 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const apiGet = <T>(path: string) => apiFetch<T>(path);
-export const apiPost = <T>(path: string, body?: unknown) =>
-  apiFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
+export const apiPost = <T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }) =>
+  apiFetch<T>(path, {
+    method: 'POST',
+    body: body ? JSON.stringify(body) : undefined,
+    headers: opts?.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : undefined,
+  });
 export const apiPatch = <T>(path: string, body?: unknown) =>
   apiFetch<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined });
 export const apiPut = <T>(path: string, body?: unknown) =>
