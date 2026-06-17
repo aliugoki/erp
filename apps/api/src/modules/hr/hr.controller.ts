@@ -3,17 +3,25 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  StreamableFile,
+  UnsupportedMediaTypeException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
+import type { UploadedFileLike } from '../storage/storage.service';
 import {
   CreateAttendanceDto,
   CreateDepartmentDto,
@@ -62,6 +70,24 @@ export class HrController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteEmployee(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteEmployee(id);
+  }
+
+  /** Upload (or replace) an employee photo — multipart `file` field (image, ≤8 MiB). */
+  @Post('employees/:id/photo')
+  @Roles(...WRITE)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPhoto(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
+    if (!file) throw new UnsupportedMediaTypeException('A multipart "file" field is required');
+    return this.hr.setEmployeePhoto(id, file);
+  }
+
+  /** Stream the employee photo bytes (raw image; not enveloped). 404 if the employee has no photo. */
+  @Get('employees/:id/photo')
+  @Header('Cache-Control', 'private, max-age=300')
+  async getPhoto(@Param('id', ParseUUIDPipe) id: string): Promise<StreamableFile> {
+    const photo = await this.hr.getEmployeePhoto(id);
+    if (!photo) throw new NotFoundException('Employee has no photo');
+    return new StreamableFile(photo.data, { type: photo.contentType, length: photo.byteSize });
   }
 
   // Departments

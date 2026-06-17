@@ -100,6 +100,37 @@ export async function apiList<T>(path: string): Promise<Paginated<T>> {
   return (await res.json()) as Paginated<T>;
 }
 
+/** Upload multipart form-data (e.g. a file). Lets the browser set the multipart boundary; refreshes
+ * the credential once on 401, mirroring {@link apiFetch}. */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const tokens = getTokens();
+  const rt = tokens?.refreshToken;
+  const send = (cred?: string) =>
+    fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      body: form,
+      headers: cred ? { Authorization: ['Bearer', cred].join(' ') } : {},
+    });
+  let res = await send(tokens?.accessToken);
+  if (res.status === 401 && rt) {
+    const r = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: rt }) });
+    if (r.ok) {
+      const refreshed = (await r.json()).data as TokenPair;
+      setTokens(refreshed);
+      res = await send(refreshed.accessToken);
+    } else {
+      clearTokens();
+      throw new ApiError(401, 'Session expired');
+    }
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string; title?: string };
+    throw new ApiError(res.status, body.detail ?? body.title ?? res.statusText);
+  }
+  const json = (await res.json()) as { data?: T };
+  return (json.data ?? (json as T)) as T;
+}
+
 export const apiGet = <T>(path: string) => apiFetch<T>(path);
 export const apiPost = <T>(path: string, body?: unknown) =>
   apiFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });

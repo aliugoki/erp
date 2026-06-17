@@ -65,6 +65,22 @@ export interface CrmLeadConvertedV1 {
   ownerId?: string | null;
 }
 
+export interface PosSaleCompletedV1 {
+  saleId: string;
+  saleNo: string;
+  registerId: string;
+  shiftId: string;
+  clientId: string | null;
+  /** SALE or RETURN — a return is a refund of an earlier sale. */
+  type: 'SALE' | 'RETURN';
+  /** Net total in minor units (negative-effect returns still carry a positive total here). */
+  totalMinor: number;
+  /** Cost of goods sold captured at sale time, for margin reporting. */
+  cogsMinor: number;
+  currency: string;
+  lineCount: number;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -74,6 +90,7 @@ export const EVENT_TYPES = {
   HR_PAYROLL_RUN_COMPLETED: 'hr.payroll_run_completed.v1',
   CRM_DEAL_CLOSED: 'crm.deal_closed.v1',
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
+  POS_SALE_COMPLETED: 'pos.sale_completed.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -85,6 +102,7 @@ export interface EventPayloads {
   'hr.payroll_run_completed.v1': HrPayrollRunCompletedV1;
   'crm.deal_closed.v1': CrmDealClosedV1;
   'crm.lead_converted.v1': CrmLeadConvertedV1;
+  'pos.sale_completed.v1': PosSaleCompletedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -97,4 +115,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'notifications', 'orders'] as const;

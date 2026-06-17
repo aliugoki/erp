@@ -164,5 +164,6 @@ export function mapEmployeeRow(row: EmployeeRow): EmployeeView {
         ? null
         : { amountMinor: Number(row.salary_amount_minor), currency: row.salary_currency },
     status: row.status,
+    photoRef: row.photo_ref ?? null,
   };
 }

@@ -43,6 +43,8 @@ export class EmployeeProfileFieldsDto {
   @IsOptional() @IsUUID() reportingTo?: string;
   @IsOptional() @IsISO8601() confirmationDate?: string;
   @IsOptional() @IsString() workLocation?: string;
+  /** Attachment id of the employee photo; normally set via the photo-upload endpoint, not raw. */
+  @IsOptional() @IsUUID() photoRef?: string;
 }
 
 export class CreateEmployeeDto extends EmployeeProfileFieldsDto {

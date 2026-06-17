@@ -509,6 +509,96 @@ export interface SalesOrder {
   lines?: SalesLine[];
 }
 
+// ── Point of Sale ─────────────────────────────────────────────────────────────
+export interface PosRegister {
+  id: string;
+  name: string;
+  code: string | null;
+  warehouseId: string | null;
+  location: string | null;
+  status: string;
+  currency: string;
+}
+export interface PosShiftReport {
+  saleCount: number;
+  returnCount: number;
+  grossSalesMinor: number;
+  refundsMinor: number;
+  netSalesMinor: number;
+  cashSalesMinor: number;
+  changeGivenMinor: number;
+  cashRefundsMinor: number;
+  tenders: { method: string; inMinor: number; outMinor: number }[];
+}
+export interface PosShift {
+  id: string;
+  shiftNo: string;
+  registerId: string;
+  cashierId: string | null;
+  status: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  openingFloat: Money;
+  countedCash: Money | null;
+  expectedCash: Money | null;
+  variance: Money | null;
+  notes: string | null;
+  report?: PosShiftReport;
+}
+export interface PosSaleLine {
+  id?: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: Money;
+  discount: Money;
+  taxRate: number;
+  tax: Money;
+  lineTotal: Money;
+  returnedQty: number;
+}
+export interface PosPayment {
+  id?: string;
+  method: string;
+  amount: Money;
+  reference: string | null;
+  paidAt: string | null;
+}
+export interface PosSale {
+  id: string;
+  saleNo: string;
+  registerId: string;
+  shiftId: string;
+  clientId: string | null;
+  customerName: string | null;
+  type: string;
+  originalSaleId: string | null;
+  status: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  total: Money;
+  paid: Money;
+  change: Money;
+  cogs: Money;
+  refunded: Money;
+  soldAt: string | null;
+  notes: string | null;
+  lines?: PosSaleLine[];
+  payments?: PosPayment[];
+}
+export interface PosDailySummary {
+  date: string | null;
+  saleCount: number;
+  returnCount: number;
+  grossSalesMinor: number;
+  refundsMinor: number;
+  netSalesMinor: number;
+  cogsMinor: number;
+  grossMarginMinor: number;
+  tenders: { method: string; amountMinor: number }[];
+}
+
 // ── Enterprise CRM ────────────────────────────────────────────────────────────
 export interface CrmAccount {
   id: string;

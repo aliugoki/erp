@@ -14,6 +14,8 @@ export interface EmployeeView {
   joinDate: string | null;
   salary: Money | null;
   status: EmployeeStatus;
+  /** Attachment id of the employee photo (served via GET /hr/employees/:id/photo); null if none. */
+  photoRef: string | null;
 }
 
 export interface DepartmentView {
@@ -43,4 +45,5 @@ export interface EmployeeRow {
   salary_amount_minor: string | number | null; // bigint comes back as string from pg
   salary_currency: string;
   status: EmployeeStatus;
+  photo_ref: string | null;
 }

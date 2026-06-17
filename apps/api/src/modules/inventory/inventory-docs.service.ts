@@ -97,6 +97,29 @@ export class InventoryDocsService {
     return { unitCostMinor: unitCost, balanceQty: newQty, balanceValueMinor: newValue };
   }
 
+  /**
+   * Public seam for other modules (e.g. POS) to move stock through the same valued ledger, INSIDE the
+   * caller's transaction so it commits atomically with their business write. `qtyOut` decrements (and
+   * returns the weighted-average unit cost consumed → use it as COGS); `qtyIn` restocks (a void/return).
+   * Pass a free-form `docType` (e.g. POS_SALE) — it is recorded on the ledger row, not numbered here.
+   */
+  async applyStockMovement(
+    m: Mgr,
+    p: {
+      productId: string;
+      warehouseId?: string | null;
+      docType: string;
+      docId?: string | null;
+      docNo?: string | null;
+      qtyIn?: number;
+      qtyOut?: number;
+      unitCostMinor?: number;
+      narration?: string | null;
+    },
+  ): Promise<{ unitCostMinor: number; balanceQty: number; balanceValueMinor: number }> {
+    return this.postLedger(m, p);
+  }
+
   /** Allocate the next per-tenant, per-type document number atomically. */
   private async nextDocNo(m: Mgr, docType: keyof typeof DOC_PREFIX): Promise<string> {
     const seq = (await m.query(

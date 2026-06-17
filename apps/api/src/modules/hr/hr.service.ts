@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import { type SuccessEnvelope, paginationMeta } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
 import type {
   CreateAttendanceDto,
   CreateDepartmentDto,
@@ -14,13 +15,20 @@ import type {
 } from './dto/hr.dto';
 import type { DepartmentView, EmployeeRow, EmployeeView, PositionView } from './hr.types';
 import { buildEmployeeWhere, mapEmployeeRow, normalizePagination, returningRows } from './hr.util';
+// returningRows unwraps TypeORM's [rows, affectedCount] shape for UPDATE…RETURNING.
 
 const EMP_COLS =
-  'id, employee_code, first_name, last_name, email, phone, department_id, position_id, join_date, salary_amount_minor, salary_currency, status';
+  'id, employee_code, first_name, last_name, email, phone, department_id, position_id, join_date, salary_amount_minor, salary_currency, status, photo_ref';
+
+/** Allowed image content types for an employee photo. */
+const PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 @Injectable()
 export class HrService {
-  constructor(private readonly tenantTx: TenantTransactionService) {}
+  constructor(
+    private readonly tenantTx: TenantTransactionService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ── Departments ────────────────────────────────────────────────────────────
   async createDepartment(dto: CreateDepartmentDto): Promise<DepartmentView> {
@@ -113,9 +121,9 @@ export class HrService {
             join_date, salary_amount_minor, salary_currency, status,
             date_of_birth, gender, marital_status, national_id, blood_group, nationality, address, city,
             country, emergency_contact_name, emergency_contact_phone, designation, employment_type,
-            reporting_to, confirmation_date, work_location)
+            reporting_to, confirmation_date, work_location, photo_ref)
          VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-                 $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+                 $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
          RETURNING ${EMP_COLS}`,
         [
           code,
@@ -145,10 +153,47 @@ export class HrService {
           dto.reportingTo ?? null,
           dto.confirmationDate ?? null,
           dto.workLocation ?? null,
+          dto.photoRef ?? null,
         ],
       )) as EmployeeRow[];
       return mapEmployeeRow(rows[0]!);
     });
+  }
+
+  /** Store/replace an employee's photo. Persists the bytes as an attachment, points `photo_ref` at it
+   * (clearing any previous attachment), and returns the refreshed employee view. */
+  async setEmployeePhoto(id: string, file: UploadedFileLike): Promise<EmployeeView> {
+    if (!PHOTO_MIME.has(file.mimetype)) {
+      throw new BadRequestException('Photo must be a JPEG, PNG, WebP, or GIF image');
+    }
+    return this.tenantTx.run(async (m) => {
+      const existing = (await m.query(
+        `SELECT photo_ref FROM hr_employee WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      )) as Array<{ photo_ref: string | null }>;
+      if (!existing[0]) throw new NotFoundException('Employee not found');
+      const { id: attachmentId } = await this.storage.putInTx(m, 'hr.employee_photo', file);
+      const rows = returningRows<EmployeeRow>(
+        await m.query(`UPDATE hr_employee SET photo_ref=$2, updated_at=now() WHERE id=$1 RETURNING ${EMP_COLS}`, [id, attachmentId]),
+      );
+      const prev = existing[0].photo_ref;
+      if (prev) await m.query(`UPDATE app_attachment SET deleted_at=now() WHERE id=$1`, [prev]);
+      return mapEmployeeRow(rows[0]!);
+    });
+  }
+
+  /** Fetch an employee's photo bytes for streaming. Null if the employee has no photo. */
+  async getEmployeePhoto(id: string): Promise<FetchedAttachment | null> {
+    const ref = await this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT photo_ref FROM hr_employee WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ photo_ref: string | null }>;
+      if (!rows[0]) throw new NotFoundException('Employee not found');
+      return rows[0].photo_ref;
+    });
+    if (!ref) return null;
+    return this.storage.get(ref, 'hr.employee_photo');
   }
 
   async listEmployees(query: ListEmployeesQueryDto): Promise<SuccessEnvelope<EmployeeView[]>> {

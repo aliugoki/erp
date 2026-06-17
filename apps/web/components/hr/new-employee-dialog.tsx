@@ -2,7 +2,7 @@
 import { type FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { ApiError, apiGet, apiPost } from '@/lib/api';
+import { ApiError, apiGet, apiPost, apiUpload } from '@/lib/api';
 import type { Department, Designation } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -24,14 +24,15 @@ export function NewEmployeeDialog() {
   const [open, setOpen] = useState(false);
   const EMPTY = { firstName: '', lastName: '', email: '', phone: '', salary: '', status: 'ACTIVE', designation: '', departmentId: '', employmentType: '', joinDate: '', city: '' };
   const [form, setForm] = useState(EMPTY);
+  const [photo, setPhoto] = useState<File | null>(null);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const departments = useQuery({ queryKey: ['departments'], queryFn: () => apiGet<Department[]>('/hr/departments') });
   const designations = useQuery({ queryKey: ['designations'], queryFn: () => apiGet<Designation[]>('/hr/designations') });
 
   const create = useMutation({
-    mutationFn: () =>
-      apiPost('/hr/employees', {
+    mutationFn: async () => {
+      const employee = await apiPost<{ id: string }>('/hr/employees', {
         firstName: form.firstName,
         lastName: form.lastName,
         ...(form.email ? { email: form.email } : {}),
@@ -43,12 +44,20 @@ export function NewEmployeeDialog() {
         ...(form.employmentType ? { employmentType: form.employmentType } : {}),
         ...(form.joinDate ? { joinDate: form.joinDate } : {}),
         ...(form.city ? { city: form.city } : {}),
-      }),
+      });
+      if (photo) {
+        const fd = new FormData();
+        fd.append('file', photo);
+        await apiUpload(`/hr/employees/${employee.id}/photo`, fd);
+      }
+      return employee;
+    },
     onSuccess: () => {
       toast.success('Employee added', { description: `${form.firstName} ${form.lastName}` });
       qc.invalidateQueries({ queryKey: ['employees'] });
       setOpen(false);
       setForm(EMPTY);
+      setPhoto(null);
     },
     onError: (e) => toast.error('Could not add employee', { description: e instanceof ApiError ? e.message : '' }),
   });
@@ -148,6 +157,16 @@ export function NewEmployeeDialog() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="photo">Photo</Label>
+            <Input
+              id="photo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+            />
+            <p className="text-xs text-muted-foreground">Optional — JPEG/PNG/WebP/GIF, up to 8 MB.</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
