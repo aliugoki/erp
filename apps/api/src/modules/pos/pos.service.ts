@@ -11,6 +11,7 @@ import { EVENT_TYPES, type PosSaleCompletedV1 } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
 import { PaymentTerminalService } from './payment-terminal.service';
 import type { TerminalChargeDto } from './dto/pos.dto';
 import type {
@@ -63,7 +64,71 @@ export class PosService {
     private readonly inventoryDocs: InventoryDocsService,
     private readonly outbox: OutboxService,
     private readonly terminal: PaymentTerminalService,
+    private readonly storage: StorageService,
   ) {}
+
+  // ── Receipt branding ──────────────────────────────────────────────────────────
+  async getBranding() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT store_name, address, phone, receipt_footer, logo_attachment_id FROM pos_branding WHERE deleted_at IS NULL LIMIT 1`,
+      )) as Row[];
+      const r = rows[0] ?? {};
+      return {
+        storeName: (r.store_name as string) ?? null,
+        address: (r.address as string) ?? null,
+        phone: (r.phone as string) ?? null,
+        receiptFooter: (r.receipt_footer as string) ?? null,
+        hasLogo: !!r.logo_attachment_id,
+      };
+    });
+  }
+
+  async setBranding(dto: { storeName?: string; address?: string; phone?: string; receiptFooter?: string }) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO pos_branding (tenant_id, store_name, address, phone, receipt_footer)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4)
+         ON CONFLICT (tenant_id) DO UPDATE SET store_name=EXCLUDED.store_name, address=EXCLUDED.address,
+           phone=EXCLUDED.phone, receipt_footer=EXCLUDED.receipt_footer, updated_at=now()
+         RETURNING store_name, address, phone, receipt_footer, logo_attachment_id`,
+        [dto.storeName ?? null, dto.address ?? null, dto.phone ?? null, dto.receiptFooter ?? null],
+      )) as Row[];
+      const r = rows[0] ?? {};
+      return {
+        storeName: (r.store_name as string) ?? null,
+        address: (r.address as string) ?? null,
+        phone: (r.phone as string) ?? null,
+        receiptFooter: (r.receipt_footer as string) ?? null,
+        hasLogo: !!r.logo_attachment_id,
+      };
+    });
+  }
+
+  async uploadLogo(file: UploadedFileLike) {
+    if (!file.mimetype.startsWith('image/')) throw new BadRequestException('Logo must be an image');
+    return this.tenantTx.run(async (m) => {
+      const prev = (await m.query(`SELECT logo_attachment_id FROM pos_branding WHERE deleted_at IS NULL LIMIT 1`, [])) as Array<{ logo_attachment_id: string | null }>;
+      const { id: attachmentId } = await this.storage.putInTx(m, 'pos.logo', file);
+      await m.query(
+        `INSERT INTO pos_branding (tenant_id, logo_attachment_id) VALUES (current_setting('app.tenant_id')::uuid, $1)
+         ON CONFLICT (tenant_id) DO UPDATE SET logo_attachment_id=EXCLUDED.logo_attachment_id, updated_at=now()`,
+        [attachmentId],
+      );
+      const old = prev[0]?.logo_attachment_id;
+      if (old) await m.query(`UPDATE app_attachment SET deleted_at=now() WHERE id=$1`, [old]);
+      return { hasLogo: true };
+    });
+  }
+
+  async getLogo(): Promise<FetchedAttachment | null> {
+    const attachmentId = await this.tenantTx.run(async (m) => {
+      const rows = (await m.query(`SELECT logo_attachment_id FROM pos_branding WHERE deleted_at IS NULL LIMIT 1`, [])) as Array<{ logo_attachment_id: string | null }>;
+      return rows[0]?.logo_attachment_id ?? null;
+    });
+    if (!attachmentId) return null;
+    return this.storage.get(attachmentId, 'pos.logo');
+  }
 
   /** Initiate a card charge on the register's configured terminal. The cashier then records the
    * returned reference/scheme as a CARD tender on the sale. Does not itself create a sale. */

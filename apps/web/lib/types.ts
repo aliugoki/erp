@@ -598,6 +598,13 @@ export interface PosSale {
   lines?: PosSaleLine[];
   payments?: PosPayment[];
 }
+export interface PosBranding {
+  storeName: string | null;
+  address: string | null;
+  phone: string | null;
+  receiptFooter: string | null;
+  hasLogo: boolean;
+}
 export interface PosDailySummary {
   date: string | null;
   saleCount: number;

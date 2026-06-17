@@ -29,8 +29,9 @@ import {
 import { useOnline } from '@/lib/use-online';
 import { AuthImage } from '@/components/auth-image';
 import { OfflineBar } from '@/components/pos/offline-bar';
-import type { CrmClient, PosRegister, PosSale, PosShift, Product } from '@/lib/types';
+import type { CrmClient, PosBranding, PosRegister, PosSale, PosShift, Product } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { BrandingCard } from '@/components/pos/branding-card';
 import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
 import { NewRegisterDialog } from '@/components/pos/new-register-dialog';
 import { PaymentDialog } from '@/components/pos/payment-dialog';
@@ -85,6 +86,7 @@ export default function PosPage() {
   useEffect(() => {
     if (online && shift && reg) saveShift({ shiftId: shift.id, registerId: reg.id, registerName: reg.name, currency: reg.currency, warehouseId: reg.warehouseId });
   }, [online, shift, reg]);
+  const branding = useQuery({ queryKey: ['pos-branding'], queryFn: () => apiGet<PosBranding>('/pos/branding') });
   const clients = useQuery({ queryKey: ['pos-clients'], queryFn: () => apiGet<CrmClient[]>('/crm/clients') });
   const sales = useQuery({
     queryKey: ['pos-sales', shift?.id],
@@ -546,13 +548,15 @@ export default function PosPage() {
           onConfirm={(tenders) => saleMut.mutate(tenders)}
         />
       ) : null}
-      <ReceiptDialog open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)} sale={receipt} registerName={effRegisterName} />
+      <ReceiptDialog open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)} sale={receipt} registerName={effRegisterName} branding={branding.data} />
       <ReturnDialog
         open={!!returnSale}
         onOpenChange={(v) => !v && setReturnSale(null)}
         sale={returnSale}
         onDone={(ret) => { setReturnSale(null); setReceipt(ret); invalidate(); }}
       />
+
+      <BrandingCard />
 
       <GlAccountsCard
         title="POS → general ledger (admin)"

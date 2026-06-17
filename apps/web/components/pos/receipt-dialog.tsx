@@ -1,7 +1,8 @@
 'use client';
 import { Printer } from 'lucide-react';
-import type { PosSale } from '@/lib/types';
+import type { PosBranding, PosSale } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
+import { AuthImage } from '@/components/auth-image';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -11,15 +12,18 @@ export function ReceiptDialog({
   onOpenChange,
   sale,
   registerName,
+  branding,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   sale: PosSale | null;
   registerName: string;
+  branding?: PosBranding | null;
 }) {
   if (!sale) return null;
   const currency = sale.total.currency;
   const when = sale.soldAt ? new Date(sale.soldAt).toLocaleString() : '';
+  const footer = branding?.receiptFooter?.trim() || 'Thank you!';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -29,7 +33,18 @@ export function ReceiptDialog({
         </DialogHeader>
         <div id="pos-receipt" className="rounded-lg border bg-background p-4 font-mono text-xs leading-relaxed">
           <div className="text-center">
-            <p className="text-sm font-semibold">{registerName}</p>
+            {branding?.hasLogo ? (
+              <AuthImage
+                path="/pos/branding/logo"
+                alt={branding.storeName ?? registerName}
+                className="mx-auto mb-2 h-16 w-auto max-w-[180px] object-contain"
+              />
+            ) : null}
+            <p className="text-sm font-semibold">{branding?.storeName?.trim() || registerName}</p>
+            {branding?.address?.trim() ? (
+              <p className="whitespace-pre-line text-muted-foreground">{branding.address}</p>
+            ) : null}
+            {branding?.phone?.trim() ? <p className="text-muted-foreground">{branding.phone}</p> : null}
             <p className="text-muted-foreground">{when}</p>
             <p className="text-muted-foreground">{sale.saleNo}</p>
           </div>
@@ -57,7 +72,7 @@ export function ReceiptDialog({
           ))}
           {sale.change.amountMinor > 0 ? <Row label="Change" value={formatMoney(sale.change.amountMinor, currency)} /> : null}
           <div className="my-2 border-t border-dashed" />
-          <p className="text-center text-muted-foreground">Thank you!</p>
+          <p className="whitespace-pre-line text-center text-muted-foreground">{footer}</p>
         </div>
         <div className="flex justify-between gap-2">
           <Button variant="outline" onClick={() => window.print()}>

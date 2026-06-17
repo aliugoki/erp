@@ -77,6 +77,18 @@ check "shift CLOSED" "$(echo "$CL" | jget data.status)" "CLOSED"
 check "expected cash 5000" "$(echo "$CL" | jget data.expectedCash.amountMinor)" "5000"
 check "variance 0" "$(echo "$CL" | jget data.variance.amountMinor)" "0"
 
+echo "== receipt branding: set fields, upload a logo, fetch the bytes back =="
+BR=$(curl -s -XPUT "$B/pos/branding" -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"storeName":"POS Co Store","address":"1 Market Rd","phone":"+92 300 0000000","receiptFooter":"Visit again!"}')
+check "branding storeName saved" "$(echo "$BR" | jget data.storeName)" "POS Co Store"
+check "branding footer saved" "$(echo "$BR" | jget data.receiptFooter)" "Visit again!"
+check "branding readable (cashier seam)" "$(curl -s "$B/pos/branding" -H "Authorization: Bearer $A" | jget data.address)" "1 Market Rd"
+LOGO="$(mktemp --suffix=.png)"; printf '\211PNG\r\n\032\n\0\0\0\rIHDR\0\0\0\1\0\0\0\1\10\6\0\0\0\037\25\304\211\0\0\0\nIDATx\234c\370\017\0\1\1\1\0\30\335\212\333\0\0\0\0IEND\256B\140\202' > "$LOGO"
+UP=$(curl -s -XPOST "$B/pos/branding/logo" -H "Authorization: Bearer $A" -F "file=@$LOGO;type=image/png")
+check "logo uploaded" "$(echo "$UP" | jget data.hasLogo)" "True"
+check "branding now hasLogo" "$(curl -s "$B/pos/branding" -H "Authorization: Bearer $A" | jget data.hasLogo)" "True"
+check "logo bytes 200 image/png" "$(code -H "Authorization: Bearer $A" -w '%{http_code} %{content_type}' "$B/pos/branding/logo" | cut -d';' -f1)" "200 image/png"
+rm -f "$LOGO"
+
 echo "== tenant isolation: another tenant sees no registers =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"POS Two\",\"adminEmail\":\"admin@postwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
 A2=$(login "admin@postwo.test")

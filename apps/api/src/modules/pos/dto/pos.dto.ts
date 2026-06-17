@@ -39,6 +39,14 @@ export class UpdateRegisterDto {
   @IsOptional() @IsString() cardTerminalUrl?: string;
 }
 
+/** Store / receipt branding shown on the printed sales receipt. */
+export class SetBrandingDto {
+  @IsOptional() @IsString() storeName?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() receiptFooter?: string;
+}
+
 /** Map the GL accounts a completed POS sale posts to. */
 export class SetPosGlConfigDto {
   @IsOptional() @IsUUID() clearingAccountId?: string;

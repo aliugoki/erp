@@ -3,15 +3,23 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Query,
+  StreamableFile,
+  UnsupportedMediaTypeException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { UploadedFileLike } from '../storage/storage.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
@@ -24,6 +32,7 @@ import {
   CreateSaleDto,
   OpenShiftDto,
   RefundSaleDto,
+  SetBrandingDto,
   SetPosGlConfigDto,
   TerminalChargeDto,
   UpdateRegisterDto,
@@ -163,6 +172,38 @@ export class PosController {
   @Roles(Role.SALES_REP, Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   topProducts(@Query('limit') limit?: string) {
     return this.pos.topProducts(limit ? Number(limit) : 10);
+  }
+
+  // ── Receipt branding ──────────────────────────────────────────────────────────
+  /** Store branding for the receipt — readable by any cashier so the till can render it. */
+  @Get('branding')
+  getBranding() {
+    return this.pos.getBranding();
+  }
+
+  @Put('branding')
+  @Roles(...ADMIN)
+  @HttpCode(HttpStatus.OK)
+  setBranding(@Body() dto: SetBrandingDto) {
+    return this.pos.setBranding(dto);
+  }
+
+  @Post('branding/logo')
+  @Roles(...ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  uploadLogo(@UploadedFile() file?: UploadedFileLike) {
+    if (!file) throw new UnsupportedMediaTypeException('A logo image file is required');
+    return this.pos.uploadLogo(file);
+  }
+
+  /** Stream the store logo (no role gate beyond the feature, so the receipt renders for cashiers). */
+  @Get('branding/logo')
+  @Header('Cache-Control', 'private, max-age=300')
+  async getLogo(): Promise<StreamableFile> {
+    const logo = await this.pos.getLogo();
+    if (!logo) throw new NotFoundException('No logo set');
+    return new StreamableFile(logo.data, { type: logo.contentType, disposition: 'inline' });
   }
 
   // ── GL posting config ───────────────────────────────────────────────────────
