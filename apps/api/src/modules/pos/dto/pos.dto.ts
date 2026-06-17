@@ -16,6 +16,8 @@ import {
 
 const PAYMENT_METHODS = ['CASH', 'CARD', 'MOBILE', 'WALLET', 'BANK', 'CREDIT', 'VOUCHER'] as const;
 
+const TERMINAL_PROVIDERS = ['NONE', 'SIMULATED', 'BRIDGE'] as const;
+
 // ── Registers ─────────────────────────────────────────────────────────────────
 export class CreateRegisterDto {
   @IsString() @MinLength(1) name!: string;
@@ -23,6 +25,8 @@ export class CreateRegisterDto {
   @IsOptional() @IsUUID() warehouseId?: string;
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  @IsOptional() @IsIn(TERMINAL_PROVIDERS as unknown as string[]) cardTerminalProvider?: string;
+  @IsOptional() @IsString() cardTerminalUrl?: string;
 }
 
 export class UpdateRegisterDto {
@@ -31,6 +35,14 @@ export class UpdateRegisterDto {
   @IsOptional() @IsUUID() warehouseId?: string;
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsIn(['ACTIVE', 'INACTIVE']) status?: string;
+  @IsOptional() @IsIn(TERMINAL_PROVIDERS as unknown as string[]) cardTerminalProvider?: string;
+  @IsOptional() @IsString() cardTerminalUrl?: string;
+}
+
+/** Initiate a charge on the register's card terminal (returns approval to attach as a CARD tender). */
+export class TerminalChargeDto {
+  @IsInt() @Min(1) amountMinor!: number;
+  @IsOptional() @IsString() reference?: string;
 }
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
@@ -59,6 +71,8 @@ export class PosPaymentDto {
   @IsIn(PAYMENT_METHODS as unknown as string[]) method!: string;
   @IsInt() @Min(1) amountMinor!: number;
   @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() cardScheme?: string;
+  @IsOptional() @IsString() cardLast4?: string;
 }
 
 export class CreateSaleDto {

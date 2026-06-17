@@ -5,6 +5,7 @@ import {
   computeLine,
   computeSaleTotals,
   expectedCashMinor,
+  simulateTerminalCharge,
   varianceMinor,
 } from '../src/modules/pos/pos.util';
 
@@ -54,5 +55,17 @@ describe('pos.util', () => {
     expect(expected).toBe(225_000);
     expect(varianceMinor(224_000, expected)).toBe(-1_000); // short by 1,000
     expect(varianceMinor(225_000, expected)).toBe(0);
+  });
+
+  it('simulateTerminalCharge: deterministic approval with scheme + 4-digit last4', () => {
+    const a = simulateTerminalCharge('SALE-000123', 275_000);
+    const b = simulateTerminalCharge('SALE-000123', 275_000);
+    expect(a).toEqual(b); // deterministic — no randomness
+    expect(a.status).toBe('APPROVED');
+    expect(a.reference).toMatch(/^SIM\d{6}$/);
+    expect(a.last4).toMatch(/^\d{4}$/);
+    expect(['VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY']).toContain(a.scheme);
+    // different inputs generally diverge
+    expect(simulateTerminalCharge('SALE-000124', 275_000).reference).not.toBe(a.reference);
   });
 });

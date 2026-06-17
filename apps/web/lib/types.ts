@@ -518,6 +518,15 @@ export interface PosRegister {
   location: string | null;
   status: string;
   currency: string;
+  cardTerminalProvider: string;
+  cardTerminalUrl: string | null;
+}
+export interface TerminalChargeResult {
+  status: 'APPROVED' | 'DECLINED' | 'ERROR';
+  reference: string | null;
+  scheme: string | null;
+  last4: string | null;
+  message: string | null;
 }
 export interface PosShiftReport {
   saleCount: number;
@@ -562,6 +571,8 @@ export interface PosPayment {
   method: string;
   amount: Money;
   reference: string | null;
+  cardScheme?: string | null;
+  cardLast4?: string | null;
   paidAt: string | null;
 }
 export interface PosSale {

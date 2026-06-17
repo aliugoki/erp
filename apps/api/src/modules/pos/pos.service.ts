@@ -5,11 +5,14 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import { EVENT_TYPES, type PosSaleCompletedV1 } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PaymentTerminalService } from './payment-terminal.service';
+import type { TerminalChargeDto } from './dto/pos.dto';
 import type {
   CloseShiftDto,
   CompleteSaleDto,
@@ -37,7 +40,7 @@ import {
 type Row = Record<string, unknown>;
 type Mgr = EntityManager;
 
-const REG_COLS = 'id, name, code, warehouse_id, location, status, currency';
+const REG_COLS = 'id, name, code, warehouse_id, location, status, currency, card_terminal_provider, card_terminal_url';
 const SHIFT_COLS =
   'id, shift_no, register_id, cashier_id, status, opened_at, closed_at, opening_float_minor, counted_cash_minor, expected_cash_minor, variance_minor, currency, notes';
 const SALE_COLS =
@@ -58,16 +61,26 @@ export class PosService {
     private readonly tenantTx: TenantTransactionService,
     private readonly inventoryDocs: InventoryDocsService,
     private readonly outbox: OutboxService,
+    private readonly terminal: PaymentTerminalService,
   ) {}
+
+  /** Initiate a card charge on the register's configured terminal. The cashier then records the
+   * returned reference/scheme as a CARD tender on the sale. Does not itself create a sale. */
+  async chargeCard(registerId: string, dto: TerminalChargeDto) {
+    const reg = await this.tenantTx.run((m) => this.getRegisterWith(m, registerId));
+    const reference = dto.reference ?? `CHG-${randomBytes(4).toString('hex').toUpperCase()}`;
+    return this.terminal.charge(reg, { amountMinor: dto.amountMinor, reference });
+  }
 
   // ── Registers ───────────────────────────────────────────────────────────────
   async createRegister(dto: CreateRegisterDto) {
     return this.tenantTx.run(async (m) => {
       try {
         const rows = (await m.query(
-          `INSERT INTO pos_register (tenant_id, name, code, warehouse_id, location, currency)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4, COALESCE($5,'PKR')) RETURNING ${REG_COLS}`,
-          [dto.name, dto.code ?? null, dto.warehouseId ?? null, dto.location ?? null, dto.currency ?? null],
+          `INSERT INTO pos_register (tenant_id, name, code, warehouse_id, location, currency, card_terminal_provider, card_terminal_url)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4, COALESCE($5,'PKR'), COALESCE($6,'NONE'), $7) RETURNING ${REG_COLS}`,
+          [dto.name, dto.code ?? null, dto.warehouseId ?? null, dto.location ?? null, dto.currency ?? null,
+            dto.cardTerminalProvider ?? null, dto.cardTerminalUrl ?? null],
         )) as Row[];
         return mapRegister(rows[0]!);
       } catch (err) {
@@ -103,6 +116,8 @@ export class PosService {
       if (dto.warehouseId !== undefined) set('warehouse_id', dto.warehouseId);
       if (dto.location !== undefined) set('location', dto.location);
       if (dto.status !== undefined) set('status', dto.status);
+      if (dto.cardTerminalProvider !== undefined) set('card_terminal_provider', dto.cardTerminalProvider);
+      if (dto.cardTerminalUrl !== undefined) set('card_terminal_url', dto.cardTerminalUrl);
       if (sets.length === 0) return this.getRegisterWith(m, id);
       const rows = rowsOf(
         await m.query(
@@ -583,12 +598,12 @@ export class PosService {
     return cogs;
   }
 
-  private async insertPayments(m: Mgr, saleId: string, payments: Array<Pick<PosPaymentDto, 'method' | 'amountMinor' | 'reference'>>) {
+  private async insertPayments(m: Mgr, saleId: string, payments: Array<Partial<PosPaymentDto> & { method: string; amountMinor: number }>) {
     for (const pay of payments) {
       await m.query(
-        `INSERT INTO pos_payment (tenant_id, sale_id, method, amount_minor, reference)
-         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4)`,
-        [saleId, pay.method, pay.amountMinor, pay.reference ?? null],
+        `INSERT INTO pos_payment (tenant_id, sale_id, method, amount_minor, reference, card_scheme, card_last4)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6)`,
+        [saleId, pay.method, pay.amountMinor, pay.reference ?? null, pay.cardScheme ?? null, pay.cardLast4 ?? null],
       );
     }
   }
@@ -679,7 +694,7 @@ export class PosService {
       [id],
     )) as Row[];
     const payments = (await m.query(
-      `SELECT id, method, amount_minor, reference, paid_at FROM pos_payment WHERE sale_id=$1 AND deleted_at IS NULL ORDER BY paid_at`,
+      `SELECT id, method, amount_minor, reference, card_scheme, card_last4, paid_at FROM pos_payment WHERE sale_id=$1 AND deleted_at IS NULL ORDER BY paid_at`,
       [id],
     )) as Row[];
     return {

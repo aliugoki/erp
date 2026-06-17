@@ -23,6 +23,7 @@ import {
   CreateSaleDto,
   OpenShiftDto,
   RefundSaleDto,
+  TerminalChargeDto,
   UpdateRegisterDto,
 } from './dto/pos.dto';
 import { PosService } from './pos.service';
@@ -71,6 +72,14 @@ export class PosController {
   @Get('registers/:id/current-shift')
   currentShift(@Param('id', ParseUUIDPipe) id: string) {
     return this.pos.currentShift(id);
+  }
+
+  /** Initiate a card charge on this register's terminal; returns the approval to attach as a tender. */
+  @Post('registers/:id/charge')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  charge(@Param('id', ParseUUIDPipe) id: string, @Body() dto: TerminalChargeDto) {
+    return this.pos.chargeCard(id, dto);
   }
 
   // ── Shifts ────────────────────────────────────────────────────────────────────

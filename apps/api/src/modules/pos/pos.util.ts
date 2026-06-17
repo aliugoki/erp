@@ -81,6 +81,38 @@ export function varianceMinor(countedMinor: number, expectedMinor: number): numb
   return countedMinor - expectedMinor;
 }
 
+// ── Card terminal ───────────────────────────────────────────────────────────
+export interface TerminalChargeResult {
+  status: 'APPROVED' | 'DECLINED' | 'ERROR';
+  reference: string | null;
+  scheme: string | null;
+  last4: string | null;
+  message: string | null;
+}
+
+const hashInt = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0);
+  return h >>> 0;
+};
+
+/**
+ * Built-in `SIMULATED` card terminal — deterministic from (reference, amount) so it's testable and
+ * never relies on randomness. Always approves with a plausible scheme + last-4 + auth code, standing
+ * in for a real reader during demos/dev. (`DECLINED`/`ERROR` come only from a real `BRIDGE` device.)
+ */
+export function simulateTerminalCharge(reference: string, amountMinor: number): TerminalChargeResult {
+  const h = hashInt(`${reference}:${amountMinor}`);
+  const scheme = ['VISA', 'MASTERCARD', 'AMEX', 'UNIONPAY'][h % 4]!;
+  return {
+    status: 'APPROVED',
+    reference: `SIM${String(h % 1_000_000).padStart(6, '0')}`,
+    scheme,
+    last4: String(h % 10_000).padStart(4, '0'),
+    message: 'Approved (simulated terminal)',
+  };
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 const money = (amountMinor: unknown, currency: unknown): Money => ({
@@ -99,6 +131,8 @@ export function mapRegister(r: Row) {
     location: (r.location as string) ?? null,
     status: r.status as string,
     currency: r.currency as string,
+    cardTerminalProvider: (r.card_terminal_provider as string) ?? 'NONE',
+    cardTerminalUrl: (r.card_terminal_url as string) ?? null,
   };
 }
 
@@ -126,6 +160,8 @@ export function mapPayment(r: Row, currency: unknown) {
     method: r.method as string,
     amount: money(r.amount_minor, currency),
     reference: (r.reference as string) ?? null,
+    cardScheme: (r.card_scheme as string) ?? null,
+    cardLast4: (r.card_last4 as string) ?? null,
     paidAt: iso(r.paid_at),
   };
 }
