@@ -1119,3 +1119,23 @@ export interface MrnRow {
   id: string; mrn_no: string; status: string; returned_on: string | null;
   returned_by: string | null; issue_no: string | null; warehouse: string | null; qty: number; value_minor: number;
 }
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+export type NotificationSeverity = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  severity: NotificationSeverity;
+  category: string;
+  link: string | null;
+  createdAt: string;
+  readAt: string | null;
+  archivedAt: string | null;
+}
+export interface NotificationPreference {
+  category: string;
+  inApp: boolean;
+  email: boolean;
+}

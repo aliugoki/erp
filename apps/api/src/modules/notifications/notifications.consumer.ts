@@ -1,21 +1,41 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
-import { type BaseEvent, type CrmDealClosedV1, EVENT_TYPES } from '@metaxperts/shared';
+import {
+  type BaseEvent,
+  type CrmDealClosedV1,
+  type CrmLeadConvertedV1,
+  EVENT_TYPES,
+  type FinanceInvoicePaidV1,
+  type HrLeaveApprovedV1,
+  type HrPayrollRunCompletedV1,
+  type InventoryLowStockV1,
+  type ProductionOrderCompletedV1,
+} from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
 import { NotificationsService } from './notifications.service';
 import { EmailQueueService } from './email-queue.service';
+import {
+  type NotificationDraft,
+  dealWonDraft,
+  invoicePaidDraft,
+  leadConvertedDraft,
+  leaveApprovedDraft,
+  lowStockDraft,
+  payrollDraft,
+  productionCompletedDraft,
+} from './notifications.util';
 
-function formatMinor(minor: number, currency: string): string {
-  return `${currency} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+type Recipient = { id: string; email: string | null };
 
 /**
- * Turns domain events into user-facing notifications (Chunk 5.1). Subscribes through the
- * IdempotentConsumer, so a notification is created exactly once per event even under redelivery, and a
- * failure is retried/dead-lettered. Flag-gated by `NOTIFICATIONS_ENABLED` (disabled in tests, which
- * drive {@link NotificationsService} directly). In-process per ADR-001.
+ * Turns domain events into user-facing notifications (Chunk 5.1, completed). Subscribes through the
+ * IdempotentConsumer, so notifications are created exactly once per event even under redelivery, and a
+ * failure is retried/dead-lettered. Events addressed to a specific user (deal assignee, lead owner)
+ * notify that user; operational events (low stock, invoice paid, payroll, production) fan out to the
+ * relevant role. The in-app row honors the recipient's category preference; email is opt-in + best
+ * effort. Flag-gated by `NOTIFICATIONS_ENABLED` (disabled in tests, which drive the consumer directly).
  */
 @Injectable()
 export class NotificationsConsumer implements OnApplicationBootstrap {
@@ -33,39 +53,76 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
       this.logger.log('Notifications disabled (NOTIFICATIONS_ENABLED is not set)');
       return;
     }
-    await this.consumer.register({
-      eventType: EVENT_TYPES.CRM_DEAL_CLOSED,
-      consumer: 'notify-deal-closed',
-      handler: (event, m) => this.onDealClosed(event, m),
-    });
-    this.logger.log('Notifications consumer registered (crm.deal_closed → assignee)');
+    const reg = (eventType: string, consumer: string, handler: (e: BaseEvent, m: EntityManager) => Promise<void>) =>
+      this.consumer.register({ eventType, consumer, handler });
+
+    await reg(EVENT_TYPES.CRM_DEAL_CLOSED, 'notify-deal-closed', (e, m) => this.onDealClosed(e, m));
+    await reg(EVENT_TYPES.CRM_LEAD_CONVERTED, 'notify-lead-converted', (e, m) => this.onLeadConverted(e, m));
+    await reg(EVENT_TYPES.INVENTORY_LOW_STOCK, 'notify-low-stock', (e, m) => this.onLowStock(e, m));
+    await reg(EVENT_TYPES.FINANCE_INVOICE_PAID, 'notify-invoice-paid', (e, m) => this.onInvoicePaid(e, m));
+    await reg(EVENT_TYPES.HR_LEAVE_APPROVED, 'notify-leave-approved', (e, m) => this.onLeaveApproved(e, m));
+    await reg(EVENT_TYPES.HR_PAYROLL_RUN_COMPLETED, 'notify-payroll', (e, m) => this.onPayroll(e, m));
+    await reg(EVENT_TYPES.PRODUCTION_ORDER_COMPLETED, 'notify-production', (e, m) => this.onProductionCompleted(e, m));
+    this.logger.log('Notifications consumer registered (7 event types)');
   }
 
-  /** crm.deal_closed → in-app notification for the deal's assignee (+ best-effort email). */
+  /** crm.deal_closed → in-app notification for the deal's assignee (+ best-effort email if opted in). */
   async onDealClosed(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as CrmDealClosedV1;
     if (!p.assignedTo) return; // unassigned deal → no recipient
+    await this.deliver(m, [await this.userRecipient(m, p.assignedTo)], dealWonDraft(p), event.id);
+  }
 
-    const created = await this.notifications.createInTx(m, {
-      userId: p.assignedTo,
-      type: 'crm.deal_won',
-      title: `Deal won: ${p.title}`,
-      body: `Closed-won at ${formatMinor(p.valueMinor, p.currency)}.`,
-      sourceEventId: event.id,
-    });
-    if (!created) return; // duplicate delivery — already notified
+  async onLeadConverted(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as CrmLeadConvertedV1;
+    if (!p.ownerId) return;
+    await this.deliver(m, [await this.userRecipient(m, p.ownerId)], leadConvertedDraft(p), event.id);
+  }
 
-    // Email side-channel: look up the recipient within the tenant tx (RLS-scoped), enqueue best-effort.
-    const rows = (await m.query(`SELECT email FROM users WHERE id=$1 AND deleted_at IS NULL`, [
-      p.assignedTo,
-    ])) as Array<{ email: string | null }>;
-    const to = rows[0]?.email;
-    if (to) {
-      void this.email.enqueue({
-        to,
-        subject: `Deal won: ${p.title}`,
-        text: `Congratulations — "${p.title}" was won at ${formatMinor(p.valueMinor, p.currency)}.`,
-      });
+  async onLowStock(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as InventoryLowStockV1;
+    const rows = (await m.query(`SELECT name FROM inventory_product WHERE id=$1 AND deleted_at IS NULL`, [p.productId])) as Array<{ name: string }>;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['INVENTORY_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, lowStockDraft(p, rows[0]?.name), event.id);
+  }
+
+  async onInvoicePaid(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as FinanceInvoicePaidV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['FINANCE_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, invoicePaidDraft(p), event.id);
+  }
+
+  async onLeaveApproved(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HrLeaveApprovedV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['HR_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, leaveApprovedDraft(p), event.id);
+  }
+
+  async onPayroll(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HrPayrollRunCompletedV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['HR_MANAGER', 'FINANCE_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, payrollDraft(p), event.id);
+  }
+
+  async onProductionCompleted(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as ProductionOrderCompletedV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['INVENTORY_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, productionCompletedDraft(p), event.id);
+  }
+
+  /** Create the in-app row per recipient (idempotent) and fan out opt-in emails (best effort). */
+  private async deliver(m: EntityManager, recipients: Recipient[], draft: NotificationDraft, sourceEventId: string): Promise<void> {
+    for (const r of recipients) {
+      const created = await this.notifications.createInTx(m, { userId: r.id, ...draft, sourceEventId });
+      if (!created) continue; // duplicate delivery or category muted in-app
+      if (r.email && (await this.notifications.emailEnabled(m, r.id, draft.category))) {
+        void this.email.enqueue({ to: r.email, subject: draft.title, text: draft.body });
+      }
     }
+  }
+
+  private async userRecipient(m: EntityManager, userId: string): Promise<Recipient> {
+    const rows = (await m.query(`SELECT email FROM users WHERE id=$1 AND deleted_at IS NULL`, [userId])) as Array<{ email: string | null }>;
+    return { id: userId, email: rows[0]?.email ?? null };
   }
 }
