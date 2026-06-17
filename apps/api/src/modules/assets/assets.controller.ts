@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -21,6 +22,7 @@ import {
   CreateMaintenanceDto,
   DisposeAssetDto,
   RunDepreciationDto,
+  SetGlConfigDto,
   UpdateAssetDto,
   UpdateCategoryDto,
 } from './dto/assets.dto';
@@ -89,6 +91,19 @@ export class AssetsController {
   @HttpCode(HttpStatus.CREATED)
   createMaintenance(@Body() dto: CreateMaintenanceDto) {
     return this.assets.createMaintenance(dto);
+  }
+
+  // ── GL posting config ───────────────────────────────────────────────────────
+  @Get('gl-config')
+  getGlConfig() {
+    return this.assets.getGlConfig();
+  }
+
+  @Put('gl-config')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  setGlConfig(@Body() dto: SetGlConfigDto) {
+    return this.assets.setGlConfig(dto);
   }
 
   // ── Reports ─────────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import type {
   UpdateCategoryDto,
 } from './dto/assets.dto';
 import {
+  type AssetGlAccounts,
   type DepMethod,
   depreciationSchedule,
   mapAsset,
@@ -361,6 +362,39 @@ export class AssetsService {
         bookValue: { amountMinor: Number(r.book_value_minor), currency: (r.currency as string) ?? 'PKR' },
       }));
     });
+  }
+
+  // ── GL posting config ─────────────────────────────────────────────────────────
+  /** The accounts a depreciation run posts to (Dr expense, Cr accumulated). Nulls when unconfigured. */
+  async getGlConfig(): Promise<AssetGlAccounts> {
+    return this.tenantTx.run((m) => this.glConfigInTx(m));
+  }
+
+  async setGlConfig(dto: { expenseAccountId?: string; accumulatedAccountId?: string }): Promise<AssetGlAccounts> {
+    return this.tenantTx.run(async (m) => {
+      try {
+        await m.query(
+          `INSERT INTO asset_gl_config (tenant_id, depreciation_expense_account_id, accumulated_depreciation_account_id)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2)
+           ON CONFLICT (tenant_id) DO UPDATE SET depreciation_expense_account_id=EXCLUDED.depreciation_expense_account_id,
+             accumulated_depreciation_account_id=EXCLUDED.accumulated_depreciation_account_id, updated_at=now()`,
+          [dto.expenseAccountId ?? null, dto.accumulatedAccountId ?? null],
+        );
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown finance account for this tenant');
+        throw err;
+      }
+      return this.glConfigInTx(m);
+    });
+  }
+
+  /** Read the GL config inside an existing tenant transaction (used by the depreciation consumer). */
+  async glConfigInTx(m: Mgr): Promise<AssetGlAccounts> {
+    const rows = (await m.query(
+      `SELECT depreciation_expense_account_id AS exp, accumulated_depreciation_account_id AS acc
+       FROM asset_gl_config WHERE deleted_at IS NULL LIMIT 1`,
+    )) as Array<{ exp: string | null; acc: string | null }>;
+    return { expenseAccountId: rows[0]?.exp ?? null, accumulatedAccountId: rows[0]?.acc ?? null };
   }
 
   // ── internals ─────────────────────────────────────────────────────────────────

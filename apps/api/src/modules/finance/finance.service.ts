@@ -171,6 +171,16 @@ export class FinanceService {
     return this.tenantTx.run((m) => this.postInTx(m, dto));
   }
 
+  /** Public seam: post a balanced voucher inside the CALLER's tenant transaction (e.g. an event
+   * consumer posting depreciation atomically with its idempotency row). Same validation as a normal
+   * post (balance, leaf accounts, voucher rule, period lock). */
+  async postJournalInTx(
+    m: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    dto: CreateTransactionDto,
+  ): Promise<unknown> {
+    return this.postInTx(m, dto);
+  }
+
   /**
    * Post a balanced voucher within an EXISTING tenant transaction (so AP/AR can post atomically with
    * a bill/payment). Validates balance, leaf accounts, voucher cash/bank rule, period lock; allocates

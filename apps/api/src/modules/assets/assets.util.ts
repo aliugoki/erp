@@ -73,6 +73,41 @@ export function salvageFromPct(costMinor: number, salvagePct: number): number {
   return Math.round((costMinor * (salvagePct || 0)) / 100);
 }
 
+export interface AssetGlAccounts {
+  expenseAccountId: string | null;
+  accumulatedAccountId: string | null;
+}
+
+export interface DepreciationVoucher {
+  description: string;
+  voucherType: 'JV';
+  occurredOn: string;
+  reference: string;
+  entries: Array<{ accountId: string; debitMinor?: number; creditMinor?: number }>;
+}
+
+/**
+ * Build the journal voucher for a depreciation run — Dr depreciation expense, Cr accumulated
+ * depreciation. Returns null when the GL accounts aren't configured or the amount is zero (the
+ * consumer then skips posting), so callers never post an unbalanced/empty voucher.
+ */
+export function depreciationVoucher(
+  accounts: AssetGlAccounts,
+  payload: { runNo: string; period: string; totalMinor: number },
+): DepreciationVoucher | null {
+  if (!accounts.expenseAccountId || !accounts.accumulatedAccountId || payload.totalMinor <= 0) return null;
+  return {
+    description: `Depreciation ${payload.runNo} (${payload.period})`,
+    voucherType: 'JV',
+    occurredOn: payload.period,
+    reference: payload.runNo,
+    entries: [
+      { accountId: accounts.expenseAccountId, debitMinor: payload.totalMinor },
+      { accountId: accounts.accumulatedAccountId, creditMinor: payload.totalMinor },
+    ],
+  };
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 const money = (amountMinor: unknown, currency: unknown): Money => ({

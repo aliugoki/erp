@@ -69,6 +69,12 @@ export class RunDepreciationDto {
   @IsOptional() @IsString() notes?: string;
 }
 
+// ── GL posting config ───────────────────────────────────────────────────────────
+export class SetGlConfigDto {
+  @IsOptional() @IsUUID() expenseAccountId?: string;
+  @IsOptional() @IsUUID() accumulatedAccountId?: string;
+}
+
 // ── Maintenance ─────────────────────────────────────────────────────────────────
 export class CreateMaintenanceDto {
   @IsUUID() assetId!: string;

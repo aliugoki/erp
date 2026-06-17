@@ -44,10 +44,11 @@ x-app-env: &app-env
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   LOG_LEVEL: info
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
-  # Event pipeline ON now that the schema is migrated: the outbox relay publishes domain events and the
-  # notifications consumer turns them into in-app notifications. Reactions/reporting stay opt-in.
+  # Event pipeline ON now that the schema is migrated: relay publishes domain events; notifications
+  # turns them into in-app notifications; reactions post depreciation to the GL + commissions / PO
+  # suggestions / running balance. Reporting refresh stays opt-in.
   OUTBOX_RELAY_ENABLED: "true"
-  WORKER_REACTIONS_ENABLED: "false"
+  WORKER_REACTIONS_ENABLED: "true"
   NOTIFICATIONS_ENABLED: "true"
   REPORTING_REFRESH_ENABLED: "false"
 

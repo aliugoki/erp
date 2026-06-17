@@ -1219,3 +1219,8 @@ export interface AssetRegisterRow {
   accumulated: Money;
   bookValue: Money;
 }
+
+export interface AssetGlConfig {
+  expenseAccountId: string | null;
+  accumulatedAccountId: string | null;
+}

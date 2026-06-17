@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { depreciationSchedule, periodDepreciation, salvageFromPct } from '../src/modules/assets/assets.util';
+import { depreciationSchedule, depreciationVoucher, periodDepreciation, salvageFromPct } from '../src/modules/assets/assets.util';
 
 describe('assets.util', () => {
   it('salvageFromPct = pct of cost', () => {
@@ -38,5 +38,19 @@ describe('assets.util', () => {
     expect(rows[0]!.amountMinor).toBeGreaterThan(rows[1]!.amountMinor); // tapering
     expect(rows[rows.length - 1]!.bookValueMinor).toBe(100_000); // ends at salvage
     expect(rows.every((r) => r.bookValueMinor >= 100_000)).toBe(true);
+  });
+
+  it('depreciationVoucher: balanced Dr expense / Cr accumulated, or null when unconfigured', () => {
+    const v = depreciationVoucher({ expenseAccountId: 'exp', accumulatedAccountId: 'acc' }, { runNo: 'DEP-000001', period: '2026-06-30', totalMinor: 100_000 });
+    expect(v).not.toBeNull();
+    expect(v!.voucherType).toBe('JV');
+    expect(v!.occurredOn).toBe('2026-06-30');
+    expect(v!.entries).toEqual([
+      { accountId: 'exp', debitMinor: 100_000 },
+      { accountId: 'acc', creditMinor: 100_000 },
+    ]);
+    // skips when accounts missing or amount zero
+    expect(depreciationVoucher({ expenseAccountId: null, accumulatedAccountId: 'acc' }, { runNo: 'r', period: '2026-06-30', totalMinor: 100_000 })).toBeNull();
+    expect(depreciationVoucher({ expenseAccountId: 'exp', accumulatedAccountId: 'acc' }, { runNo: 'r', period: '2026-06-30', totalMinor: 0 })).toBeNull();
   });
 });

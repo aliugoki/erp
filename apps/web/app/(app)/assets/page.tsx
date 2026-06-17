@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import type { Asset, AssetCategory, AssetDepreciationRun, AssetMaintenance, AssetRegisterRow } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { AssetDetailDialog } from '@/components/assets/asset-detail-dialog';
+import { GlConfigCard } from '@/components/assets/gl-config-card';
 import { NewAssetDialog } from '@/components/assets/new-asset-dialog';
 import { NewCategoryDialog } from '@/components/assets/new-category-dialog';
 import { NewMaintenanceDialog } from '@/components/assets/new-maintenance-dialog';
@@ -94,6 +95,7 @@ export default function AssetsPage() {
 
       {tab === 'depreciation' ? (
         <div className="space-y-4">
+          <GlConfigCard />
           <div className="overflow-hidden rounded-xl border">
             <div className="border-b bg-muted/40 px-4 py-2 text-sm font-medium">Asset register by category</div>
             <table className="w-full text-sm">
