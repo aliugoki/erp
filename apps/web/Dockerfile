@@ -28,9 +28,11 @@ FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3001 HOSTNAME=0.0.0.0
 # Standalone bundle mirrors the monorepo layout (tracing root = repo root): server.js lives at
-# apps/web/server.js and node_modules at the bundle root. Static assets are copied separately.
+# apps/web/server.js and node_modules at the bundle root. Static + public assets are copied separately
+# (public holds the PWA service worker + offline shell, which must be served for offline POS to work).
 COPY --from=build --chown=nonroot:nonroot /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=nonroot:nonroot /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=nonroot:nonroot /repo/apps/web/public ./apps/web/public
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD ["/nodejs/bin/node","-e","const p=process.env.PORT||3001;require('http').get('http://127.0.0.1:'+p+'/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
