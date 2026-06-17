@@ -18,6 +18,7 @@ import { ReactionsModule } from './modules/reactions/reactions.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
+import { SalesModule } from './modules/sales/sales.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -59,6 +60,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     FinanceModule,
     InventoryModule,
     CrmModule,
+    SalesModule,
     NotificationsModule,
     ReportingModule,
     RealtimeModule,

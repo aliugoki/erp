@@ -472,6 +472,43 @@ export interface CrmClient {
   companyName: string;
 }
 
+// ── Sales (quote-to-order) ────────────────────────────────────────────────────
+export interface SalesLine {
+  id?: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  deliveredQty?: number;
+  unitPrice: Money;
+  lineTotal: Money;
+}
+export interface Quotation {
+  id: string;
+  quoteNo: string;
+  clientId: string;
+  dealId: string | null;
+  status: string;
+  validUntil: string | null;
+  taxRate: number;
+  subtotal: Money;
+  tax: Money;
+  total: Money;
+  notes: string | null;
+  lines?: SalesLine[];
+}
+export interface SalesOrder {
+  id: string;
+  soNo: string;
+  clientId: string;
+  quotationId: string | null;
+  status: string;
+  orderDate: string | null;
+  expectedDate: string | null;
+  total: Money;
+  notes: string | null;
+  lines?: SalesLine[];
+}
+
 // ── Enterprise CRM ────────────────────────────────────────────────────────────
 export interface CrmAccount {
   id: string;

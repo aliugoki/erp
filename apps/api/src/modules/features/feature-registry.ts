@@ -57,6 +57,15 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
     ],
   },
   {
+    key: 'sales',
+    name: 'Sales',
+    description: 'Quotations and sales orders (quote-to-order).',
+    features: [
+      { key: 'sales.quotations', name: 'Quotations' },
+      { key: 'sales.orders', name: 'Sales orders' },
+    ],
+  },
+  {
     key: 'crm',
     name: 'CRM',
     description: 'Accounts, contacts, leads, opportunities, activities, sales reports.',
@@ -132,6 +141,9 @@ const BUSINESS = [
   'inventory.low_stock',
   'crm.deals',
   'crm.pipeline',
+  'sales',
+  'sales.quotations',
+  'sales.orders',
   'crm.leads',
   'crm.activities',
   'crm.reports',
