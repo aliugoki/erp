@@ -32,8 +32,8 @@ function write(key: string, value: unknown): void {
 
 // ── Catalogue + shift snapshot (so the terminal has data offline) ───────────────
 export function saveCatalog(products: Product[]): void {
-  // Keep it slim — only what the till needs to ring a sale.
-  write(K.catalog, products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, sellPrice: p.sellPrice, onHand: p.onHand })));
+  // Keep it slim — only what the till needs to ring a sale (+ the thumbnail id for online cache hits).
+  write(K.catalog, products.map((p) => ({ id: p.id, sku: p.sku, name: p.name, sellPrice: p.sellPrice, onHand: p.onHand, primaryImageId: p.primaryImageId ?? null })));
 }
 export function loadCatalog(): Product[] {
   return read<Product[]>(K.catalog, []);

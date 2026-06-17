@@ -27,6 +27,7 @@ import {
   saveShift,
 } from '@/lib/pos-offline';
 import { useOnline } from '@/lib/use-online';
+import { AuthImage } from '@/components/auth-image';
 import { OfflineBar } from '@/components/pos/offline-bar';
 import type { CrmClient, PosRegister, PosSale, PosShift, Product } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
@@ -381,13 +382,16 @@ export default function PosPage() {
                   key={p.id}
                   onClick={() => addProduct(p)}
                   disabled={!!resumingId}
-                  className="group rounded-xl border p-3 text-left transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                  className="group overflow-hidden rounded-xl border text-left transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
                 >
+                  <AuthImage path={p.primaryImageId ? `/inventory/products/${p.id}/images/${p.primaryImageId}` : null} alt={p.name} className="aspect-[4/3] w-full" />
+                  <div className="p-3">
                   <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{p.sku}</p>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-semibold">{formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency)}</span>
                     <Badge variant={p.onHand > 0 ? 'secondary' : 'outline'} className="text-[10px]">{p.onHand} in</Badge>
+                  </div>
                   </div>
                 </button>
               ))}
