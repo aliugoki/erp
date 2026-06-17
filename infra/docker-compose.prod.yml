@@ -44,10 +44,11 @@ x-app-env: &app-env
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   LOG_LEVEL: info
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
-  # Background workers OFF until the schema exists (Chunk 9.2). Flip to "true" after migrate+seed.
-  OUTBOX_RELAY_ENABLED: "false"
+  # Event pipeline ON now that the schema is migrated: the outbox relay publishes domain events and the
+  # notifications consumer turns them into in-app notifications. Reactions/reporting stay opt-in.
+  OUTBOX_RELAY_ENABLED: "true"
   WORKER_REACTIONS_ENABLED: "false"
-  NOTIFICATIONS_ENABLED: "false"
+  NOTIFICATIONS_ENABLED: "true"
   REPORTING_REFRESH_ENABLED: "false"
 
 services:
