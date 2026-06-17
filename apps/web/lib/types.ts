@@ -1336,3 +1336,110 @@ export interface TimesheetRow {
   cost: Money;
   billable: Money;
 }
+
+// ── Ecommerce (admin) ───────────────────────────────────────────────────────────
+export interface EcStore {
+  configured: boolean;
+  storefrontSlug: string | null;
+  name?: string;
+  tagline?: string | null;
+  description?: string | null;
+  currency?: string;
+  accentColor?: string;
+  hasLogo?: boolean;
+  hasHero?: boolean;
+  heroHeadline?: string | null;
+  heroSubtext?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  address?: string | null;
+  defaultTaxRate?: number;
+  shippingFlat?: Money;
+  freeShippingOver?: Money | null;
+  published?: boolean;
+}
+
+export interface EcCollection {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  sort: number;
+  isFeatured: boolean;
+  productCount?: number;
+}
+
+export interface EcProduct {
+  id: string;
+  productId: string | null;
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  status: string;
+  isFeatured: boolean;
+  sort: number;
+  taxRate: number;
+  price: Money;
+  compareAt: Money | null;
+  sku: string | null;
+  onHand: number | null;
+  primaryImageId: string | null;
+  imageCount?: number;
+  collectionIds?: string[];
+}
+
+export interface EcProductImage {
+  id: string;
+  attachmentId: string;
+  sort: number;
+  isPrimary: boolean;
+}
+
+export interface EcDiscount {
+  id: string;
+  code: string;
+  type: string;
+  value: number;
+  active: boolean;
+  minSubtotalMinor: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+}
+
+export interface EcOrderLine {
+  id: string;
+  productId: string | null;
+  title: string;
+  quantity: number;
+  unitPrice: Money;
+  tax: Money;
+  lineTotal: Money;
+}
+
+export interface EcOrder {
+  id: string;
+  orderNo: string;
+  clientId: string | null;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string | null;
+  shippingAddress: string | null;
+  shippingCity: string | null;
+  shippingCountry: string | null;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  shipping: Money;
+  total: Money;
+  cogs: Money;
+  discountCode: string | null;
+  placedAt: string | null;
+  createdAt: string | null;
+  lines?: EcOrderLine[];
+}

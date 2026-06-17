@@ -105,6 +105,22 @@ export interface AssetDepreciationPostedV1 {
   currency: string;
 }
 
+export interface EcommerceOrderPlacedV1 {
+  orderId: string;
+  orderNo: string;
+  /** Linked CRM account (upserted from the customer email), if any. */
+  clientId: string | null;
+  /** COD or CARD — a CARD order is paid at placement; COD is collected on delivery. */
+  paymentMethod: 'COD' | 'CARD';
+  totalMinor: number;
+  taxMinor: number;
+  shippingMinor: number;
+  /** Cost of goods sold captured at placement, for margin reporting + GL. */
+  cogsMinor: number;
+  currency: string;
+  lineCount: number;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -117,6 +133,7 @@ export const EVENT_TYPES = {
   POS_SALE_COMPLETED: 'pos.sale_completed.v1',
   PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
   ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
+  ECOMMERCE_ORDER_PLACED: 'ecommerce.order_placed.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -131,6 +148,7 @@ export interface EventPayloads {
   'pos.sale_completed.v1': PosSaleCompletedV1;
   'production.order_completed.v1': ProductionOrderCompletedV1;
   'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
+  'ecommerce.order_placed.v1': EcommerceOrderPlacedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -143,4 +161,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'notifications', 'orders'] as const;

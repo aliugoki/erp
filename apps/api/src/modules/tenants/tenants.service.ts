@@ -72,6 +72,16 @@ export class TenantsService {
     return { tenant, admin };
   }
 
+  /** Resolve an ACTIVE tenant by its public slug (used by the unauthenticated storefront). Null if
+   * not found / suspended — the `tenants` table is not RLS-scoped, so this is a direct lookup. */
+  async findBySlug(slug: string): Promise<{ id: string; name: string; slug: string; status: string } | null> {
+    const rows = (await this.dataSource.query(
+      `SELECT id, name, slug, status FROM tenants WHERE slug = $1 AND status = 'active' LIMIT 1`,
+      [slug],
+    )) as ProvisionResult['tenant'][];
+    return rows[0] ?? null;
+  }
+
   async findById(id: string): Promise<ProvisionResult['tenant']> {
     const rows = (await this.dataSource.query(
       `SELECT id, name, slug, status FROM tenants WHERE id = $1`,
