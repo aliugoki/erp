@@ -603,7 +603,7 @@ export class PosService {
       const rows = (await m.query(
         `INSERT INTO pos_sale (tenant_id, sale_no, register_id, shift_id, client_id, customer_name, type, original_sale_id,
            status, currency, subtotal_minor, discount_minor, tax_minor, total_minor, paid_minor, change_minor, cogs_minor, sold_by, notes)
-         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
          RETURNING id`,
         [
           p.saleNo, p.dto.registerId, p.dto.shiftId, p.dto.clientId ?? null, p.dto.customerName ?? null, p.type,
