@@ -23,6 +23,7 @@ import type {
   UpdateVariantDto,
   UpsertCollectionDto,
   UpsertDiscountDto,
+  UpsertShippingZoneDto,
   UpsertStoreDto,
 } from './dto/ecommerce.dto';
 import {
@@ -36,6 +37,7 @@ import {
   mapOrder,
   mapOrderLine,
   mapProduct,
+  mapShippingZone,
   mapStore,
   nextEcDocNo,
   priceLine,
@@ -415,6 +417,72 @@ export class EcommerceService {
       await m.query(`UPDATE ec_product_variant SET deleted_at = now() WHERE id = $1`, [id]);
       return { ok: true };
     });
+  }
+
+  // ── Shipping zones ──────────────────────────────────────────────────────────
+  async listShippingZones() {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(`SELECT * FROM ec_shipping_zone WHERE deleted_at IS NULL ORDER BY sort, created_at`)) as Row[];
+      return rows.map(mapShippingZone);
+    });
+  }
+
+  async createShippingZone(dto: UpsertShippingZoneDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `INSERT INTO ec_shipping_zone (tenant_id, name, countries, rate_minor, free_over_minor, sort, enabled)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2::text[], COALESCE($3,0), $4, COALESCE($5,0), COALESCE($6,true))
+         RETURNING *`,
+        [dto.name, normCountries(dto.countries), dto.rateMinor ?? null, dto.freeOverMinor ?? null, dto.sort ?? null, dto.enabled ?? null],
+      )) as Row[];
+      return mapShippingZone(rows[0]!);
+    });
+  }
+
+  async updateShippingZone(id: string, dto: UpsertShippingZoneDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf(await m.query(
+        `UPDATE ec_shipping_zone SET name = COALESCE($2, name), countries = COALESCE($3::text[], countries),
+            rate_minor = COALESCE($4, rate_minor), free_over_minor = $5, sort = COALESCE($6, sort),
+            enabled = COALESCE($7, enabled), updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+        [id, dto.name ?? null, dto.countries ? normCountries(dto.countries) : null, dto.rateMinor ?? null, dto.freeOverMinor ?? null, dto.sort ?? null, dto.enabled ?? null],
+      )) as Row[];
+      if (!rows[0]) throw new NotFoundException('Shipping zone not found');
+      return mapShippingZone(rows[0]);
+    });
+  }
+
+  async removeShippingZone(id: string) {
+    return this.tenantTx.run(async (m) => {
+      await m.query(`UPDATE ec_shipping_zone SET deleted_at = now() WHERE id = $1`, [id]);
+      return { ok: true };
+    });
+  }
+
+  /** A public shipping quote for a destination + subtotal (used by checkout when the country changes). */
+  async shippingQuote(country: string | undefined, subtotalMinor: number) {
+    return this.tenantTx.run(async (m) => {
+      const store = await this.storeRow(m);
+      const shippingMinor = await this.resolveShippingInTx(m, country ?? null, subtotalMinor, store);
+      return { shippingMinor, currency: (store?.currency as string) ?? 'PKR' };
+    });
+  }
+
+  /** Resolve the shipping charge: a zone matching the country (specific first, then catch-all), else the
+   * store's default flat/free-over. */
+  private async resolveShippingInTx(m: Mgr, country: string | null, subtotalMinor: number, store: Row | null): Promise<number> {
+    const zones = (await m.query(
+      `SELECT countries, rate_minor, free_over_minor FROM ec_shipping_zone WHERE enabled = true AND deleted_at IS NULL ORDER BY sort, created_at`,
+    )) as Array<{ countries: string[]; rate_minor: string; free_over_minor: string | null }>;
+    if (zones.length > 0) {
+      const c = (country ?? '').trim().toLowerCase();
+      const specific = c ? zones.find((z) => (z.countries ?? []).map((x) => x.toLowerCase()).includes(c)) : undefined;
+      const catchAll = zones.find((z) => !z.countries || z.countries.length === 0);
+      const zone = specific ?? catchAll;
+      if (zone) return shippingFor(subtotalMinor, Number(zone.rate_minor), zone.free_over_minor == null ? null : Number(zone.free_over_minor));
+    }
+    return shippingFor(subtotalMinor, Number(store?.shipping_flat_minor ?? 0), store?.free_shipping_over_minor == null ? null : Number(store.free_shipping_over_minor));
   }
 
   // ── Discounts ───────────────────────────────────────────────────────────────
@@ -919,7 +987,7 @@ export class EcommerceService {
       const subtotal = priced.reduce((s, l) => s + l.quantity * l.unitPriceMinor, 0);
       const couponRow = couponCode ? await this.validCoupon(m, couponCode, subtotal) : null;
       const discount: DiscountInput | null = couponRow ? { type: couponRow.type as 'PERCENT' | 'FIXED', value: Number(couponRow.value) } : null;
-      const shipping = shippingFor(subtotal, Number(store.shipping_flat_minor ?? 0), store.free_shipping_over_minor == null ? null : Number(store.free_shipping_over_minor));
+      const shipping = await this.resolveShippingInTx(m, dto.shippingCountry ?? null, subtotal, store);
       const totals = computeOrderTotals(priced, discount, shipping);
 
       const orderNo = await nextEcDocNo(m, 'ORD', 'ORDER');
@@ -1037,6 +1105,10 @@ function rowsOf(res: unknown): unknown[] {
 
 function isUnique(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { code?: string }).code === '23505';
+}
+/** Trim + lowercase a country list for case-insensitive zone matching (drops blanks). */
+function normCountries(countries?: string[]): string[] {
+  return (countries ?? []).map((c) => c.trim().toLowerCase()).filter(Boolean);
 }
 function rethrowSlugConflict(e: unknown): never {
   if (isUnique(e)) throw new ConflictException('That slug is already in use');

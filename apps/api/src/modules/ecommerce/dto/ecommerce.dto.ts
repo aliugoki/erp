@@ -137,6 +137,22 @@ export class ApplyCouponDto {
   @IsString() @MinLength(2) code!: string;
 }
 
+// ── Admin: shipping zones ───────────────────────────────────────────────────────
+export class UpsertShippingZoneDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) countries?: string[];
+  @IsOptional() @IsInt() @Min(0) rateMinor?: number;
+  @IsOptional() @IsInt() @Min(0) freeOverMinor?: number;
+  @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsBoolean() enabled?: boolean;
+}
+
+// ── Storefront: shipping quote ──────────────────────────────────────────────────
+export class ShippingQuoteDto {
+  @IsOptional() @IsString() country?: string;
+  @IsInt() @Min(0) subtotalMinor!: number;
+}
+
 // ── Admin: payment provider config ──────────────────────────────────────────────
 export class SetPaymentConfigDto {
   @IsIn(['SIMULATED', 'HTTP']) provider!: string;

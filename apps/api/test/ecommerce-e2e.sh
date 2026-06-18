@@ -162,6 +162,17 @@ check "webhook with bad signature → 401" "$(code -XPOST "$B/shop/$SLUG/pay/web
 ppost "shop/$SLUG/pay/webhook" "{\"paymentId\":\"$PID2\",\"status\":\"PAID\",\"signature\":\"$SIG\"}" >/dev/null
 check "signed webhook marks the order PAID" "$(ownerq "SELECT status FROM ec_order WHERE id='$HID'")" "PAID"
 
+echo "== shipping zones: the destination country selects the rate =="
+ZP=$(post "$A" ecommerce/shipping-zones '{"name":"Pakistan","countries":["Pakistan"],"rateMinor":0}' | jget data.id)
+ZI=$(post "$A" ecommerce/shipping-zones '{"name":"International","countries":[],"rateMinor":200000}' | jget data.id)
+check "zones created" "$([ -n "$ZP" ] && [ -n "$ZI" ] && echo ok)" "ok"
+check "quote: Pakistan ships free" "$(ppost "shop/$SLUG/shipping/quote" '{"country":"pakistan","subtotalMinor":2500}' | jget data.shippingMinor)" "0"
+check "quote: elsewhere → catch-all 2000" "$(ppost "shop/$SLUG/shipping/quote" '{"country":"USA","subtotalMinor":2500}' | jget data.shippingMinor)" "200000"
+PK_ORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"PK\",\"customerEmail\":\"pk@buyer.test\",\"shippingCountry\":\"Pakistan\",\"paymentMethod\":\"COD\"}")
+check "order shipped to Pakistan is free" "$(echo "$PK_ORD" | jget data.shipping.amountMinor)" "0"
+US_ORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"US\",\"customerEmail\":\"us@buyer.test\",\"shippingCountry\":\"United States\",\"paymentMethod\":\"COD\"}")
+check "order shipped abroad uses the catch-all rate" "$(echo "$US_ORD" | jget data.shipping.amountMinor)" "200000"
+
 echo "== isolation: a second tenant's unpublished store is a flat 404 =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"Shop Two\",\"adminEmail\":\"admin@shoptwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
 SLUG2=$(ownerq "SELECT slug FROM tenants WHERE name='Shop Two'")

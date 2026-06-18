@@ -1411,6 +1411,16 @@ export interface EcVariant {
   onHand: number | null;
 }
 
+export interface EcShippingZone {
+  id: string;
+  name: string;
+  countries: string[];
+  rate: Money;
+  freeOver: Money | null;
+  sort: number;
+  enabled: boolean;
+}
+
 export interface EcDiscount {
   id: string;
   code: string;

@@ -15,7 +15,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
-import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, ShippingQuoteDto, UpdateCartItemDto } from './dto/ecommerce.dto';
 import { CustomerAuthService } from './customer-auth.service';
 import { EcommerceService } from './ecommerce.service';
 import { PaymentService } from './payment.service';
@@ -170,6 +170,14 @@ export class StorefrontController {
   async coupon(@Param('slug') slug: string, @Param('token') token: string, @Body() dto: ApplyCouponDto) {
     await this.storefront.resolve(slug);
     return this.ec.applyCoupon(token, dto.code);
+  }
+
+  // ── Shipping ────────────────────────────────────────────────────────────────────
+  @Post('shipping/quote')
+  @HttpCode(HttpStatus.OK)
+  async shippingQuote(@Param('slug') slug: string, @Body() dto: ShippingQuoteDto) {
+    await this.storefront.resolve(slug);
+    return this.ec.shippingQuote(dto.country, dto.subtotalMinor);
   }
 
   // ── Checkout ────────────────────────────────────────────────────────────────────

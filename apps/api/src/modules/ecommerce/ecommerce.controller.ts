@@ -33,6 +33,7 @@ import {
   UpdateVariantDto,
   UpsertCollectionDto,
   UpsertDiscountDto,
+  UpsertShippingZoneDto,
   UpsertStoreDto,
 } from './dto/ecommerce.dto';
 import { EcommerceService } from './ecommerce.service';
@@ -230,6 +231,32 @@ export class EcommerceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeVariant(@Param('variantId', ParseUUIDPipe) variantId: string) {
     return this.ec.removeVariant(variantId);
+  }
+
+  // ── Shipping zones ──────────────────────────────────────────────────────────
+  @Get('shipping-zones')
+  listShippingZones() {
+    return this.ec.listShippingZones();
+  }
+
+  @Post('shipping-zones')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  createShippingZone(@Body() dto: UpsertShippingZoneDto) {
+    return this.ec.createShippingZone(dto);
+  }
+
+  @Patch('shipping-zones/:id')
+  @Roles(...WRITE)
+  updateShippingZone(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertShippingZoneDto) {
+    return this.ec.updateShippingZone(id, dto);
+  }
+
+  @Delete('shipping-zones/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeShippingZone(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ec.removeShippingZone(id);
   }
 
   // ── Discounts ───────────────────────────────────────────────────────────────

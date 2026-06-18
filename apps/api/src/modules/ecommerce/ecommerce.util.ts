@@ -335,6 +335,18 @@ export function mapOrder(r: Row) {
   };
 }
 
+export function mapShippingZone(r: Row) {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    countries: (r.countries as string[]) ?? [],
+    rate: money(r.rate_minor, r.currency),
+    freeOver: r.free_over_minor == null ? null : money(r.free_over_minor, r.currency),
+    sort: Number(r.sort ?? 0),
+    enabled: !!r.enabled,
+  };
+}
+
 export function mapDiscount(r: Row) {
   return {
     id: r.id as string,

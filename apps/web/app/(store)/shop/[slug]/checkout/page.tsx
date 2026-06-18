@@ -49,6 +49,14 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Checkout failed'),
   });
 
+  // Re-quote shipping for the entered destination (zones can override the store default).
+  const [quotedShip, setQuotedShip] = useState<number | null>(null);
+  const quote = useMutation({
+    mutationFn: (country: string) =>
+      apiPost<{ shippingMinor: number }>(sfPath(slug, '/shipping/quote'), { country, subtotalMinor: cart?.totals.subtotalMinor ?? 0 }),
+    onSuccess: (r) => setQuotedShip(r.shippingMinor),
+  });
+
   if (loading) return <div className="flex justify-center py-32"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
   const items = cart?.items ?? [];
@@ -63,6 +71,8 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
 
   const t = cart!.totals;
   const cur = cart!.currency;
+  const shipMinor = quotedShip ?? t.shippingMinor;
+  const totalMinor = t.subtotalMinor - t.discountMinor + t.taxMinor + shipMinor;
   const valid = form.customerName.trim() && /.+@.+\..+/.test(form.customerEmail);
 
   return (
@@ -81,7 +91,7 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
             <Field label="Address"><input value={form.shippingAddress} onChange={set('shippingAddress')} className={inputCls} placeholder="123 Market Road" /></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="City"><input value={form.shippingCity} onChange={set('shippingCity')} className={inputCls} placeholder="Lahore" /></Field>
-              <Field label="Country"><input value={form.shippingCountry} onChange={set('shippingCountry')} className={inputCls} placeholder="Pakistan" /></Field>
+              <Field label="Country"><input value={form.shippingCountry} onChange={set('shippingCountry')} onBlur={(e) => e.target.value.trim() && quote.mutate(e.target.value.trim())} className={inputCls} placeholder="Pakistan" /></Field>
             </div>
           </Card>
 
@@ -108,8 +118,8 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
             <Row label="Subtotal" value={formatMoney(t.subtotalMinor, cur)} />
             {t.discountMinor > 0 ? <Row label="Discount" value={`−${formatMoney(t.discountMinor, cur)}`} /> : null}
             {t.taxMinor > 0 ? <Row label="Tax" value={formatMoney(t.taxMinor, cur)} /> : null}
-            <Row label="Shipping" value={t.shippingMinor > 0 ? formatMoney(t.shippingMinor, cur) : 'Free'} />
-            <div className="border-t border-zinc-200 pt-2"><Row label="Total" value={formatMoney(t.totalMinor, cur)} bold /></div>
+            <Row label="Shipping" value={shipMinor > 0 ? formatMoney(shipMinor, cur) : 'Free'} />
+            <div className="border-t border-zinc-200 pt-2"><Row label="Total" value={formatMoney(totalMinor, cur)} bold /></div>
           </dl>
           <button
             type="button"
@@ -119,7 +129,7 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
             style={accentStyle(store)}
           >
             {place.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Place order · {formatMoney(t.totalMinor, cur)}
+            Place order · {formatMoney(totalMinor, cur)}
           </button>
           <p className="mt-3 text-center text-xs text-zinc-400">By placing this order you agree to {store.name}’s terms.</p>
         </div>
