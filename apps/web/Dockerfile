@@ -21,6 +21,11 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
+# Browser-facing API base URL is baked into the client bundle at build time. Default suits browsing on
+# the host; for remote access set it to the API's public URL (e.g. http://your-host:3300) via the
+# compose build arg PUBLIC_API_URL.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3300
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY . .
 RUN pnpm --filter @app/web build
 

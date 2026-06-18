@@ -228,6 +228,10 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        # Browser-facing API URL baked into the client bundle. Set PUBLIC_API_URL to the API's public
+        # address (e.g. http://YOUR_SERVER_IP:3300) to view the storefront from a remote browser.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3300}
     restart: unless-stopped
     environment:
       NODE_ENV: production
