@@ -109,8 +109,9 @@ SQL
 INVS=$(ownerq "SELECT id FROM inventory_product WHERE tenant_id='$T' AND sku='BLU-S'")
 INVL=$(ownerq "SELECT id FROM inventory_product WHERE tenant_id='$T' AND sku='BLU-L'")
  on() { ownerq "SELECT on_hand FROM inventory_product WHERE id='$1'"; }
-EP2=$(post "$A" ecommerce/products "{\"productId\":\"$INVS\",\"title\":\"Blue Tee\",\"status\":\"ACTIVE\",\"priceMinor\":2000}")
+EP2=$(post "$A" ecommerce/products "{\"productId\":\"$INVS\",\"title\":\"Blue Tee\",\"status\":\"ACTIVE\",\"priceMinor\":2000,\"seoTitle\":\"Blue Tee — Best Cotton Tee\",\"seoDescription\":\"Soft blue cotton tee.\"}")
 EPID2=$(echo "$EP2" | jget data.id); PSLUG2=$(echo "$EP2" | jget data.slug)
+check "storefront product exposes SEO metadata" "$(pget "shop/$SLUG/products/$PSLUG2" | jget data.seoTitle)" "Blue Tee — Best Cotton Tee"
 VS=$(post "$A" "ecommerce/products/$EPID2/variants" "{\"inventoryProductId\":\"$INVS\",\"label\":\"Small\"}" | jget data.id)
 VL=$(post "$A" "ecommerce/products/$EPID2/variants" "{\"inventoryProductId\":\"$INVL\",\"label\":\"Large\",\"isDefault\":true}" | jget data.id)
 check "variant create returns ids" "$([ -n "$VS" ] && [ -n "$VL" ] && echo ok)" "ok"

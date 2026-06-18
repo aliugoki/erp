@@ -51,7 +51,7 @@ type Mgr = EntityManager;
 /** Join an online listing to its inventory product for sku / base price / stock. */
 const PRODUCT_SELECT = `
   SELECT p.id, p.product_id, p.slug, p.title, p.subtitle, p.description, p.status, p.is_featured,
-         p.sort, p.tax_rate, p.price_minor, p.compare_at_minor,
+         p.sort, p.tax_rate, p.price_minor, p.compare_at_minor, p.seo_title, p.seo_description,
          ip.sku, ip.sell_price_minor, ip.cost_price_minor, ip.on_hand,
          (SELECT pi.attachment_id FROM ec_product_image pi WHERE pi.product_id = p.id AND pi.deleted_at IS NULL
             ORDER BY pi.is_primary DESC, pi.sort, pi.created_at LIMIT 1) AS primary_image_id,
@@ -237,12 +237,13 @@ export class EcommerceService {
       const slug = slugify(dto.slug || `${title}-${inv[0].sku}`);
       const rows = (await m.query(
         `INSERT INTO ec_product (tenant_id, product_id, slug, title, subtitle, description, price_minor,
-            compare_at_minor, status, is_featured, sort, tax_rate)
+            compare_at_minor, status, is_featured, sort, tax_rate, seo_title, seo_description)
          VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7,
-            COALESCE($8,'DRAFT'), COALESCE($9,false), COALESCE($10,0), COALESCE($11,0))
+            COALESCE($8,'DRAFT'), COALESCE($9,false), COALESCE($10,0), COALESCE($11,0), $12, $13)
          RETURNING id`,
         [dto.productId, slug, title, dto.subtitle ?? null, dto.description ?? null, dto.priceMinor ?? null,
-          dto.compareAtMinor ?? null, dto.status ?? null, dto.isFeatured ?? null, dto.sort ?? null, dto.taxRate ?? null],
+          dto.compareAtMinor ?? null, dto.status ?? null, dto.isFeatured ?? null, dto.sort ?? null, dto.taxRate ?? null,
+          dto.seoTitle ?? null, dto.seoDescription ?? null],
       ).catch(rethrowProductConflict)) as Array<{ id: string }>;
       const id = rows[0]!.id;
       if (dto.collectionIds) await this.replaceCollections(m, id, dto.collectionIds);
@@ -257,10 +258,11 @@ export class EcommerceService {
         `UPDATE ec_product SET title = COALESCE($2, title), slug = COALESCE($3, slug), subtitle = $4,
             description = $5, price_minor = $6, compare_at_minor = $7, status = COALESCE($8, status),
             is_featured = COALESCE($9, is_featured), sort = COALESCE($10, sort), tax_rate = COALESCE($11, tax_rate),
-            updated_at = now()
+            seo_title = $12, seo_description = $13, updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
         [id, dto.title ?? null, slug ?? null, dto.subtitle ?? null, dto.description ?? null, dto.priceMinor ?? null,
-          dto.compareAtMinor ?? null, dto.status ?? null, dto.isFeatured ?? null, dto.sort ?? null, dto.taxRate ?? null],
+          dto.compareAtMinor ?? null, dto.status ?? null, dto.isFeatured ?? null, dto.sort ?? null, dto.taxRate ?? null,
+          dto.seoTitle ?? null, dto.seoDescription ?? null],
       ).catch(rethrowProductConflict)) as Array<{ id: string }>;
       if (!rows[0]) throw new NotFoundException('Product not found');
       if (dto.collectionIds) await this.replaceCollections(m, id, dto.collectionIds);

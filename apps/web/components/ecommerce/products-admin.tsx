@@ -152,6 +152,7 @@ function ProductDialog({ product, onClose, onSaved }: { product?: EcProduct; onC
     description: product?.description ?? '', price: product ? String(product.price.amountMinor / 100) : '',
     compareAt: product?.compareAt ? String(product.compareAt.amountMinor / 100) : '', taxRate: String(product?.taxRate ?? 0),
     status: product?.status ?? 'ACTIVE', isFeatured: product?.isFeatured ?? false,
+    seoTitle: product?.seoTitle ?? '', seoDescription: product?.seoDescription ?? '',
   });
   const [cols, setCols] = useState<string[]>(product?.collectionIds ?? []);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -161,7 +162,7 @@ function ProductDialog({ product, onClose, onSaved }: { product?: EcProduct; onC
       const body = {
         title: f.title || undefined, subtitle: f.subtitle, description: f.description,
         priceMinor: toMinor(f.price), compareAtMinor: toMinor(f.compareAt), taxRate: Number(f.taxRate) || 0,
-        status: f.status, isFeatured: f.isFeatured, collectionIds: cols,
+        status: f.status, isFeatured: f.isFeatured, seoTitle: f.seoTitle, seoDescription: f.seoDescription, collectionIds: cols,
       };
       return editing ? apiPatch(`/ecommerce/products/${product!.id}`, body) : apiPost('/ecommerce/products', { productId: f.productId, ...body });
     },
@@ -212,6 +213,13 @@ function ProductDialog({ product, onClose, onSaved }: { product?: EcProduct; onC
               </div>
             </Field>
           ) : null}
+          <div className="rounded-lg border border-dashed p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Search & social (optional)</p>
+            <div className="space-y-2">
+              <Field label="SEO title"><Input value={f.seoTitle} onChange={set('seoTitle')} placeholder="(defaults to the product title)" /></Field>
+              <Field label="SEO description"><textarea value={f.seoDescription} onChange={set('seoDescription')} rows={2} className="w-full rounded-md border bg-background px-3 py-2 text-sm" placeholder="Shown in search results & link previews" /></Field>
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

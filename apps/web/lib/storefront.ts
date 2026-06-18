@@ -46,6 +46,8 @@ export interface SfProduct {
   title: string;
   subtitle: string | null;
   description: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
   status: string;
   isFeatured: boolean;
   price: Money;

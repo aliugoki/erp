@@ -261,6 +261,8 @@ export function mapProduct(r: Row, currency: unknown) {
     title: r.title as string,
     subtitle: (r.subtitle as string) ?? null,
     description: (r.description as string) ?? null,
+    seoTitle: (r.seo_title as string) ?? null,
+    seoDescription: (r.seo_description as string) ?? null,
     status: r.status as string,
     isFeatured: !!r.is_featured,
     sort: Number(r.sort ?? 0),

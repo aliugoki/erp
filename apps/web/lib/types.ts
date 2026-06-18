@@ -1376,6 +1376,8 @@ export interface EcProduct {
   title: string;
   subtitle: string | null;
   description: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
   status: string;
   isFeatured: boolean;
   sort: number;

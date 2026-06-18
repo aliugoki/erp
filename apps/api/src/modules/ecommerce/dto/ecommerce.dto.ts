@@ -57,6 +57,8 @@ export class CreateProductDto {
   @IsOptional() @IsBoolean() isFeatured?: boolean;
   @IsOptional() @IsInt() sort?: number;
   @IsOptional() @IsInt() @Min(0) @Max(100) taxRate?: number;
+  @IsOptional() @IsString() seoTitle?: string;
+  @IsOptional() @IsString() seoDescription?: string;
   @IsOptional() @IsArray() @IsUUID('all', { each: true }) collectionIds?: string[];
 }
 
@@ -71,6 +73,8 @@ export class UpdateProductDto {
   @IsOptional() @IsBoolean() isFeatured?: boolean;
   @IsOptional() @IsInt() sort?: number;
   @IsOptional() @IsInt() @Min(0) @Max(100) taxRate?: number;
+  @IsOptional() @IsString() seoTitle?: string;
+  @IsOptional() @IsString() seoDescription?: string;
   @IsOptional() @IsArray() @IsUUID('all', { each: true }) collectionIds?: string[];
 }
 
