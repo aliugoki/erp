@@ -18,6 +18,8 @@ import type {
   CreateProductDto,
   CreateVariantDto,
   SetEcGlConfigDto,
+  SetReviewStatusDto,
+  SubmitReviewDto,
   UpdateOrderStatusDto,
   UpdateProductDto,
   UpdateVariantDto,
@@ -37,6 +39,7 @@ import {
   mapOrder,
   mapOrderLine,
   mapProduct,
+  mapReview,
   mapShippingZone,
   mapStore,
   nextEcDocNo,
@@ -421,6 +424,77 @@ export class EcommerceService {
     });
   }
 
+  // ── Reviews ─────────────────────────────────────────────────────────────────
+  /** A signed-in customer submits a review (one per product). Starts PENDING; `verified` if they ordered it. */
+  async submitReview(productId: string, customer: { id: string; name: string; email: string }, dto: SubmitReviewDto) {
+    return this.tenantTx.run(async (m) => {
+      const prod = (await m.query(`SELECT id FROM ec_product WHERE id = $1 AND deleted_at IS NULL AND status = 'ACTIVE'`, [productId])) as Row[];
+      if (!prod[0]) throw new NotFoundException('Product not found');
+      const ordered = (await m.query(
+        `SELECT 1 FROM ec_order_line ol JOIN ec_order o ON o.id = ol.order_id
+         WHERE ol.ec_product_id = $1 AND lower(o.customer_email) = lower($2) AND o.deleted_at IS NULL LIMIT 1`,
+        [productId, customer.email],
+      )) as Row[];
+      const verified = ordered.length > 0;
+      await m.query(
+        `INSERT INTO ec_review (tenant_id, product_id, customer_id, author_name, rating, title, body, verified)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7)`,
+        [productId, customer.id, customer.name, dto.rating, dto.title ?? null, dto.body ?? null, verified],
+      ).catch((e: unknown) => {
+        if (isUnique(e)) throw new ConflictException('You have already reviewed this product');
+        throw e;
+      });
+      return { ok: true, status: 'PENDING' as const, verified };
+    });
+  }
+
+  /** Approved reviews + rating summary for a product (storefront). */
+  async reviewsInTx(m: Mgr, productId: string) {
+    const rows = (await m.query(
+      `SELECT id, product_id, author_name, rating, title, body, status, verified, created_at
+       FROM ec_review WHERE product_id = $1 AND status = 'APPROVED' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50`,
+      [productId],
+    )) as Row[];
+    const agg = (await m.query(
+      `SELECT COALESCE(round(avg(rating), 2), 0) AS avg, count(*) AS n FROM ec_review WHERE product_id = $1 AND status = 'APPROVED' AND deleted_at IS NULL`,
+      [productId],
+    )) as Array<{ avg: string; n: string }>;
+    return { reviews: rows.map(mapReview), ratingAvg: Number(agg[0]?.avg ?? 0), ratingCount: Number(agg[0]?.n ?? 0) };
+  }
+
+  async listReviews(filter?: { status?: string }) {
+    return this.tenantTx.run(async (m) => {
+      const conds = ['r.deleted_at IS NULL'];
+      const params: unknown[] = [];
+      if (filter?.status) conds.push(`r.status = $${params.push(filter.status)}`);
+      const rows = (await m.query(
+        `SELECT r.id, r.product_id, r.author_name, r.rating, r.title, r.body, r.status, r.verified, r.created_at, p.title AS product_title
+         FROM ec_review r JOIN ec_product p ON p.id = r.product_id
+         WHERE ${conds.join(' AND ')} ORDER BY r.created_at DESC LIMIT 200`,
+        params,
+      )) as Row[];
+      return rows.map(mapReview);
+    });
+  }
+
+  async setReviewStatus(id: string, dto: SetReviewStatusDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf(await m.query(
+        `UPDATE ec_review SET status = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+        [id, dto.status],
+      )) as Row[];
+      if (!rows[0]) throw new NotFoundException('Review not found');
+      return mapReview(rows[0]);
+    });
+  }
+
+  async deleteReview(id: string) {
+    return this.tenantTx.run(async (m) => {
+      await m.query(`UPDATE ec_review SET deleted_at = now() WHERE id = $1`, [id]);
+      return { ok: true };
+    });
+  }
+
   // ── Shipping zones ──────────────────────────────────────────────────────────
   async listShippingZones() {
     return this.tenantTx.run(async (m) => {
@@ -738,7 +812,8 @@ export class EcommerceService {
       const id = rows[0]!.id as string;
       const images = await this.listProductImages(id);
       const variants = await this.variantsInTx(m, id, true);
-      return { ...mapProduct(rows[0], currency), images, variants };
+      const reviews = await this.reviewsInTx(m, id);
+      return { ...mapProduct(rows[0], currency), images, variants, ...reviews };
     });
   }
 

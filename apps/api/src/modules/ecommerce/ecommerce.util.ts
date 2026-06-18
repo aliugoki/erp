@@ -337,6 +337,21 @@ export function mapOrder(r: Row) {
   };
 }
 
+export function mapReview(r: Row) {
+  return {
+    id: r.id as string,
+    productId: r.product_id as string,
+    productTitle: (r.product_title as string) ?? null,
+    authorName: r.author_name as string,
+    rating: Number(r.rating ?? 0),
+    title: (r.title as string) ?? null,
+    body: (r.body as string) ?? null,
+    status: r.status as string,
+    verified: !!r.verified,
+    createdAt: iso(r.created_at),
+  };
+}
+
 export function mapShippingZone(r: Row) {
   return {
     id: r.id as string,

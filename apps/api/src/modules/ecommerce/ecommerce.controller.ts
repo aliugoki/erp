@@ -28,6 +28,7 @@ import {
   CreateVariantDto,
   SetEcGlConfigDto,
   SetPaymentConfigDto,
+  SetReviewStatusDto,
   UpdateOrderStatusDto,
   UpdateProductDto,
   UpdateVariantDto,
@@ -231,6 +232,25 @@ export class EcommerceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeVariant(@Param('variantId', ParseUUIDPipe) variantId: string) {
     return this.ec.removeVariant(variantId);
+  }
+
+  // ── Reviews (moderation) ────────────────────────────────────────────────────
+  @Get('reviews')
+  listReviews(@Query('status') status?: string) {
+    return this.ec.listReviews({ status });
+  }
+
+  @Patch('reviews/:id/status')
+  @Roles(...WRITE)
+  setReviewStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetReviewStatusDto) {
+    return this.ec.setReviewStatus(id, dto);
+  }
+
+  @Delete('reviews/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteReview(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ec.deleteReview(id);
   }
 
   // ── Shipping zones ──────────────────────────────────────────────────────────

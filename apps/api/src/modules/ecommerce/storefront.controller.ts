@@ -15,7 +15,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
-import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, ShippingQuoteDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, ShippingQuoteDto, SubmitReviewDto, UpdateCartItemDto } from './dto/ecommerce.dto';
 import { CustomerAuthService } from './customer-auth.service';
 import { EcommerceService } from './ecommerce.service';
 import { PaymentService } from './payment.service';
@@ -106,6 +106,20 @@ export class StorefrontController {
   async product(@Param('slug') slug: string, @Param('productSlug') productSlug: string) {
     await this.storefront.resolve(slug);
     return this.ec.storefrontProduct(productSlug);
+  }
+
+  /** A signed-in customer leaves a review (moderated before it shows). */
+  @Post('products/:productId/reviews')
+  @HttpCode(HttpStatus.CREATED)
+  async submitReview(
+    @Param('slug') slug: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: SubmitReviewDto,
+    @Headers('authorization') auth?: string,
+  ) {
+    await this.storefront.resolve(slug);
+    const customer = await this.customers.profile(auth); // 401 unless signed in
+    return this.ec.submitReview(productId, customer, dto);
   }
 
   @Get('images/:imageId')

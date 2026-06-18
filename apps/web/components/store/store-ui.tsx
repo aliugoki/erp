@@ -2,7 +2,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Minus, Plus, ShoppingBag, ShoppingCart, Store, User } from 'lucide-react';
+import { Minus, Plus, ShoppingBag, ShoppingCart, Star, Store, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import {
@@ -242,6 +242,28 @@ export function ProductCard({ product }: { product: SfProduct }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Star rating ─────────────────────────────────────────────────────────────────
+export function Stars({ value, size = 16, onChange }: { value: number; size?: number; onChange?: (v: number) => void }) {
+  return (
+    <div className="flex items-center">
+      {[1, 2, 3, 4, 5].map((n) => {
+        const filled = n <= Math.round(value);
+        const Cmp = onChange ? 'button' : 'span';
+        return (
+          <Cmp
+            key={n}
+            {...(onChange ? { type: 'button' as const, onClick: () => onChange(n) } : {})}
+            className={onChange ? 'cursor-pointer' : ''}
+            aria-label={onChange ? `${n} star${n > 1 ? 's' : ''}` : undefined}
+          >
+            <Star style={{ width: size, height: size }} className={filled ? 'fill-amber-400 text-amber-400' : 'text-zinc-300'} />
+          </Cmp>
+        );
+      })}
     </div>
   );
 }

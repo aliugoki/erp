@@ -1413,6 +1413,19 @@ export interface EcVariant {
   onHand: number | null;
 }
 
+export interface EcReview {
+  id: string;
+  productId: string;
+  productTitle: string | null;
+  authorName: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  status: string;
+  verified: boolean;
+  createdAt: string | null;
+}
+
 export interface EcShippingZone {
   id: string;
   name: string;

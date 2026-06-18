@@ -40,6 +40,16 @@ export interface SfVariant {
   onHand: number | null;
 }
 
+export interface SfReview {
+  id: string;
+  authorName: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  verified: boolean;
+  createdAt: string | null;
+}
+
 export interface SfProduct {
   id: string;
   slug: string;
@@ -58,6 +68,9 @@ export interface SfProduct {
   imageCount?: number;
   images?: { id: string; attachmentId: string; isPrimary: boolean }[];
   variants?: SfVariant[];
+  reviews?: SfReview[];
+  ratingAvg?: number;
+  ratingCount?: number;
 }
 
 export interface SfHome {
@@ -159,14 +172,25 @@ export function clearCustomerToken(slug: string): void {
 
 /** GET a storefront endpoint with the customer session token attached (for /account/*). */
 export async function customerGet<T>(slug: string, path: string): Promise<T> {
+  return customerFetch<T>(slug, path, { method: 'GET' });
+}
+
+/** POST a storefront endpoint with the customer session token attached (e.g. submitting a review). */
+export async function customerPost<T>(slug: string, path: string, body?: unknown): Promise<T> {
+  return customerFetch<T>(slug, path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
+}
+
+async function customerFetch<T>(slug: string, path: string, init: RequestInit): Promise<T> {
   const tok = getCustomerToken(slug);
   const res = await fetch(`${API_URL}${sfPath(slug, path)}`, {
-    headers: tok ? { Authorization: ['Bearer', tok].join(' ') } : {},
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: ['Bearer', tok].join(' ') } : {}), ...init.headers },
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { detail?: string; title?: string };
-    throw new ApiError(res.status, body.detail ?? body.title ?? res.statusText);
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; title?: string };
+    throw new ApiError(res.status, data.detail ?? data.title ?? res.statusText);
   }
+  if (res.status === 204) return undefined as T;
   const json = (await res.json()) as { data?: T };
   return (json.data ?? (json as T)) as T;
 }

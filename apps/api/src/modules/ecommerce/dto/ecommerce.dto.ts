@@ -178,6 +178,17 @@ export class PaymentWebhookDto {
   @IsOptional() @IsString() providerRef?: string;
 }
 
+// ── Reviews ─────────────────────────────────────────────────────────────────────
+export class SubmitReviewDto {
+  @IsInt() @Min(1) @Max(5) rating!: number;
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() body?: string;
+}
+
+export class SetReviewStatusDto {
+  @IsIn(['PENDING', 'APPROVED', 'REJECTED']) status!: string;
+}
+
 // ── Storefront: customer accounts ───────────────────────────────────────────────
 export class CustomerRegisterDto {
   @IsString() @MinLength(1) name!: string;

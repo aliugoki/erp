@@ -1,12 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { LayoutGrid, Package, PackageOpen, Store, Tag, Truck, Wallet } from 'lucide-react';
+import { LayoutGrid, Package, PackageOpen, Star, Store, Tag, Truck, Wallet } from 'lucide-react';
 import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
 import { PaymentConfigCard } from '@/components/ecommerce/payment-config';
 import { CollectionsAdmin } from '@/components/ecommerce/collections-admin';
 import { DiscountsAdmin } from '@/components/ecommerce/discounts-admin';
 import { OrdersAdmin } from '@/components/ecommerce/orders-admin';
 import { ProductsAdmin } from '@/components/ecommerce/products-admin';
+import { ReviewsAdmin } from '@/components/ecommerce/reviews-admin';
 import { ShippingAdmin } from '@/components/ecommerce/shipping-admin';
 import { StoreSettings } from '@/components/ecommerce/store-settings';
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'products', label: 'Products', icon: Package },
   { key: 'collections', label: 'Collections', icon: LayoutGrid },
   { key: 'discounts', label: 'Discounts', icon: Tag },
+  { key: 'reviews', label: 'Reviews', icon: Star },
   { key: 'shipping', label: 'Shipping', icon: Truck },
   { key: 'orders', label: 'Orders', icon: PackageOpen },
   { key: 'accounting', label: 'Accounting', icon: Wallet },
@@ -50,6 +52,7 @@ export default function EcommercePage() {
       {tab === 'products' ? <ProductsAdmin /> : null}
       {tab === 'collections' ? <CollectionsAdmin /> : null}
       {tab === 'discounts' ? <DiscountsAdmin /> : null}
+      {tab === 'reviews' ? <ReviewsAdmin /> : null}
       {tab === 'shipping' ? <ShippingAdmin /> : null}
       {tab === 'orders' ? <OrdersAdmin /> : null}
       {tab === 'accounting' ? (

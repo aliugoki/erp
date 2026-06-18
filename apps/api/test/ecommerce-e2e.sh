@@ -139,6 +139,18 @@ check "me without a token → 401" "$(code "$B/shop/$SLUG/account/me")" "401"
 ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Repeat Buyer\",\"customerEmail\":\"repeat@buyer.test\",\"paymentMethod\":\"COD\"}" >/dev/null
 check "order history lists the customer's order" "$(curl -s "$B/shop/$SLUG/account/orders" -H "Authorization: Bearer $CTOK" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data'])>=1)")" "True"
 
+echo "== reviews: customer submits, admin moderates, storefront shows approved =="
+check "review needs sign-in → 401" "$(code -XPOST "$B/shop/$SLUG/products/$EPID/reviews" -H 'Content-Type: application/json' -d '{"rating":5}')" "401"
+RV=$(curl -s -XPOST "$B/shop/$SLUG/products/$EPID/reviews" -H "Authorization: Bearer $CTOK" -H 'Content-Type: application/json' -d '{"rating":5,"title":"Great","body":"Love it"}')
+check "review accepted PENDING" "$(echo "$RV" | jget data.status)" "PENDING"
+check "verified-purchase flagged" "$(echo "$RV" | jget data.verified)" "True"
+check "pending review hidden on storefront" "$(pget "shop/$SLUG/products/$PSLUG" | jget data.ratingCount)" "0"
+check "duplicate review → 409" "$(code -XPOST "$B/shop/$SLUG/products/$EPID/reviews" -H "Authorization: Bearer $CTOK" -H 'Content-Type: application/json' -d '{"rating":3}')" "409"
+RID=$(curl -s "$B/ecommerce/reviews?status=PENDING" -H "Authorization: Bearer $A" | python3 -c "import sys,json;print(json.load(sys.stdin)['data'][0]['id'])")
+patch "$A" "ecommerce/reviews/$RID/status" '{"status":"APPROVED"}' >/dev/null
+check "approved review shows on storefront" "$(pget "shop/$SLUG/products/$PSLUG" | jget data.ratingCount)" "1"
+check "rating average reflects it" "$(pget "shop/$SLUG/products/$PSLUG" | jget data.ratingAvg)" "5"
+
 echo "== payments: SIMULATED card session — pending → confirm → paid =="
 PAYORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Card Buyer\",\"customerEmail\":\"card@buyer.test\",\"paymentMethod\":\"CARD\"}")
 PID=$(echo "$PAYORD" | jget data.payment.paymentId)

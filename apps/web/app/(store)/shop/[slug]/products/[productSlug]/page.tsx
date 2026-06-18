@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, Loader2, ShoppingBag, ShoppingCart } from 'lucide-react';
-import { apiGet } from '@/lib/api';
-import { type SfProduct, productImageUrl, sfPath } from '@/lib/storefront';
-import { QtyStepper, accentStyle, useCart, useStore } from '@/components/store/store-ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, Loader2, ShieldCheck, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { toast } from 'sonner';
+import { ApiError, apiGet } from '@/lib/api';
+import { type SfProduct, customerPost, productImageUrl, sfPath } from '@/lib/storefront';
+import { QtyStepper, Stars, accentStyle, useCart, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
 
 export default function ProductDetail({ params }: { params: { slug: string; productSlug: string } }) {
@@ -80,6 +81,12 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{p.title}</h1>
           {p.subtitle ? <p className="mt-1 text-lg text-zinc-500">{p.subtitle}</p> : null}
+          {p.ratingCount ? (
+            <a href="#reviews" className="mt-2 flex items-center gap-2 text-sm">
+              <Stars value={p.ratingAvg ?? 0} />
+              <span className="text-zinc-500">{(p.ratingAvg ?? 0).toFixed(1)} · {p.ratingCount} review{p.ratingCount > 1 ? 's' : ''}</span>
+            </a>
+          ) : null}
 
           <div className="mt-5 flex items-center gap-3">
             <span className="text-2xl font-bold text-zinc-900">{formatMoney(price.amountMinor, price.currency)}</span>
@@ -142,6 +149,76 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
           {p.sku ? <p className="mt-4 text-xs text-zinc-400">SKU: {p.sku}</p> : null}
         </div>
       </div>
+
+      <ReviewsSection slug={slug} product={p} />
     </div>
+  );
+}
+
+function ReviewsSection({ slug, product }: { slug: string; product: SfProduct }) {
+  const { store } = useStore();
+  const { customer } = useCustomer(slug);
+  const qc = useQueryClient();
+  const reviews = product.reviews ?? [];
+  const [rating, setRating] = useState(5);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+
+  const submit = useMutation({
+    mutationFn: () => customerPost(slug, `/products/${product.id}/reviews`, { rating, title: title || undefined, body: body || undefined }),
+    onSuccess: () => {
+      toast.success('Thanks! Your review will appear once approved.');
+      setTitle(''); setBody(''); setRating(5);
+      void qc.invalidateQueries({ queryKey: ['sf-product', slug, product.slug] });
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not submit review'),
+  });
+
+  return (
+    <section id="reviews" className="mt-14 border-t border-zinc-100 pt-10">
+      <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Reviews</h2>
+      <div className="mt-2 flex items-center gap-3">
+        <Stars value={product.ratingAvg ?? 0} size={18} />
+        <span className="text-sm text-zinc-500">{product.ratingCount ? `${(product.ratingAvg ?? 0).toFixed(1)} out of 5 · ${product.ratingCount} review${product.ratingCount > 1 ? 's' : ''}` : 'No reviews yet'}</span>
+      </div>
+
+      <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_360px]">
+        {/* List */}
+        <div className="space-y-6">
+          {reviews.length === 0 ? (
+            <p className="text-sm text-zinc-500">Be the first to review this product.</p>
+          ) : reviews.map((r) => (
+            <div key={r.id} className="border-b border-zinc-100 pb-5 last:border-0">
+              <div className="flex items-center gap-2">
+                <Stars value={r.rating} size={14} />
+                {r.verified ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600"><ShieldCheck className="h-3.5 w-3.5" /> Verified purchase</span> : null}
+              </div>
+              {r.title ? <p className="mt-2 font-semibold text-zinc-900">{r.title}</p> : null}
+              {r.body ? <p className="mt-1 text-sm text-zinc-600">{r.body}</p> : null}
+              <p className="mt-2 text-xs text-zinc-400">{r.authorName}{r.createdAt ? ` · ${new Date(r.createdAt).toLocaleDateString()}` : ''}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Write a review */}
+        <div className="h-fit rounded-2xl border border-zinc-200 p-5">
+          <h3 className="text-sm font-semibold text-zinc-900">Write a review</h3>
+          {customer ? (
+            <div className="mt-3 space-y-3">
+              <div><span className="mb-1 block text-xs text-zinc-500">Your rating</span><Stars value={rating} size={24} onChange={setRating} /></div>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="h-9 w-full rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:border-zinc-400" />
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="Share your thoughts" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400" />
+              <button type="button" disabled={submit.isPending} onClick={() => submit.mutate()} className="flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={accentStyle(store)}>
+                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit review
+              </button>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">
+              <Link href={sfPath(slug, '/account')} className="font-medium" style={{ color: store.accentColor }}>Sign in</Link> to write a review.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
