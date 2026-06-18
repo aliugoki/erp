@@ -20,8 +20,8 @@ export default function CartPage({ params }: { params: { slug: string } }) {
   const setCart = (c: SfCart) => qc.setQueryData(['sf-cart', slug], c);
 
   const update = useMutation({
-    mutationFn: ({ productId, quantity }: { productId: string; quantity: number }) =>
-      apiPatch<SfCart>(sfPath(slug, `/cart/${tok}/items/${productId}`), { quantity }),
+    mutationFn: ({ productId, variantId, quantity }: { productId: string; variantId: string | null; quantity: number }) =>
+      apiPatch<SfCart>(sfPath(slug, `/cart/${tok}/items/${productId}`), { quantity, variantId: variantId ?? undefined }),
     onSuccess: setCart,
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Update failed'),
   });
@@ -58,7 +58,7 @@ export default function CartPage({ params }: { params: { slug: string } }) {
         {/* Items */}
         <div className="divide-y divide-zinc-100 rounded-2xl border border-zinc-200">
           {items.map((it) => (
-            <div key={it.productId} className="flex items-center gap-4 p-4">
+            <div key={it.productId + (it.variantId ?? '')} className="flex items-center gap-4 p-4">
               <Link href={sfPath(slug, `/products/${it.slug}`)} className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
                 {it.primaryImageId ? (
                   <img src={productImageUrl(slug, it.primaryImageId)} alt={it.title} className="h-full w-full object-cover" />
@@ -68,14 +68,15 @@ export default function CartPage({ params }: { params: { slug: string } }) {
               </Link>
               <div className="min-w-0 flex-1">
                 <Link href={sfPath(slug, `/products/${it.slug}`)} className="line-clamp-1 font-medium text-zinc-900 hover:underline">{it.title}</Link>
+                {it.variantLabel ? <p className="text-xs text-zinc-500">{it.variantLabel}</p> : null}
                 <p className="mt-0.5 text-sm text-zinc-500">{formatMoney(it.unitPriceMinor, cur)} each</p>
                 <div className="mt-2">
-                  <QtyStepper value={it.quantity} disabled={update.isPending} onChange={(v) => update.mutate({ productId: it.productId, quantity: v })} />
+                  <QtyStepper value={it.quantity} disabled={update.isPending} onChange={(v) => update.mutate({ productId: it.productId, variantId: it.variantId, quantity: v })} />
                 </div>
               </div>
               <div className="text-right">
                 <p className="font-semibold tabular-nums text-zinc-900">{formatMoney(it.lineTotalMinor, cur)}</p>
-                <button type="button" onClick={() => update.mutate({ productId: it.productId, quantity: 0 })} className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-rose-600">
+                <button type="button" onClick={() => update.mutate({ productId: it.productId, variantId: it.variantId, quantity: 0 })} className="mt-2 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-rose-600">
                   <Trash2 className="h-3.5 w-3.5" /> Remove
                 </button>
               </div>

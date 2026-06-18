@@ -274,11 +274,30 @@ export function mapProduct(r: Row, currency: unknown) {
   };
 }
 
+export function mapVariant(r: Row, currency: unknown) {
+  const priceMinor = r.price_minor == null ? Number(r.sell_price_minor ?? 0) : Number(r.price_minor);
+  return {
+    id: r.id as string,
+    productId: r.product_id as string,
+    inventoryProductId: r.inventory_product_id as string,
+    label: r.label as string,
+    status: r.status as string,
+    sort: Number(r.sort ?? 0),
+    isDefault: !!r.is_default,
+    price: money(priceMinor, currency),
+    compareAt: r.compare_at_minor == null ? null : money(r.compare_at_minor, currency),
+    sku: (r.sku as string) ?? null,
+    onHand: r.on_hand == null ? null : Number(r.on_hand),
+  };
+}
+
 export function mapOrderLine(r: Row, currency: unknown) {
   return {
     id: r.id as string,
     ecProductId: (r.ec_product_id as string) ?? null,
     productId: (r.product_id as string) ?? null,
+    variantId: (r.variant_id as string) ?? null,
+    variantLabel: (r.variant_label as string) ?? null,
     title: r.title as string,
     quantity: Number(r.quantity ?? 0),
     unitPrice: money(r.unit_price_minor, currency),

@@ -84,8 +84,8 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Your order</h2>
           <ul className="mt-4 space-y-2 text-sm">
             {items.map((it) => (
-              <li key={it.productId} className="flex justify-between gap-2">
-                <span className="line-clamp-1 text-zinc-600">{it.quantity}× {it.title}</span>
+              <li key={it.productId + (it.variantId ?? '')} className="flex justify-between gap-2">
+                <span className="line-clamp-1 text-zinc-600">{it.quantity}× {it.title}{it.variantLabel ? ` (${it.variantLabel})` : ''}</span>
                 <span className="tabular-nums text-zinc-900">{formatMoney(it.lineTotalMinor, cur)}</span>
               </li>
             ))}

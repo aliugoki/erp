@@ -25,9 +25,11 @@ import { RequiresFeature } from '../features/requires-feature.decorator';
 import type { UploadedFileLike } from '../storage/storage.service';
 import {
   CreateProductDto,
+  CreateVariantDto,
   SetEcGlConfigDto,
   UpdateOrderStatusDto,
   UpdateProductDto,
+  UpdateVariantDto,
   UpsertCollectionDto,
   UpsertDiscountDto,
   UpsertStoreDto,
@@ -183,6 +185,32 @@ export class EcommerceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeImage(@Param('imageId', ParseUUIDPipe) imageId: string) {
     return this.ec.removeProductImage(imageId);
+  }
+
+  // ── Product variants ──────────────────────────────────────────────────────────
+  @Get('products/:id/variants')
+  listVariants(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ec.listVariants(id);
+  }
+
+  @Post('products/:id/variants')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.CREATED)
+  addVariant(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateVariantDto) {
+    return this.ec.addVariant(id, dto);
+  }
+
+  @Patch('variants/:variantId')
+  @Roles(...WRITE)
+  updateVariant(@Param('variantId', ParseUUIDPipe) variantId: string, @Body() dto: UpdateVariantDto) {
+    return this.ec.updateVariant(variantId, dto);
+  }
+
+  @Delete('variants/:variantId')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeVariant(@Param('variantId', ParseUUIDPipe) variantId: string) {
+    return this.ec.removeVariant(variantId);
   }
 
   // ── Discounts ───────────────────────────────────────────────────────────────

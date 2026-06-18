@@ -15,9 +15,11 @@ import type {
   AddToCartDto,
   CheckoutDto,
   CreateProductDto,
+  CreateVariantDto,
   SetEcGlConfigDto,
   UpdateOrderStatusDto,
   UpdateProductDto,
+  UpdateVariantDto,
   UpsertCollectionDto,
   UpsertDiscountDto,
   UpsertStoreDto,
@@ -28,6 +30,7 @@ import {
   type OrderEmailInfo,
   computeOrderTotals,
   mapCollection,
+  mapVariant,
   mapDiscount,
   mapOrder,
   mapOrderLine,
@@ -214,7 +217,8 @@ export class EcommerceService {
         `SELECT collection_id FROM ec_product_collection WHERE product_id = $1`,
         [id],
       )) as Array<{ collection_id: string }>;
-      return { ...mapProduct(rows[0], currency), collectionIds: collections.map((c) => c.collection_id) };
+      const variants = await this.variantsInTx(m, id, false);
+      return { ...mapProduct(rows[0], currency), collectionIds: collections.map((c) => c.collection_id), variants };
     });
   }
 
@@ -343,6 +347,70 @@ export class EcommerceService {
   async removeProductImage(imageId: string) {
     return this.tenantTx.run(async (m) => {
       await m.query(`UPDATE ec_product_image SET deleted_at = now() WHERE id = $1`, [imageId]);
+      return { ok: true };
+    });
+  }
+
+  // ── Product variants ──────────────────────────────────────────────────────────
+  /** Variants for a product, joined to their inventory SKU for stock/base price. `activeOnly` for the storefront. */
+  async variantsInTx(m: Mgr, productId: string, activeOnly: boolean) {
+    const currency = await this.currency(m);
+    const rows = (await m.query(
+      `SELECT v.id, v.product_id, v.inventory_product_id, v.label, v.price_minor, v.compare_at_minor, v.sort, v.is_default, v.status,
+              ip.sku, ip.on_hand, ip.sell_price_minor
+       FROM ec_product_variant v JOIN inventory_product ip ON ip.id = v.inventory_product_id
+       WHERE v.product_id = $1 AND v.deleted_at IS NULL ${activeOnly ? `AND v.status = 'ACTIVE'` : ''}
+       ORDER BY v.is_default DESC, v.sort, v.created_at`,
+      [productId],
+    )) as Row[];
+    return rows.map((r) => mapVariant(r, currency));
+  }
+
+  async listVariants(productId: string) {
+    return this.tenantTx.run((m) => this.variantsInTx(m, productId, false));
+  }
+
+  async addVariant(productId: string, dto: CreateVariantDto) {
+    return this.tenantTx.run(async (m) => {
+      const prod = (await m.query(`SELECT id FROM ec_product WHERE id = $1 AND deleted_at IS NULL`, [productId])) as Row[];
+      if (!prod[0]) throw new NotFoundException('Product not found');
+      const inv = (await m.query(
+        `SELECT name FROM inventory_product WHERE id = $1 AND deleted_at IS NULL`,
+        [dto.inventoryProductId],
+      )) as Array<{ name: string }>;
+      if (!inv[0]) throw new NotFoundException('Inventory product not found');
+      if (dto.isDefault) await m.query(`UPDATE ec_product_variant SET is_default = false WHERE product_id = $1`, [productId]);
+      const rows = rowsOf(await m.query(
+        `INSERT INTO ec_product_variant (tenant_id, product_id, inventory_product_id, label, price_minor, compare_at_minor, sort, is_default)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, COALESCE($6,0), COALESCE($7,false))
+         RETURNING id`,
+        [productId, dto.inventoryProductId, dto.label || inv[0].name, dto.priceMinor ?? null, dto.compareAtMinor ?? null, dto.sort ?? null, dto.isDefault ?? null],
+      ).catch((e: unknown) => {
+        if (isUnique(e)) throw new ConflictException('That inventory product is already a variant of this listing');
+        throw e;
+      })) as Array<{ id: string }>;
+      return { id: rows[0]!.id };
+    });
+  }
+
+  async updateVariant(id: string, dto: UpdateVariantDto) {
+    return this.tenantTx.run(async (m) => {
+      const cur = (await m.query(`SELECT product_id FROM ec_product_variant WHERE id = $1 AND deleted_at IS NULL`, [id])) as Array<{ product_id: string }>;
+      if (!cur[0]) throw new NotFoundException('Variant not found');
+      if (dto.isDefault) await m.query(`UPDATE ec_product_variant SET is_default = false WHERE product_id = $1`, [cur[0].product_id]);
+      await m.query(
+        `UPDATE ec_product_variant SET label = COALESCE($2, label), price_minor = $3, compare_at_minor = $4,
+            sort = COALESCE($5, sort), is_default = COALESCE($6, is_default), status = COALESCE($7, status), updated_at = now()
+         WHERE id = $1`,
+        [id, dto.label ?? null, dto.priceMinor ?? null, dto.compareAtMinor ?? null, dto.sort ?? null, dto.isDefault ?? null, dto.status ?? null],
+      );
+      return { ok: true };
+    });
+  }
+
+  async removeVariant(id: string) {
+    return this.tenantTx.run(async (m) => {
+      await m.query(`UPDATE ec_product_variant SET deleted_at = now() WHERE id = $1`, [id]);
       return { ok: true };
     });
   }
@@ -595,8 +663,10 @@ export class EcommerceService {
         [slug],
       )) as Row[];
       if (!rows[0]) throw new NotFoundException('Product not found');
-      const images = await this.listProductImages(rows[0]!.id as string);
-      return { ...mapProduct(rows[0], currency), images };
+      const id = rows[0]!.id as string;
+      const images = await this.listProductImages(id);
+      const variants = await this.variantsInTx(m, id, true);
+      return { ...mapProduct(rows[0], currency), images, variants };
     });
   }
 
@@ -622,26 +692,33 @@ export class EcommerceService {
   async addToCart(token: string, dto: AddToCartDto) {
     return this.tenantTx.run(async (m) => {
       const cart = await this.cartRow(m, token);
-      const prod = await this.activeProduct(m, dto.productId);
+      const prod = await this.resolvePurchasable(m, dto.productId, dto.variantId);
       const qty = dto.quantity ?? 1;
-      await m.query(
-        `INSERT INTO ec_cart_item (tenant_id, cart_id, product_id, quantity, unit_price_minor)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)
-         ON CONFLICT (tenant_id, cart_id, product_id)
-         DO UPDATE SET quantity = ec_cart_item.quantity + $3, unit_price_minor = $4`,
-        [cart.id, dto.productId, qty, prod.unitPriceMinor],
-      );
+      // Manual upsert keyed by (cart, product, variant) — `IS NOT DISTINCT FROM` matches a null variant.
+      const existing = (await m.query(
+        `SELECT id FROM ec_cart_item WHERE cart_id = $1 AND product_id = $2 AND variant_id IS NOT DISTINCT FROM $3`,
+        [cart.id, dto.productId, prod.variantId],
+      )) as Array<{ id: string }>;
+      if (existing[0]) {
+        await m.query(`UPDATE ec_cart_item SET quantity = quantity + $2, unit_price_minor = $3 WHERE id = $1`, [existing[0].id, qty, prod.unitPriceMinor]);
+      } else {
+        await m.query(
+          `INSERT INTO ec_cart_item (tenant_id, cart_id, product_id, variant_id, quantity, unit_price_minor)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5)`,
+          [cart.id, dto.productId, prod.variantId, qty, prod.unitPriceMinor],
+        );
+      }
       return this.cartView(m, token);
     });
   }
 
-  async updateCartItem(token: string, productId: string, quantity: number) {
+  async updateCartItem(token: string, productId: string, quantity: number, variantId?: string | null) {
     return this.tenantTx.run(async (m) => {
       const cart = await this.cartRow(m, token);
       if (quantity <= 0) {
-        await m.query(`DELETE FROM ec_cart_item WHERE cart_id = $1 AND product_id = $2`, [cart.id, productId]);
+        await m.query(`DELETE FROM ec_cart_item WHERE cart_id = $1 AND product_id = $2 AND variant_id IS NOT DISTINCT FROM $3`, [cart.id, productId, variantId ?? null]);
       } else {
-        await m.query(`UPDATE ec_cart_item SET quantity = $3 WHERE cart_id = $1 AND product_id = $2`, [cart.id, productId, quantity]);
+        await m.query(`UPDATE ec_cart_item SET quantity = $3 WHERE cart_id = $1 AND product_id = $2 AND variant_id IS NOT DISTINCT FROM $4`, [cart.id, productId, quantity, variantId ?? null]);
       }
       return this.cartView(m, token);
     });
@@ -671,13 +748,13 @@ export class EcommerceService {
     if (!cart[0]) throw new NotFoundException('Cart not found');
     const currency = await this.currency(m);
     const items = (await m.query(
-      `SELECT ci.product_id, ci.quantity, p.title, p.slug, p.tax_rate,
-              COALESCE(p.price_minor, ip.sell_price_minor) AS unit_price_minor,
+      `SELECT ci.product_id, ci.variant_id, ci.quantity, ci.unit_price_minor, p.title, p.slug, p.tax_rate,
+              v.label AS variant_label,
               (SELECT pi.attachment_id FROM ec_product_image pi WHERE pi.product_id = p.id AND pi.deleted_at IS NULL
                  ORDER BY pi.is_primary DESC, pi.sort LIMIT 1) AS primary_image_id
        FROM ec_cart_item ci
        JOIN ec_product p ON p.id = ci.product_id AND p.deleted_at IS NULL
-       JOIN inventory_product ip ON ip.id = p.product_id
+       LEFT JOIN ec_product_variant v ON v.id = ci.variant_id
        WHERE ci.cart_id = $1 ORDER BY ci.created_at`,
       [cart[0]!.id],
     )) as Row[];
@@ -700,6 +777,8 @@ export class EcommerceService {
       currency,
       items: items.map((r, i) => ({
         productId: r.product_id as string,
+        variantId: (r.variant_id as string) ?? null,
+        variantLabel: (r.variant_label as string) ?? null,
         slug: r.slug as string,
         title: r.title as string,
         quantity: Number(r.quantity),
@@ -711,23 +790,57 @@ export class EcommerceService {
     };
   }
 
-  private async activeProduct(m: Mgr, ecProductId: string) {
-    const rows = (await m.query(
-      `SELECT p.id, p.product_id, p.title, p.tax_rate, COALESCE(p.price_minor, ip.sell_price_minor) AS unit_price_minor,
-              ip.on_hand, ip.cost_price_minor
+  /**
+   * Resolve the purchasable unit for an add-to-cart / checkout request. A product with variants sells
+   * through its variants (each backed by its own inventory product); `variantId` picks one, else the
+   * default variant is used. A product with no variants sells its base inventory product directly.
+   * Returns the inventory product to move stock against, the effective price, and on-hand qty.
+   */
+  private async resolvePurchasable(m: Mgr, ecProductId: string, variantId?: string | null) {
+    const prodRows = (await m.query(
+      `SELECT p.id, p.product_id, p.title, p.tax_rate, p.price_minor, ip.sell_price_minor AS base_sell, ip.on_hand AS base_on_hand,
+              (SELECT count(*) FROM ec_product_variant v WHERE v.product_id = p.id AND v.deleted_at IS NULL AND v.status = 'ACTIVE') AS variant_count
        FROM ec_product p JOIN inventory_product ip ON ip.id = p.product_id AND ip.deleted_at IS NULL
        WHERE p.id = $1 AND p.deleted_at IS NULL AND p.status = 'ACTIVE'`,
       [ecProductId],
     )) as Row[];
-    if (!rows[0]) throw new UnprocessableEntityException('Product unavailable');
-    const r = rows[0];
+    if (!prodRows[0]) throw new UnprocessableEntityException('Product unavailable');
+    const p = prodRows[0];
+    const hasVariants = Number(p.variant_count ?? 0) > 0;
+
+    if (hasVariants || variantId) {
+      const vRows = (await m.query(
+        `SELECT v.id, v.label, v.price_minor, v.inventory_product_id, iv.on_hand, iv.sell_price_minor
+         FROM ec_product_variant v JOIN inventory_product iv ON iv.id = v.inventory_product_id AND iv.deleted_at IS NULL
+         WHERE v.product_id = $1 AND v.deleted_at IS NULL AND v.status = 'ACTIVE' AND ($2::uuid IS NULL OR v.id = $2)
+         ORDER BY v.is_default DESC, v.sort, v.created_at LIMIT 1`,
+        [ecProductId, variantId ?? null],
+      )) as Row[];
+      if (!vRows[0]) throw new UnprocessableEntityException('Selected option is unavailable');
+      const v = vRows[0];
+      const priceMinor = v.price_minor != null ? Number(v.price_minor)
+        : p.price_minor != null ? Number(p.price_minor) : Number(v.sell_price_minor ?? 0);
+      return {
+        ecProductId: p.id as string,
+        productId: v.inventory_product_id as string,
+        variantId: v.id as string,
+        title: p.title as string,
+        variantLabel: v.label as string,
+        taxRate: Number(p.tax_rate ?? 0),
+        unitPriceMinor: priceMinor,
+        onHand: Number(v.on_hand ?? 0),
+      };
+    }
+
     return {
-      ecProductId: r.id as string,
-      productId: r.product_id as string,
-      title: r.title as string,
-      taxRate: Number(r.tax_rate ?? 0),
-      unitPriceMinor: Number(r.unit_price_minor),
-      onHand: Number(r.on_hand ?? 0),
+      ecProductId: p.id as string,
+      productId: p.product_id as string,
+      variantId: null as string | null,
+      title: p.title as string,
+      variantLabel: null as string | null,
+      taxRate: Number(p.tax_rate ?? 0),
+      unitPriceMinor: p.price_minor != null ? Number(p.price_minor) : Number(p.base_sell ?? 0),
+      onHand: Number(p.base_on_hand ?? 0),
     };
   }
 
@@ -760,7 +873,7 @@ export class EcommerceService {
       const currency = (store.currency as string) ?? 'PKR';
 
       // Resolve the lines from a server cart or the directly-passed items.
-      let requested: Array<{ productId: string; quantity: number }>;
+      let requested: Array<{ productId: string; variantId: string | null; quantity: number }>;
       let cartId: string | null = null;
       let couponCode: string | null = dto.discountCode?.toUpperCase() ?? null;
       if (dto.cartToken) {
@@ -768,32 +881,37 @@ export class EcommerceService {
         cartId = cart.id;
         couponCode = couponCode ?? cart.discount_code;
         const items = (await m.query(
-          `SELECT product_id, quantity FROM ec_cart_item WHERE cart_id = $1`,
+          `SELECT product_id, variant_id, quantity FROM ec_cart_item WHERE cart_id = $1`,
           [cart.id],
-        )) as Array<{ product_id: string; quantity: number }>;
-        requested = items.map((i) => ({ productId: i.product_id, quantity: Number(i.quantity) }));
+        )) as Array<{ product_id: string; variant_id: string | null; quantity: number }>;
+        requested = items.map((i) => ({ productId: i.product_id, variantId: i.variant_id ?? null, quantity: Number(i.quantity) }));
       } else if (dto.items?.length) {
-        requested = dto.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
+        requested = dto.items.map((i) => ({ productId: i.productId, variantId: i.variantId ?? null, quantity: i.quantity }));
       } else {
         throw new BadRequestException('No items to order');
       }
       if (!requested.length) throw new BadRequestException('Cart is empty');
 
-      // Price + stock-check each line against the live catalogue.
+      // Price + stock-check each line (per variant) against the live catalogue.
       const priced = [];
       for (const item of requested) {
-        const prod = await this.activeProduct(m, item.productId);
+        const prod = await this.resolvePurchasable(m, item.productId, item.variantId);
         if (prod.onHand < item.quantity) {
-          throw new UnprocessableEntityException(`Insufficient stock for "${prod.title}" (have ${prod.onHand})`);
+          const name = prod.variantLabel ? `${prod.title} (${prod.variantLabel})` : prod.title;
+          throw new UnprocessableEntityException(`Insufficient stock for "${name}" (have ${prod.onHand})`);
         }
-        priced.push(priceLine({
-          ecProductId: prod.ecProductId,
-          productId: prod.productId,
-          title: prod.title,
-          quantity: item.quantity,
-          unitPriceMinor: prod.unitPriceMinor,
-          taxRate: prod.taxRate || Number(store.default_tax_rate ?? 0),
-        }));
+        priced.push({
+          ...priceLine({
+            ecProductId: prod.ecProductId,
+            productId: prod.productId,
+            title: prod.title,
+            quantity: item.quantity,
+            unitPriceMinor: prod.unitPriceMinor,
+            taxRate: prod.taxRate || Number(store.default_tax_rate ?? 0),
+          }),
+          variantId: prod.variantId,
+          variantLabel: prod.variantLabel,
+        });
       }
 
       const subtotal = priced.reduce((s, l) => s + l.quantity * l.unitPriceMinor, 0);
@@ -844,10 +962,10 @@ export class EcommerceService {
       for (let i = 0; i < priced.length; i++) {
         const l = priced[i]!;
         await m.query(
-          `INSERT INTO ec_order_line (tenant_id, order_id, ec_product_id, product_id, title, quantity,
+          `INSERT INTO ec_order_line (tenant_id, order_id, ec_product_id, product_id, variant_id, variant_label, title, quantity,
               unit_price_minor, tax_rate, tax_minor, line_total_minor, unit_cost_minor)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [orderId, l.ecProductId, l.productId, l.title, l.quantity, l.unitPriceMinor, l.taxRate, l.taxMinor, l.lineTotalMinor, lineCosts[i]],
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [orderId, l.ecProductId, l.productId, l.variantId, l.variantLabel, l.title, l.quantity, l.unitPriceMinor, l.taxRate, l.taxMinor, l.lineTotalMinor, lineCosts[i]],
         );
       }
 

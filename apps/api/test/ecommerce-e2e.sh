@@ -100,6 +100,30 @@ check "order now SHIPPED" "$(echo "$UP" | jget data.status)" "SHIPPED"
 check "order_status_changed in outbox" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T' AND type='ecommerce.order_status_changed.v1'")" "1"
 check "no-op status change emits nothing new" "$(patch "$A" "ecommerce/orders/$OID/status" '{"status":"SHIPPED"}' >/dev/null; ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T' AND type='ecommerce.order_status_changed.v1'")" "1"
 
+echo "== product variants: each variant draws its own inventory SKU =="
+psql "$OWNER_URL" -q >/dev/null 2>&1 <<SQL
+INSERT INTO inventory_product (tenant_id, sku, name, unit, cost_price_minor, sell_price_minor, currency, min_stock, on_hand, stock_value_minor)
+VALUES ('$T','BLU-S','Blue Tee S','ea',500,1800,'PKR',1,5,2500),
+       ('$T','BLU-L','Blue Tee L','ea',500,1800,'PKR',1,3,1500);
+SQL
+INVS=$(ownerq "SELECT id FROM inventory_product WHERE tenant_id='$T' AND sku='BLU-S'")
+INVL=$(ownerq "SELECT id FROM inventory_product WHERE tenant_id='$T' AND sku='BLU-L'")
+ on() { ownerq "SELECT on_hand FROM inventory_product WHERE id='$1'"; }
+EP2=$(post "$A" ecommerce/products "{\"productId\":\"$INVS\",\"title\":\"Blue Tee\",\"status\":\"ACTIVE\",\"priceMinor\":2000}")
+EPID2=$(echo "$EP2" | jget data.id); PSLUG2=$(echo "$EP2" | jget data.slug)
+VS=$(post "$A" "ecommerce/products/$EPID2/variants" "{\"inventoryProductId\":\"$INVS\",\"label\":\"Small\"}" | jget data.id)
+VL=$(post "$A" "ecommerce/products/$EPID2/variants" "{\"inventoryProductId\":\"$INVL\",\"label\":\"Large\",\"isDefault\":true}" | jget data.id)
+check "variant create returns ids" "$([ -n "$VS" ] && [ -n "$VL" ] && echo ok)" "ok"
+check "storefront product exposes 2 variants" "$(pget "shop/$SLUG/products/$PSLUG2" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data']['variants']))")" "2"
+TOK2=$(ppost "shop/$SLUG/cart" '' | jget data.token)
+ppost "shop/$SLUG/cart/$TOK2/items" "{\"productId\":\"$EPID2\",\"variantId\":\"$VL\",\"quantity\":2}" >/dev/null
+check "cart shows the variant label" "$(pget "shop/$SLUG/cart/$TOK2" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['items'][0]['variantLabel'])")" "Large"
+V_ORD=$(ppost "shop/$SLUG/checkout" "{\"cartToken\":\"$TOK2\",\"customerName\":\"Variant Buyer\",\"customerEmail\":\"v@buyer.test\",\"paymentMethod\":\"COD\"}")
+check "variant order placed" "$(echo "$V_ORD" | jget data.status)" "PENDING"
+check "Large variant stock 3→1" "$(on "$INVL")" "1"
+check "Small variant stock untouched (5)" "$(on "$INVS")" "5"
+check "oversell a variant → 422" "$(code -XPOST "$B/shop/$SLUG/checkout" -H 'Content-Type: application/json' -d "{\"items\":[{\"productId\":\"$EPID2\",\"variantId\":\"$VS\",\"quantity\":999}],\"customerName\":\"x\",\"customerEmail\":\"x@y.test\",\"paymentMethod\":\"COD\"}")" "422"
+
 echo "== isolation: a second tenant's unpublished store is a flat 404 =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"Shop Two\",\"adminEmail\":\"admin@shoptwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
 SLUG2=$(ownerq "SELECT slug FROM tenants WHERE name='Shop Two'")

@@ -1,10 +1,10 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImagePlus, Loader2, Pencil, Plus, ShoppingBag, Star, Trash2 } from 'lucide-react';
+import { ImagePlus, Layers, Loader2, Pencil, Plus, ShoppingBag, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost, apiUpload } from '@/lib/api';
-import type { EcCollection, EcProduct, EcProductImage, Product } from '@/lib/types';
+import type { EcCollection, EcProduct, EcProductImage, EcVariant, Product } from '@/lib/types';
 import { AuthImage } from '@/components/auth-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ export function ProductsAdmin() {
   const [editing, setEditing] = useState<EcProduct | null>(null);
   const [creating, setCreating] = useState(false);
   const [imagesFor, setImagesFor] = useState<EcProduct | null>(null);
+  const [variantsFor, setVariantsFor] = useState<EcProduct | null>(null);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['ec-products'] });
 
   const remove = useMutation({
@@ -58,8 +59,9 @@ export function ProductsAdmin() {
                   <Badge variant={p.status === 'ACTIVE' ? 'default' : p.status === 'DRAFT' ? 'secondary' : 'outline'} className="text-[10px]">{p.status}</Badge>
                 </div>
                 <p className="mt-2 font-semibold">{formatMoney(p.price.amountMinor, p.price.currency)}</p>
-                <div className="mt-3 flex gap-1">
+                <div className="mt-3 flex flex-wrap gap-1">
                   <Button size="sm" variant="outline" onClick={() => setImagesFor(p)}><ImagePlus className="mr-1 h-3.5 w-3.5" /> Images{p.imageCount ? ` (${p.imageCount})` : ''}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setVariantsFor(p)}><Layers className="mr-1 h-3.5 w-3.5" /> Variants</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditing(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => remove.mutate(p.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
                 </div>
@@ -72,7 +74,72 @@ export function ProductsAdmin() {
       {creating ? <ProductDialog onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void invalidate(); }} /> : null}
       {editing ? <ProductDialog product={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void invalidate(); }} /> : null}
       {imagesFor ? <ImagesDialog product={imagesFor} onClose={() => { setImagesFor(null); void invalidate(); }} /> : null}
+      {variantsFor ? <VariantsDialog product={variantsFor} onClose={() => { setVariantsFor(null); void invalidate(); }} /> : null}
     </div>
+  );
+}
+
+function VariantsDialog({ product, onClose }: { product: EcProduct; onClose: () => void }) {
+  const qc = useQueryClient();
+  const variants = useQuery({ queryKey: ['ec-variants', product.id], queryFn: () => apiGet<EcVariant[]>(`/ecommerce/products/${product.id}/variants`) });
+  const inventory = useQuery({ queryKey: ['inv-products-min'], queryFn: () => apiGet<Product[]>('/inventory/products') });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['ec-variants', product.id] });
+  const [inv, setInv] = useState('');
+  const [label, setLabel] = useState('');
+  const [price, setPrice] = useState('');
+
+  const add = useMutation({
+    mutationFn: () => apiPost(`/ecommerce/products/${product.id}/variants`, {
+      inventoryProductId: inv, label: label || undefined, priceMinor: price ? Math.round(Number(price) * 100) : undefined,
+      isDefault: (variants.data ?? []).length === 0,
+    }),
+    onSuccess: () => { setInv(''); setLabel(''); setPrice(''); toast.success('Variant added'); void invalidate(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
+  const setDefault = useMutation({ mutationFn: (id: string) => apiPatch(`/ecommerce/variants/${id}`, { isDefault: true }), onSuccess: () => { toast.success('Default set'); void invalidate(); } });
+  const remove = useMutation({ mutationFn: (id: string) => apiDelete(`/ecommerce/variants/${id}`), onSuccess: () => { toast.success('Removed'); void invalidate(); } });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader><DialogTitle>Variants · {product.title}</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Each variant is backed by its own inventory SKU, so stock and cost stay accurate per option.</p>
+        <div className="rounded-lg border divide-y">
+          {(variants.data ?? []).length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No variants — this product sells as a single item.</p>
+          ) : (
+            variants.data!.map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  {v.isDefault ? <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> : null}
+                  <span className="font-medium">{v.label}</span>
+                  <code className="rounded bg-muted px-1.5 text-xs text-muted-foreground">{v.sku}</code>
+                  <span className="text-xs text-muted-foreground">{formatMoney(v.price.amountMinor, v.price.currency)} · {v.onHand ?? 0} in stock</span>
+                </div>
+                <div className="flex gap-1">
+                  {!v.isDefault ? <Button size="sm" variant="ghost" onClick={() => setDefault.mutate(v.id)}>Default</Button> : null}
+                  <Button size="sm" variant="ghost" onClick={() => remove.mutate(v.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+          <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Inventory SKU</span>
+            <select value={inv} onChange={(e) => setInv(e.target.value)} className="h-10 rounded-md border bg-background px-2 text-sm">
+              <option value="">Select…</option>
+              {(inventory.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Label</span><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Large" className="w-28" /></label>
+          <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Price</span><Input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="(base)" className="w-24" /></label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Done</Button>
+          <Button onClick={() => add.mutate()} disabled={!inv || add.isPending}>{add.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />} Add variant</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

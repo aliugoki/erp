@@ -68,9 +68,9 @@ export function useCart(slug: string) {
   };
 
   const add = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: string; quantity?: number }) => {
+    mutationFn: async ({ productId, variantId, quantity }: { productId: string; variantId?: string; quantity?: number }) => {
       const tok = await ensureCart();
-      return apiPost<SfCart>(sfPath(slug, `/cart/${tok}/items`), { productId, quantity: quantity ?? 1 });
+      return apiPost<SfCart>(sfPath(slug, `/cart/${tok}/items`), { productId, variantId, quantity: quantity ?? 1 });
     },
     onSuccess: (c) => {
       qc.setQueryData(['sf-cart', slug], c);

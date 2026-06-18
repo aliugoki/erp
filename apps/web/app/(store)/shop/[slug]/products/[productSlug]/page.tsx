@@ -14,6 +14,7 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
   const { add } = useCart(slug);
   const [qty, setQty] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const [variantId, setVariantId] = useState<string | null>(null);
 
   const product = useQuery({
     queryKey: ['sf-product', slug, productSlug],
@@ -34,8 +35,13 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
 
   const p = product.data;
   const images = p.images ?? [];
-  const onSale = p.compareAt && p.compareAt.amountMinor > p.price.amountMinor;
-  const soldOut = p.onHand != null && p.onHand <= 0;
+  const variants = p.variants ?? [];
+  const activeVariant = variants.find((v) => v.id === variantId) ?? variants.find((v) => v.isDefault) ?? variants[0] ?? null;
+  const price = activeVariant?.price ?? p.price;
+  const compareAt = activeVariant?.compareAt ?? p.compareAt;
+  const onHand = activeVariant ? activeVariant.onHand : p.onHand;
+  const onSale = compareAt && compareAt.amountMinor > price.amountMinor;
+  const soldOut = onHand != null && onHand <= 0;
   const selected = images[activeImg] ?? images[0];
 
   return (
@@ -76,10 +82,10 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
           {p.subtitle ? <p className="mt-1 text-lg text-zinc-500">{p.subtitle}</p> : null}
 
           <div className="mt-5 flex items-center gap-3">
-            <span className="text-2xl font-bold text-zinc-900">{formatMoney(p.price.amountMinor, p.price.currency)}</span>
+            <span className="text-2xl font-bold text-zinc-900">{formatMoney(price.amountMinor, price.currency)}</span>
             {onSale ? (
               <>
-                <span className="text-lg text-zinc-400 line-through">{formatMoney(p.compareAt!.amountMinor, p.compareAt!.currency)}</span>
+                <span className="text-lg text-zinc-400 line-through">{formatMoney(compareAt!.amountMinor, compareAt!.currency)}</span>
                 <span className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-bold text-white">SALE</span>
               </>
             ) : null}
@@ -88,12 +94,36 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
           <div className="mt-2 text-sm">
             {soldOut ? (
               <span className="font-medium text-rose-600">Out of stock</span>
-            ) : p.onHand != null && p.onHand <= 5 ? (
-              <span className="font-medium text-amber-600">Only {p.onHand} left</span>
+            ) : onHand != null && onHand <= 5 ? (
+              <span className="font-medium text-amber-600">Only {onHand} left</span>
             ) : (
               <span className="font-medium text-emerald-600">In stock</span>
             )}
           </div>
+
+          {variants.length > 0 ? (
+            <div className="mt-6">
+              <p className="mb-2 text-sm font-medium text-zinc-700">Options</p>
+              <div className="flex flex-wrap gap-2">
+                {variants.map((v) => {
+                  const out = v.onHand != null && v.onHand <= 0;
+                  const on = activeVariant?.id === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      disabled={out}
+                      onClick={() => setVariantId(v.id)}
+                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${on ? 'text-white' : 'border-zinc-200 text-zinc-700 hover:border-zinc-400'}`}
+                      style={on ? { backgroundColor: store.accentColor, borderColor: store.accentColor } : undefined}
+                    >
+                      {v.label}{out ? ' — sold out' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {p.description ? <p className="mt-6 whitespace-pre-line leading-relaxed text-zinc-600">{p.description}</p> : null}
 
@@ -102,7 +132,7 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
             <button
               type="button"
               disabled={soldOut || add.isPending}
-              onClick={() => add.mutate({ productId: p.id, quantity: qty })}
+              onClick={() => add.mutate({ productId: p.id, variantId: activeVariant?.id, quantity: qty })}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:opacity-90 disabled:opacity-40"
               style={accentStyle(store)}
             >

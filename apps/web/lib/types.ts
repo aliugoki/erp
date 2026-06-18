@@ -1387,6 +1387,7 @@ export interface EcProduct {
   primaryImageId: string | null;
   imageCount?: number;
   collectionIds?: string[];
+  variants?: EcVariant[];
 }
 
 export interface EcProductImage {
@@ -1394,6 +1395,20 @@ export interface EcProductImage {
   attachmentId: string;
   sort: number;
   isPrimary: boolean;
+}
+
+export interface EcVariant {
+  id: string;
+  productId: string;
+  inventoryProductId: string;
+  label: string;
+  status: string;
+  sort: number;
+  isDefault: boolean;
+  price: Money;
+  compareAt: Money | null;
+  sku: string | null;
+  onHand: number | null;
 }
 
 export interface EcDiscount {

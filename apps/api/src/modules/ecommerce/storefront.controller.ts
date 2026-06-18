@@ -110,7 +110,7 @@ export class StorefrontController {
     @Body() dto: UpdateCartItemDto,
   ) {
     await this.storefront.resolve(slug);
-    return this.ec.updateCartItem(token, productId, dto.quantity);
+    return this.ec.updateCartItem(token, productId, dto.quantity, dto.variantId);
   }
 
   @Post('cart/:token/coupon')

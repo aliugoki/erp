@@ -102,14 +102,35 @@ export class UpdateOrderStatusDto {
   @IsOptional() @IsString() paymentReference?: string;
 }
 
+// ── Admin: product variants ─────────────────────────────────────────────────────
+export class CreateVariantDto {
+  @IsUUID() inventoryProductId!: string; // the stocked SKU backing this variant
+  @IsOptional() @IsString() @MinLength(1) label?: string;
+  @IsOptional() @IsInt() @Min(0) priceMinor?: number;
+  @IsOptional() @IsInt() @Min(0) compareAtMinor?: number;
+  @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsBoolean() isDefault?: boolean;
+}
+
+export class UpdateVariantDto {
+  @IsOptional() @IsString() @MinLength(1) label?: string;
+  @IsOptional() @IsInt() @Min(0) priceMinor?: number;
+  @IsOptional() @IsInt() @Min(0) compareAtMinor?: number;
+  @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsBoolean() isDefault?: boolean;
+  @IsOptional() @IsIn(['ACTIVE', 'ARCHIVED']) status?: string;
+}
+
 // ── Storefront: cart ────────────────────────────────────────────────────────────
 export class AddToCartDto {
   @IsUUID() productId!: string; // ec_product id
+  @IsOptional() @IsUUID() variantId?: string; // ec_product_variant id (when the product has variants)
   @IsOptional() @IsInt() @Min(1) @Max(999) quantity?: number;
 }
 
 export class UpdateCartItemDto {
   @IsInt() @Min(0) @Max(999) quantity!: number; // 0 removes the line
+  @IsOptional() @IsUUID() variantId?: string; // which variant line to change (when present)
 }
 
 export class ApplyCouponDto {
@@ -119,6 +140,7 @@ export class ApplyCouponDto {
 // ── Storefront: checkout ────────────────────────────────────────────────────────
 export class CheckoutItemDto {
   @IsUUID() productId!: string; // ec_product id
+  @IsOptional() @IsUUID() variantId?: string;
   @IsInt() @Min(1) @Max(999) quantity!: number;
 }
 

@@ -30,6 +30,15 @@ export interface SfCollection {
   productCount?: number;
 }
 
+export interface SfVariant {
+  id: string;
+  label: string;
+  isDefault: boolean;
+  price: Money;
+  compareAt: Money | null;
+  onHand: number | null;
+}
+
 export interface SfProduct {
   id: string;
   slug: string;
@@ -45,6 +54,7 @@ export interface SfProduct {
   primaryImageId: string | null;
   imageCount?: number;
   images?: { id: string; attachmentId: string; isPrimary: boolean }[];
+  variants?: SfVariant[];
 }
 
 export interface SfHome {
@@ -56,6 +66,8 @@ export interface SfHome {
 
 export interface SfCartItem {
   productId: string;
+  variantId: string | null;
+  variantLabel: string | null;
   slug: string;
   title: string;
   quantity: number;
