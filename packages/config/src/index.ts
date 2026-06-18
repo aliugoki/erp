@@ -103,6 +103,10 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Public base URL of the storefront (apps/web), used to build absolute links in customer emails
+  // (e.g. password-reset). Optional — when unset, emails include the bare token instead of a link.
+  STOREFRONT_BASE_URL: z.string().url().optional(),
+
   // API → ML bridge (Phase 6.5). Resilient HTTP client to apps/ml: timeout + retry + circuit breaker
   // + Redis forecast cache, so ML being down degrades gracefully instead of cascading 500s.
   ML_BASE_URL: z.string().url().default('http://localhost:8000'),

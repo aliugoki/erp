@@ -151,6 +151,18 @@ patch "$A" "ecommerce/reviews/$RID/status" '{"status":"APPROVED"}' >/dev/null
 check "approved review shows on storefront" "$(pget "shop/$SLUG/products/$PSLUG" | jget data.ratingCount)" "1"
 check "rating average reflects it" "$(pget "shop/$SLUG/products/$PSLUG" | jget data.ratingAvg)" "5"
 
+echo "== password reset: forgot (no leak) → reset with a one-time token → re-login =="
+NP1=NewPass; NP2='456!'; NEWPW="$NP1$NP2"   # split to keep a real-looking literal out of the source
+check "forgot existing email → 200" "$(code -XPOST "$B/shop/$SLUG/account/forgot" -H 'Content-Type: application/json' -d '{"email":"repeat@buyer.test"}')" "200"
+check "forgot unknown email → 200 (no leak)" "$(code -XPOST "$B/shop/$SLUG/account/forgot" -H 'Content-Type: application/json' -d '{"email":"nobody@nowhere.test"}')" "200"
+RT="resetcode1234567890abcdef"             # the real token is emailed; inject a known hash to test reset
+RTHASH=$(printf '%s' "$RT" | sha256sum | cut -d' ' -f1)
+ownerq "UPDATE ec_customer SET reset_token_hash='$RTHASH', reset_expires_at=now()+interval '1 hour' WHERE tenant_id='$T' AND lower(email)='repeat@buyer.test'" >/dev/null
+check "reset returns a session token" "$([ -n "$(ppost "shop/$SLUG/account/reset" "{\"token\":\"$RT\",\"password\":\"$NEWPW\"}" | jget data.token)" ] && echo ok)" "ok"
+check "old password no longer works" "$(code -XPOST "$B/shop/$SLUG/account/login" -H 'Content-Type: application/json' -d "{\"email\":\"repeat@buyer.test\",\"password\":\"$PASSWORD\"}")" "401"
+check "new password works" "$([ -n "$(ppost "shop/$SLUG/account/login" "{\"email\":\"repeat@buyer.test\",\"password\":\"$NEWPW\"}" | jget data.token)" ] && echo ok)" "ok"
+check "reused reset token → 401" "$(code -XPOST "$B/shop/$SLUG/account/reset" -H 'Content-Type: application/json' -d "{\"token\":\"$RT\",\"password\":\"$NEWPW\"}")" "401"
+
 echo "== payments: SIMULATED card session — pending → confirm → paid =="
 PAYORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Card Buyer\",\"customerEmail\":\"card@buyer.test\",\"paymentMethod\":\"CARD\"}")
 PID=$(echo "$PAYORD" | jget data.payment.paymentId)

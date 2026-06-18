@@ -15,7 +15,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
-import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, ShippingQuoteDto, SubmitReviewDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, ForgotPasswordDto, PaymentWebhookDto, ResetPasswordDto, ShippingQuoteDto, SubmitReviewDto, UpdateCartItemDto } from './dto/ecommerce.dto';
 import { CustomerAuthService } from './customer-auth.service';
 import { EcommerceService } from './ecommerce.service';
 import { PaymentService } from './payment.service';
@@ -71,6 +71,20 @@ export class StorefrontController {
   async login(@Param('slug') slug: string, @Body() dto: CustomerLoginDto) {
     await this.storefront.resolve(slug);
     return this.customers.login(dto);
+  }
+
+  @Post('account/forgot')
+  @HttpCode(HttpStatus.OK)
+  async forgot(@Param('slug') slug: string, @Body() dto: ForgotPasswordDto) {
+    await this.storefront.resolve(slug);
+    return this.customers.requestReset(slug, dto.email);
+  }
+
+  @Post('account/reset')
+  @HttpCode(HttpStatus.OK)
+  async reset(@Param('slug') slug: string, @Body() dto: ResetPasswordDto) {
+    await this.storefront.resolve(slug);
+    return this.customers.resetPassword(dto.token, dto.password);
   }
 
   @Get('account/me')

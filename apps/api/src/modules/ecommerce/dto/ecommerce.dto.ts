@@ -202,6 +202,15 @@ export class CustomerLoginDto {
   @IsString() @MinLength(1) password!: string;
 }
 
+export class ForgotPasswordDto {
+  @IsEmail() email!: string;
+}
+
+export class ResetPasswordDto {
+  @IsString() @MinLength(10) token!: string;
+  @IsString() @MinLength(8) password!: string;
+}
+
 // ── Storefront: checkout ────────────────────────────────────────────────────────
 export class CheckoutItemDto {
   @IsUUID() productId!: string; // ec_product id

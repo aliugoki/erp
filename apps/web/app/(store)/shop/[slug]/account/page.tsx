@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, User } from 'lucide-react';
@@ -58,6 +59,9 @@ export default function AccountPage({ params }: { params: { slug: string } }) {
           ) : null}
           <Field label="Email"><input value={f.email} onChange={set('email')} type="email" className={inputCls} placeholder="jane@example.com" /></Field>
           <Field label="Password"><input value={f.password} onChange={set('password')} type="password" className={inputCls} placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'} /></Field>
+          {mode === 'login' ? (
+            <div className="text-right"><Link href={sfPath(slug, '/account/forgot')} className="text-xs font-medium text-zinc-500 hover:text-zinc-900">Forgot password?</Link></div>
+          ) : null}
           <button
             type="button"
             disabled={!valid || submit.isPending}

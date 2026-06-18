@@ -1,12 +1,16 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { createHash, randomBytes } from 'node:crypto';
 import * as argon2 from 'argon2';
 import type { AppConfig } from '@metaxperts/config';
 import { TenantContext } from '../../common/tenant/tenant-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { EmailQueueService } from '../notifications/email-queue.service';
 import type { CustomerLoginDto, CustomerRegisterDto } from './dto/ecommerce.dto';
 import { mapOrder } from './ecommerce.util';
+
+const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 type Row = Record<string, unknown>;
 
@@ -31,7 +35,54 @@ export class CustomerAuthService {
     private readonly tenantTx: TenantTransactionService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly email: EmailQueueService,
   ) {}
+
+  /** Begin a password reset — always returns ok (never reveals whether the email exists). When the
+   * account exists, store a hashed one-time token (1h expiry) and email a reset link. */
+  async requestReset(slug: string, email: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, name FROM ec_customer WHERE lower(email) = lower($1) AND deleted_at IS NULL`,
+        [email],
+      )) as Array<{ id: string; name: string }>;
+      const c = rows[0];
+      if (c) {
+        const tok = randomBytes(24).toString('hex');
+        await m.query(
+          `UPDATE ec_customer SET reset_token_hash = $2, reset_expires_at = now() + interval '1 hour', updated_at = now() WHERE id = $1`,
+          [c.id, sha256(tok)],
+        );
+        const base = this.config.get('STOREFRONT_BASE_URL', { infer: true });
+        const link = base ? `${base}/shop/${slug}/account/reset?token=${tok}` : null;
+        void this.email.enqueue({
+          to: email.toLowerCase(),
+          subject: 'Reset your password',
+          text: `Hi ${c.name.split(' ')[0] || 'there'},\n\nWe received a request to reset your password.\n\n${link ? `Reset it here (valid for 1 hour):\n${link}` : `Use this one-time code on the reset page (valid for 1 hour):\n${tok}`}\n\nIf you didn't request this, you can safely ignore this email.`,
+        });
+      }
+      return { ok: true };
+    });
+  }
+
+  /** Complete a reset with a valid, unexpired token; sets the new password and signs the customer in. */
+  async resetPassword(presentedToken: string, newPassword: string) {
+    const passwordHash = await argon2.hash(newPassword);
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, email, name FROM ec_customer
+         WHERE reset_token_hash = $1 AND reset_expires_at > now() AND deleted_at IS NULL`,
+        [sha256(presentedToken)],
+      )) as Array<{ id: string; email: string; name: string }>;
+      const c = rows[0];
+      if (!c) throw new UnauthorizedException('This reset link is invalid or has expired');
+      await m.query(
+        `UPDATE ec_customer SET password_hash = $2, reset_token_hash = NULL, reset_expires_at = NULL, updated_at = now() WHERE id = $1`,
+        [c.id, passwordHash],
+      );
+      return this.issue(c);
+    });
+  }
 
   async register(dto: CustomerRegisterDto) {
     const passwordHash = await argon2.hash(dto.password);
