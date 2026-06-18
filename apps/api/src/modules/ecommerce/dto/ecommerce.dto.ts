@@ -137,6 +137,19 @@ export class ApplyCouponDto {
   @IsString() @MinLength(2) code!: string;
 }
 
+// ── Storefront: customer accounts ───────────────────────────────────────────────
+export class CustomerRegisterDto {
+  @IsString() @MinLength(1) name!: string;
+  @IsEmail() email!: string;
+  @IsString() @MinLength(8) password!: string;
+  @IsOptional() @IsString() phone?: string;
+}
+
+export class CustomerLoginDto {
+  @IsEmail() email!: string;
+  @IsString() @MinLength(1) password!: string;
+}
+
 // ── Storefront: checkout ────────────────────────────────────────────────────────
 export class CheckoutItemDto {
   @IsUUID() productId!: string; // ec_product id

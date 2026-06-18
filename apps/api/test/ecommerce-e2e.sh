@@ -124,6 +124,20 @@ check "Large variant stock 3→1" "$(on "$INVL")" "1"
 check "Small variant stock untouched (5)" "$(on "$INVS")" "5"
 check "oversell a variant → 422" "$(code -XPOST "$B/shop/$SLUG/checkout" -H 'Content-Type: application/json' -d "{\"items\":[{\"productId\":\"$EPID2\",\"variantId\":\"$VS\",\"quantity\":999}],\"customerName\":\"x\",\"customerEmail\":\"x@y.test\",\"paymentMethod\":\"COD\"}")" "422"
 
+echo "== customer accounts: register → login → me → order history =="
+REG=$(ppost "shop/$SLUG/account/register" "{\"name\":\"Repeat Buyer\",\"email\":\"repeat@buyer.test\",\"password\":\"$PASSWORD\"}")
+CTOK=$(echo "$REG" | jget data.token)
+check "register returns a token" "$([ -n "$CTOK" ] && echo ok)" "ok"
+check "duplicate register → 409" "$(code -XPOST "$B/shop/$SLUG/account/register" -H 'Content-Type: application/json' -d "{\"name\":\"x\",\"email\":\"repeat@buyer.test\",\"password\":\"$PASSWORD\"}")" "409"
+LTOK=$(ppost "shop/$SLUG/account/login" "{\"email\":\"repeat@buyer.test\",\"password\":\"$PASSWORD\"}" | jget data.token)
+check "login returns a token" "$([ -n "$LTOK" ] && echo ok)" "ok"
+check "wrong password → 401" "$(code -XPOST "$B/shop/$SLUG/account/login" -H 'Content-Type: application/json' -d "{\"email\":\"repeat@buyer.test\",\"password\":\"nope\"}")" "401"
+check "me returns the profile" "$(curl -s "$B/shop/$SLUG/account/me" -H "Authorization: Bearer $CTOK" | jget data.email)" "repeat@buyer.test"
+check "me without a token → 401" "$(code "$B/shop/$SLUG/account/me")" "401"
+# Place an order with this customer's email; it should appear in their history.
+ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Repeat Buyer\",\"customerEmail\":\"repeat@buyer.test\",\"paymentMethod\":\"COD\"}" >/dev/null
+check "order history lists the customer's order" "$(curl -s "$B/shop/$SLUG/account/orders" -H "Authorization: Bearer $CTOK" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data'])>=1)")" "True"
+
 echo "== isolation: a second tenant's unpublished store is a flat 404 =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"Shop Two\",\"adminEmail\":\"admin@shoptwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
 SLUG2=$(ownerq "SELECT slug FROM tenants WHERE name='Shop Two'")

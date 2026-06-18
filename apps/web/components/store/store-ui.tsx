@@ -2,14 +2,18 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Minus, Plus, ShoppingBag, ShoppingCart, Store } from 'lucide-react';
+import { Minus, Plus, ShoppingBag, ShoppingCart, Store, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import {
   type SfCart,
+  type SfCustomer,
   type SfProduct,
   type SfStore,
+  clearCustomerToken,
+  customerGet,
   getCartToken,
+  getCustomerToken,
   productImageUrl,
   setCartToken,
   sfPath,
@@ -83,10 +87,33 @@ export function useCart(slug: string) {
   return { cart: cart.data ?? null, loading: cart.isLoading, count, add };
 }
 
+// ── Customer session hook ───────────────────────────────────────────────────────
+export function useCustomer(slug: string) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['sf-customer', slug],
+    queryFn: async (): Promise<SfCustomer | null> => {
+      if (!getCustomerToken(slug)) return null;
+      try {
+        return await customerGet<SfCustomer>(slug, '/account/me');
+      } catch {
+        clearCustomerToken(slug);
+        return null;
+      }
+    },
+  });
+  const logout = () => {
+    clearCustomerToken(slug);
+    qc.setQueryData(['sf-customer', slug], null);
+  };
+  return { customer: q.data ?? null, loading: q.isLoading, logout };
+}
+
 // ── Header ──────────────────────────────────────────────────────────────────────
 export function StoreHeader() {
   const { slug, store } = useStore();
   const { count } = useCart(slug);
+  const { customer } = useCustomer(slug);
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
@@ -103,6 +130,13 @@ export function StoreHeader() {
         <nav className="flex items-center gap-1 text-sm font-medium text-zinc-600">
           <Link href={sfPath(slug)} className="rounded-md px-3 py-2 hover:bg-zinc-100">Home</Link>
           <Link href={sfPath(slug, '/products')} className="rounded-md px-3 py-2 hover:bg-zinc-100">Shop</Link>
+          <Link
+            href={sfPath(slug, customer ? '/account/orders' : '/account')}
+            className="flex items-center gap-1.5 rounded-md px-3 py-2 hover:bg-zinc-100"
+          >
+            <User className="h-4 w-4" />
+            <span className="hidden sm:inline">{customer ? customer.name.split(' ')[0] : 'Sign in'}</span>
+          </Link>
           <Link
             href={sfPath(slug, '/cart')}
             className="relative ml-1 flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"

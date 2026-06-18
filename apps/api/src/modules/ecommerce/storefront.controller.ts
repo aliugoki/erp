@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Headers,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -14,7 +15,8 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
-import { AddToCartDto, ApplyCouponDto, CheckoutDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { AddToCartDto, ApplyCouponDto, CheckoutDto, CustomerLoginDto, CustomerRegisterDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { CustomerAuthService } from './customer-auth.service';
 import { EcommerceService } from './ecommerce.service';
 import { StorefrontService } from './storefront.service';
 
@@ -30,7 +32,35 @@ export class StorefrontController {
   constructor(
     private readonly storefront: StorefrontService,
     private readonly ec: EcommerceService,
+    private readonly customers: CustomerAuthService,
   ) {}
+
+  // ── Customer accounts ───────────────────────────────────────────────────────────
+  @Post('account/register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Param('slug') slug: string, @Body() dto: CustomerRegisterDto) {
+    await this.storefront.resolve(slug);
+    return this.customers.register(dto);
+  }
+
+  @Post('account/login')
+  @HttpCode(HttpStatus.OK)
+  async login(@Param('slug') slug: string, @Body() dto: CustomerLoginDto) {
+    await this.storefront.resolve(slug);
+    return this.customers.login(dto);
+  }
+
+  @Get('account/me')
+  async me(@Param('slug') slug: string, @Headers('authorization') auth?: string) {
+    await this.storefront.resolve(slug);
+    return this.customers.profile(auth);
+  }
+
+  @Get('account/orders')
+  async myOrders(@Param('slug') slug: string, @Headers('authorization') auth?: string) {
+    await this.storefront.resolve(slug);
+    return this.customers.myOrders(auth);
+  }
 
   @Get()
   async home(@Param('slug') slug: string) {

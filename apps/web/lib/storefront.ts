@@ -1,8 +1,9 @@
 'use client';
 /** Client helpers + types for the public storefront (the unauthenticated `/shop/[slug]` pages). Calls
  * go through the same apiGet/apiPost (no token is attached when the visitor isn't logged in); images
- * are public URLs. The cart token is kept in localStorage, namespaced per store slug. */
-import { API_URL } from '@/lib/api';
+ * are public URLs. The cart token + customer session token are kept in localStorage, namespaced per
+ * store slug. */
+import { API_URL, ApiError } from '@/lib/api';
 import type { Money } from '@/lib/types';
 
 export interface SfStore {
@@ -116,6 +117,43 @@ export const sfPath = (slug: string, p = ''): string => `/shop/${slug}${p}`;
 export const productImageUrl = (slug: string, imageId: string): string => `${API_URL}/shop/${slug}/images/${imageId}`;
 export const storeLogoUrl = (slug: string): string => `${API_URL}/shop/${slug}/logo`;
 export const storeHeroUrl = (slug: string): string => `${API_URL}/shop/${slug}/hero`;
+
+export interface SfCustomer {
+  id: string;
+  email: string;
+  name: string;
+}
+export interface SfAuthResult {
+  token: string;
+  customer: SfCustomer;
+}
+
+// ── Customer session token (per store) ──────────────────────────────────────────
+const custKey = (slug: string): string => `mx_store_cust_${slug}`;
+export function getCustomerToken(slug: string): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(custKey(slug));
+}
+export function setCustomerToken(slug: string, value: string): void {
+  localStorage.setItem(custKey(slug), value);
+}
+export function clearCustomerToken(slug: string): void {
+  localStorage.removeItem(custKey(slug));
+}
+
+/** GET a storefront endpoint with the customer session token attached (for /account/*). */
+export async function customerGet<T>(slug: string, path: string): Promise<T> {
+  const tok = getCustomerToken(slug);
+  const res = await fetch(`${API_URL}${sfPath(slug, path)}`, {
+    headers: tok ? { Authorization: ['Bearer', tok].join(' ') } : {},
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string; title?: string };
+    throw new ApiError(res.status, body.detail ?? body.title ?? res.statusText);
+  }
+  const json = (await res.json()) as { data?: T };
+  return (json.data ?? (json as T)) as T;
+}
 
 // ── Cart token (per store) ──────────────────────────────────────────────────────
 const cartKey = (slug: string): string => `mx_store_cart_${slug}`;

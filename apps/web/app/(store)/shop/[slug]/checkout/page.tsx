@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,17 +7,22 @@ import { CreditCard, Loader2, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiPost } from '@/lib/api';
 import { type SfOrder, clearCartToken, getCartToken, sfPath } from '@/lib/storefront';
-import { accentStyle, useCart, useStore } from '@/components/store/store-ui';
+import { accentStyle, useCart, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
 
 export default function CheckoutPage({ params }: { params: { slug: string } }) {
   const slug = params.slug;
   const { store } = useStore();
   const { cart, loading } = useCart(slug);
+  const { customer } = useCustomer(slug);
   const router = useRouter();
   const qc = useQueryClient();
 
   const [form, setForm] = useState({ customerName: '', customerEmail: '', customerPhone: '', shippingAddress: '', shippingCity: '', shippingCountry: '' });
+  // Prefill the contact fields for a signed-in shopper (only while still blank, so edits stick).
+  useEffect(() => {
+    if (customer) setForm((f) => (f.customerName || f.customerEmail ? f : { ...f, customerName: customer.name, customerEmail: customer.email }));
+  }, [customer]);
   const [method, setMethod] = useState<'COD' | 'CARD'>('COD');
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -29,6 +34,7 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
     onSuccess: (order) => {
       clearCartToken(slug);
       qc.setQueryData(['sf-cart', slug], null);
+      void qc.invalidateQueries({ queryKey: ['sf-my-orders', slug] });
       toast.success('Order placed!');
       router.push(sfPath(slug, `/order/${order.orderNo}`));
     },
