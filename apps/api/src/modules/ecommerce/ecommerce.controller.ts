@@ -27,6 +27,7 @@ import {
   CreateProductDto,
   CreateVariantDto,
   SetEcGlConfigDto,
+  SetPaymentConfigDto,
   UpdateOrderStatusDto,
   UpdateProductDto,
   UpdateVariantDto,
@@ -35,6 +36,7 @@ import {
   UpsertStoreDto,
 } from './dto/ecommerce.dto';
 import { EcommerceService } from './ecommerce.service';
+import { PaymentService } from './payment.service';
 
 const WRITE = [Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 const FINANCE = [Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -44,7 +46,24 @@ const IMG = { limits: { fileSize: 5 * 1024 * 1024 } };
 @Controller('ecommerce')
 @RequiresFeature('ecommerce')
 export class EcommerceController {
-  constructor(private readonly ec: EcommerceService) {}
+  constructor(
+    private readonly ec: EcommerceService,
+    private readonly payments: PaymentService,
+  ) {}
+
+  // ── Payment provider config ─────────────────────────────────────────────────────
+  @Get('payment-config')
+  @Roles(...WRITE)
+  getPaymentConfig() {
+    return this.payments.getConfig();
+  }
+
+  @Put('payment-config')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  setPaymentConfig(@Body() dto: SetPaymentConfigDto) {
+    return this.payments.setConfig(dto);
+  }
 
   // ── Store settings ──────────────────────────────────────────────────────────
   @Get('store')

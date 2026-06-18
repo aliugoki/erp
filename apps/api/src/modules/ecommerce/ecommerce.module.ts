@@ -5,6 +5,7 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { CustomerAuthService } from './customer-auth.service';
+import { PaymentService } from './payment.service';
 import { EcommerceEmailConsumer } from './ecommerce-email.consumer';
 import { EcommerceGlConsumer } from './ecommerce-gl.consumer';
 import { EcommerceController } from './ecommerce.controller';
@@ -21,6 +22,6 @@ import { StorefrontService } from './storefront.service';
 @Module({
   imports: [InventoryModule, FinanceModule, TenantsModule, NotificationsModule, JwtModule.register({})],
   controllers: [EcommerceController, StorefrontController],
-  providers: [EcommerceService, StorefrontService, CustomerAuthService, EcommerceGlConsumer, EcommerceEmailConsumer],
+  providers: [EcommerceService, StorefrontService, CustomerAuthService, PaymentService, EcommerceGlConsumer, EcommerceEmailConsumer],
 })
 export class EcommerceModule {}

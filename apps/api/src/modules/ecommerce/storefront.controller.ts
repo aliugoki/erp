@@ -15,9 +15,10 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
-import { AddToCartDto, ApplyCouponDto, CheckoutDto, CustomerLoginDto, CustomerRegisterDto, UpdateCartItemDto } from './dto/ecommerce.dto';
+import { AddToCartDto, ApplyCouponDto, CheckoutDto, ConfirmPaymentDto, CustomerLoginDto, CustomerRegisterDto, PaymentWebhookDto, UpdateCartItemDto } from './dto/ecommerce.dto';
 import { CustomerAuthService } from './customer-auth.service';
 import { EcommerceService } from './ecommerce.service';
+import { PaymentService } from './payment.service';
 import { StorefrontService } from './storefront.service';
 
 /**
@@ -33,7 +34,29 @@ export class StorefrontController {
     private readonly storefront: StorefrontService,
     private readonly ec: EcommerceService,
     private readonly customers: CustomerAuthService,
+    private readonly payments: PaymentService,
   ) {}
+
+  // ── Payment (hosted step + gateway webhook) ─────────────────────────────────────
+  @Get('pay/:paymentId')
+  async payment(@Param('slug') slug: string, @Param('paymentId', ParseUUIDPipe) paymentId: string) {
+    await this.storefront.resolve(slug);
+    return this.payments.getPayment(paymentId);
+  }
+
+  @Post('pay/:paymentId/confirm')
+  @HttpCode(HttpStatus.OK)
+  async confirmPayment(@Param('slug') slug: string, @Param('paymentId', ParseUUIDPipe) paymentId: string, @Body() dto: ConfirmPaymentDto) {
+    await this.storefront.resolve(slug);
+    return this.payments.confirmSimulated(paymentId, dto.clientSecret);
+  }
+
+  @Post('pay/webhook')
+  @HttpCode(HttpStatus.OK)
+  async paymentWebhook(@Param('slug') slug: string, @Body() dto: PaymentWebhookDto) {
+    await this.storefront.resolve(slug);
+    return this.payments.handleWebhook(dto);
+  }
 
   // ── Customer accounts ───────────────────────────────────────────────────────────
   @Post('account/register')

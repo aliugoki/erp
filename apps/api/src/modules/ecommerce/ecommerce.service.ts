@@ -11,6 +11,7 @@ import { TenantTransactionService } from '../../common/tenant/tenant-transaction
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
+import { PaymentService } from './payment.service';
 import type {
   AddToCartDto,
   CheckoutDto,
@@ -70,6 +71,7 @@ export class EcommerceService {
     private readonly storage: StorageService,
     private readonly inventoryDocs: InventoryDocsService,
     private readonly outbox: OutboxService,
+    private readonly payments: PaymentService,
   ) {}
 
   // ── Store settings ──────────────────────────────────────────────────────────
@@ -940,19 +942,19 @@ export class EcommerceService {
         cogsMinor += lineCost;
       }
 
-      const card = dto.paymentMethod === 'CARD';
-      const paymentReference = card ? `EPAY-${orderNo}` : null;
+      // The order is created PENDING / UNPAID for both methods. COD is collected on delivery; CARD is
+      // confirmed by a payment session (below) — neither is optimistically marked paid.
       const orderRows = (await m.query(
         `INSERT INTO ec_order (tenant_id, order_no, cart_id, client_id, customer_name, customer_email, customer_phone,
             shipping_address, shipping_city, shipping_country, status, payment_method, payment_status, payment_reference,
             subtotal_minor, discount_minor, tax_minor, shipping_minor, total_minor, cogs_minor, currency, discount_code, placed_at)
          VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4, $5, $6, $7, $8, $9,
-            $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, now())
+            'PENDING', $10, 'UNPAID', NULL, $11, $12, $13, $14, $15, $16, $17, $18, now())
          RETURNING id`,
         [
           orderNo, cartId, clientId, dto.customerName, dto.customerEmail.toLowerCase(), dto.customerPhone ?? null,
           dto.shippingAddress ?? null, dto.shippingCity ?? null, dto.shippingCountry ?? null,
-          card ? 'PAID' : 'PENDING', dto.paymentMethod, card ? 'PAID' : 'UNPAID', paymentReference,
+          dto.paymentMethod,
           totals.subtotalMinor, totals.discountMinor, totals.taxMinor, totals.shippingMinor, totals.totalMinor,
           cogsMinor, currency, couponRow ? (couponRow.code as string) : null,
         ],
@@ -986,7 +988,13 @@ export class EcommerceService {
       };
       await this.outbox.write(m, EVENT_TYPES.ECOMMERCE_ORDER_PLACED, payload);
 
-      return this.orderWithLines(m, orderId);
+      const result = await this.orderWithLines(m, orderId);
+      // A card order needs a payment session the storefront sends the buyer to before confirmation.
+      if (dto.paymentMethod === 'CARD') {
+        const session = await this.payments.createSessionInTx(m, { id: orderId, orderNo, totalMinor: totals.totalMinor, currency });
+        return { ...result, payment: session };
+      }
+      return result;
     });
   }
 

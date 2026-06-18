@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, Loader2, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiPost } from '@/lib/api';
-import { type SfOrder, clearCartToken, getCartToken, sfPath } from '@/lib/storefront';
+import { type SfOrder, type SfPaymentSession, clearCartToken, getCartToken, sfPath } from '@/lib/storefront';
 import { accentStyle, useCart, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
 
@@ -29,12 +29,20 @@ export default function CheckoutPage({ params }: { params: { slug: string } }) {
   const place = useMutation({
     mutationFn: () => {
       const tok = getCartToken(slug);
-      return apiPost<SfOrder>(sfPath(slug, '/checkout'), { cartToken: tok, paymentMethod: method, ...form });
+      return apiPost<SfOrder & { payment?: SfPaymentSession }>(sfPath(slug, '/checkout'), { cartToken: tok, paymentMethod: method, ...form });
     },
     onSuccess: (order) => {
       clearCartToken(slug);
       qc.setQueryData(['sf-cart', slug], null);
       void qc.invalidateQueries({ queryKey: ['sf-my-orders', slug] });
+      const pay = order.payment;
+      if (pay) {
+        // Card order — go to the payment step (or the external gateway).
+        if (pay.redirectUrl) { window.location.href = pay.redirectUrl; return; }
+        sessionStorage.setItem(`mx_pay_${pay.paymentId}`, pay.clientSecret);
+        router.push(sfPath(slug, `/pay/${pay.paymentId}`));
+        return;
+      }
       toast.success('Order placed!');
       router.push(sfPath(slug, `/order/${order.orderNo}`));
     },

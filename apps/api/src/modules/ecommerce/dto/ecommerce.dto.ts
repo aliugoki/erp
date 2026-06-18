@@ -137,6 +137,27 @@ export class ApplyCouponDto {
   @IsString() @MinLength(2) code!: string;
 }
 
+// ── Admin: payment provider config ──────────────────────────────────────────────
+export class SetPaymentConfigDto {
+  @IsIn(['SIMULATED', 'HTTP']) provider!: string;
+  @IsOptional() @IsString() gatewayUrl?: string;
+  @IsOptional() @IsString() webhookSecret?: string;
+  @IsOptional() @IsString() publishableKey?: string;
+  @IsOptional() @IsBoolean() enabled?: boolean;
+}
+
+// ── Storefront: payment ─────────────────────────────────────────────────────────
+export class ConfirmPaymentDto {
+  @IsString() @MinLength(8) clientSecret!: string;
+}
+
+export class PaymentWebhookDto {
+  @IsUUID() paymentId!: string;
+  @IsIn(['PAID', 'FAILED']) status!: string;
+  @IsString() signature!: string;
+  @IsOptional() @IsString() providerRef?: string;
+}
+
 // ── Storefront: customer accounts ───────────────────────────────────────────────
 export class CustomerRegisterDto {
   @IsString() @MinLength(1) name!: string;

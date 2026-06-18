@@ -9,6 +9,7 @@ import {
   shippingFor,
   slugify,
 } from '../src/modules/ecommerce/ecommerce.util';
+import { newClientSecret, signWebhook, verifyWebhook } from '../src/modules/ecommerce/payment.util';
 
 const line = (qty: number, unit: number, tax = 0) =>
   priceLine({ ecProductId: 'p', productId: 'i', title: 't', quantity: qty, unitPriceMinor: unit, taxRate: tax });
@@ -104,5 +105,23 @@ describe('ecommerce.util customer emails', () => {
     expect(customerOrderEmail({ ...info, status: 'REFUNDED' }, 'REFUNDED')!.text).toContain('refund of PKR 4,800.00');
     expect(customerOrderEmail(info, 'PENDING')).toBeNull(); // no email for a return-to-pending
     expect(customerOrderEmail(info, 'WHATEVER')).toBeNull();
+  });
+});
+
+describe('ecommerce payment webhook signing', () => {
+  it('verifyWebhook accepts a matching HMAC and rejects tampering', () => {
+    const secret = 'a-shared-gateway-secret';
+    const data = 'pay-123.PAID';
+    const sig = signWebhook(secret, data);
+    expect(verifyWebhook(secret, data, sig)).toBe(true);
+    expect(verifyWebhook(secret, 'pay-123.FAILED', sig)).toBe(false); // status tampered
+    expect(verifyWebhook('other-secret', data, sig)).toBe(false); // wrong secret
+    expect(verifyWebhook(secret, data, 'deadbeef')).toBe(false); // forged signature
+  });
+
+  it('newClientSecret returns a high-entropy hex string', () => {
+    const a = newClientSecret();
+    expect(a).toMatch(/^[0-9a-f]{48}$/);
+    expect(newClientSecret()).not.toBe(a);
   });
 });

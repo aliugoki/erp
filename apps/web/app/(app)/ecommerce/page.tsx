@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { LayoutGrid, Package, PackageOpen, Store, Tag, Wallet } from 'lucide-react';
 import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
+import { PaymentConfigCard } from '@/components/ecommerce/payment-config';
 import { CollectionsAdmin } from '@/components/ecommerce/collections-admin';
 import { DiscountsAdmin } from '@/components/ecommerce/discounts-admin';
 import { OrdersAdmin } from '@/components/ecommerce/orders-admin';
@@ -49,6 +50,8 @@ export default function EcommercePage() {
       {tab === 'discounts' ? <DiscountsAdmin /> : null}
       {tab === 'orders' ? <OrdersAdmin /> : null}
       {tab === 'accounting' ? (
+        <div className="space-y-6">
+        <PaymentConfigCard />
         <GlAccountsCard
           title="Online store → general ledger"
           description="When set, each placed order posts Dr clearing; Cr revenue (+ tax, + shipping), and Dr COGS / Cr inventory. Requires background reactions enabled."
@@ -64,6 +67,7 @@ export default function EcommercePage() {
             { key: 'inventoryAccountId', label: 'Inventory (Cr)', types: ['ASSET'] },
           ]}
         />
+        </div>
       ) : null}
     </div>
   );

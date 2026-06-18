@@ -93,6 +93,20 @@ export interface SfOrderLine {
   lineTotal: Money;
 }
 
+export interface SfPaymentSession {
+  paymentId: string;
+  clientSecret: string;
+  provider: string;
+  redirectUrl: string | null;
+}
+export interface SfPayment {
+  id: string;
+  orderNo: string | null;
+  provider: string;
+  status: string;
+  amount: Money;
+}
+
 export interface SfOrder {
   id: string;
   orderNo: string;

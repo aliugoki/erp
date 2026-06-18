@@ -90,8 +90,8 @@ check "confirmation page by order no" "$(pget "shop/$SLUG/orders/$ORDNO" | jget 
 echo "== guards: oversell rejected, CARD pays at placement =="
 check "oversell → 422" "$(code -XPOST "$B/shop/$SLUG/checkout" -H 'Content-Type: application/json' -d "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":999}],\"customerName\":\"x\",\"customerEmail\":\"x@y.test\",\"paymentMethod\":\"COD\"}")" "422"
 CARD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Grace H\",\"customerEmail\":\"grace@buyer.test\",\"paymentMethod\":\"CARD\"}")
-check "CARD order PAID" "$(echo "$CARD" | jget data.status)" "PAID"
-check "CARD payment reference set" "$(echo "$CARD" | jget data.paymentStatus)" "PAID"
+check "CARD order is PENDING until paid" "$(echo "$CARD" | jget data.status)" "PENDING"
+check "CARD checkout returns a payment session" "$(echo "$CARD" | jget data.payment.provider)" "SIMULATED"
 
 echo "== admin: fulfil an order → emits ecommerce.order_status_changed (drives customer email) =="
 OID=$(ownerq "SELECT id FROM ec_order WHERE tenant_id='$T' AND order_no='$ORDNO'")
@@ -137,6 +137,30 @@ check "me without a token → 401" "$(code "$B/shop/$SLUG/account/me")" "401"
 # Place an order with this customer's email; it should appear in their history.
 ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Repeat Buyer\",\"customerEmail\":\"repeat@buyer.test\",\"paymentMethod\":\"COD\"}" >/dev/null
 check "order history lists the customer's order" "$(curl -s "$B/shop/$SLUG/account/orders" -H "Authorization: Bearer $CTOK" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['data'])>=1)")" "True"
+
+echo "== payments: SIMULATED card session — pending → confirm → paid =="
+PAYORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Card Buyer\",\"customerEmail\":\"card@buyer.test\",\"paymentMethod\":\"CARD\"}")
+PID=$(echo "$PAYORD" | jget data.payment.paymentId)
+PSEC=$(echo "$PAYORD" | jget data.payment.clientSecret)
+PORDNO=$(echo "$PAYORD" | jget data.orderNo)
+check "card order PENDING/UNPAID" "$(echo "$PAYORD" | jget data.paymentStatus)" "UNPAID"
+check "pay page shows the pending session" "$(pget "shop/$SLUG/pay/$PID" | jget data.status)" "PENDING"
+check "confirm with wrong secret → 401" "$(code -XPOST "$B/shop/$SLUG/pay/$PID/confirm" -H 'Content-Type: application/json' -d '{"clientSecret":"wrongsecretvalue"}')" "401"
+check "confirm with the client secret → PAID" "$(ppost "shop/$SLUG/pay/$PID/confirm" "{\"clientSecret\":\"$PSEC\"}" | jget data.status)" "PAID"
+check "order is now PAID" "$(ownerq "SELECT status FROM ec_order WHERE tenant_id='$T' AND order_no='$PORDNO'")" "PAID"
+check "payment row PAID" "$(ownerq "SELECT status FROM ec_payment WHERE tenant_id='$T' AND id='$PID'")" "PAID"
+check "PAID emits order_status_changed" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T' AND type='ecommerce.order_status_changed.v1' AND payload->>'orderNo'='$PORDNO' AND payload->>'status'='PAID'")" "1"
+
+echo "== payments: HTTP gateway webhook (HMAC-signed) confirms a payment =="
+WSEC="ecommercewebhooksecret123"
+put "$A" ecommerce/payment-config "{\"provider\":\"HTTP\",\"gatewayUrl\":\"http://gw.local/sessions\",\"webhookSecret\":\"$WSEC\"}" >/dev/null
+check "admin config never echoes the secret" "$(curl -s "$B/ecommerce/payment-config" -H "Authorization: Bearer $A" | python3 -c "import sys,json;d=json.load(sys.stdin)['data'];print('webhookSecret' not in d and d['hasWebhookSecret'])")" "True"
+HID=$(ownerq "INSERT INTO ec_order (tenant_id,order_no,customer_name,customer_email,payment_method,payment_status,status,total_minor,currency) VALUES ('$T','ORD-HOOK','Hook Buyer','hook@buyer.test','CARD','UNPAID','PENDING',5000,'PKR') RETURNING id" | head -1)
+PID2=$(ownerq "INSERT INTO ec_payment (tenant_id,order_id,provider,status,amount_minor,currency,client_secret) VALUES ('$T','$HID','HTTP','PENDING',5000,'PKR','x') RETURNING id" | head -1)
+SIG=$(printf '%s' "$PID2.PAID" | openssl dgst -sha256 -hmac "$WSEC" -r | cut -d' ' -f1)
+check "webhook with bad signature → 401" "$(code -XPOST "$B/shop/$SLUG/pay/webhook" -H 'Content-Type: application/json' -d "{\"paymentId\":\"$PID2\",\"status\":\"PAID\",\"signature\":\"deadbeef\"}")" "401"
+ppost "shop/$SLUG/pay/webhook" "{\"paymentId\":\"$PID2\",\"status\":\"PAID\",\"signature\":\"$SIG\"}" >/dev/null
+check "signed webhook marks the order PAID" "$(ownerq "SELECT status FROM ec_order WHERE id='$HID'")" "PAID"
 
 echo "== isolation: a second tenant's unpublished store is a flat 404 =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"Shop Two\",\"adminEmail\":\"admin@shoptwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
