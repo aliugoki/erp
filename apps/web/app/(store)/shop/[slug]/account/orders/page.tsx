@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, LogOut, PackageOpen } from 'lucide-react';
+import { LifeBuoy, Loader2, LogOut, PackageOpen } from 'lucide-react';
 import { type SfOrder, customerGet, getCustomerToken, sfPath } from '@/lib/storefront';
 import { accentStyle, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
@@ -42,9 +42,14 @@ export default function OrderHistory({ params }: { params: { slug: string } }) {
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">My orders</h1>
           <p className="text-sm text-zinc-500">Signed in as {customer.name} · {customer.email}</p>
         </div>
-        <button type="button" onClick={() => { logout(); router.replace(sfPath(slug, '/account')); }} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">
-          <LogOut className="h-4 w-4" /> Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <Link href={sfPath(slug, '/account/support')} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">
+            <LifeBuoy className="h-4 w-4" /> Support
+          </Link>
+          <button type="button" onClick={() => { logout(); router.replace(sfPath(slug, '/account')); }} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">
+            <LogOut className="h-4 w-4" /> Sign out
+          </button>
+        </div>
       </div>
 
       {orders.isLoading ? (

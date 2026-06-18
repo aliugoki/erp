@@ -1483,3 +1483,55 @@ export interface EcOrder {
   createdAt: string | null;
   lines?: EcOrderLine[];
 }
+
+// ── Help Desk ───────────────────────────────────────────────────────────────────
+export interface HdMessage {
+  id: string;
+  ticketId: string;
+  authorType: 'AGENT' | 'CUSTOMER' | 'SYSTEM';
+  authorId: string | null;
+  authorName: string;
+  body: string;
+  isInternal: boolean;
+  createdAt: string | null;
+}
+
+export interface HdTicket {
+  id: string;
+  ticketNo: string;
+  subject: string;
+  requesterName: string;
+  requesterEmail: string;
+  clientId: string | null;
+  orderId: string | null;
+  channel: string;
+  category: string | null;
+  priority: string;
+  status: string;
+  assignedTo: string | null;
+  assigneeName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  tags: string[];
+  firstResponseDueAt: string | null;
+  resolutionDueAt: string | null;
+  firstRespondedAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  slaPaused: boolean;
+  firstResponseBreached: boolean;
+  resolutionBreached: boolean;
+  reopenedCount: number;
+  csatRating: number | null;
+  csatComment: string | null;
+  messageCount?: number;
+  lastActivityAt: string | null;
+  createdAt: string | null;
+  messages?: HdMessage[];
+}
+
+export interface HdTeam { id: string; name: string; description: string | null; memberCount?: number; memberIds?: string[]; }
+export interface HdSlaPolicy { id: string; priority: string; firstResponseMins: number; resolutionMins: number; active: boolean; }
+export interface HdCannedResponse { id: string; title: string; body: string; }
+export interface HdAgent { id: string; email: string; }
+export interface HdOverview { byStatus: Record<string, number>; open: number; unassigned: number; breached: number; csatAvg: number | null; csatCount: number; }

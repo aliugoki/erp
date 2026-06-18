@@ -24,5 +24,6 @@ import { StorefrontService } from './storefront.service';
   imports: [InventoryModule, FinanceModule, TenantsModule, NotificationsModule, JwtModule.register({})],
   controllers: [EcommerceController, StorefrontController],
   providers: [EcommerceService, StorefrontService, CustomerAuthService, PaymentService, EcommerceGlConsumer, EcommerceEmailConsumer, EcommerceExpiryScheduler],
+  exports: [StorefrontService, CustomerAuthService],
 })
 export class EcommerceModule {}

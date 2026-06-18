@@ -129,6 +129,48 @@ export interface EcommerceOrderStatusChangedV1 {
   previousStatus: string;
 }
 
+export interface HelpdeskTicketCreatedV1 {
+  ticketId: string;
+  ticketNo: string;
+  subject: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  requesterEmail: string;
+  clientId: string | null;
+  assignedTo: string | null;
+  teamId: string | null;
+}
+
+export interface HelpdeskTicketAssignedV1 {
+  ticketId: string;
+  ticketNo: string;
+  assignedTo: string;
+}
+
+export interface HelpdeskTicketRepliedV1 {
+  ticketId: string;
+  ticketNo: string;
+  requesterEmail: string;
+  /** Who sent the reply — an AGENT reply notifies the customer; a CUSTOMER reply notifies the agent. */
+  authorType: 'AGENT' | 'CUSTOMER';
+  assignedTo: string | null;
+}
+
+export interface HelpdeskTicketResolvedV1 {
+  ticketId: string;
+  ticketNo: string;
+  requesterEmail: string;
+  clientId: string | null;
+}
+
+export interface HelpdeskSlaBreachedV1 {
+  ticketId: string;
+  ticketNo: string;
+  /** Which SLA target was missed. */
+  breachType: 'FIRST_RESPONSE' | 'RESOLUTION';
+  assignedTo: string | null;
+  teamId: string | null;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -143,6 +185,11 @@ export const EVENT_TYPES = {
   ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
   ECOMMERCE_ORDER_PLACED: 'ecommerce.order_placed.v1',
   ECOMMERCE_ORDER_STATUS_CHANGED: 'ecommerce.order_status_changed.v1',
+  HELPDESK_TICKET_CREATED: 'helpdesk.ticket_created.v1',
+  HELPDESK_TICKET_ASSIGNED: 'helpdesk.ticket_assigned.v1',
+  HELPDESK_TICKET_REPLIED: 'helpdesk.ticket_replied.v1',
+  HELPDESK_TICKET_RESOLVED: 'helpdesk.ticket_resolved.v1',
+  HELPDESK_SLA_BREACHED: 'helpdesk.sla_breached.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -159,6 +206,11 @@ export interface EventPayloads {
   'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
   'ecommerce.order_placed.v1': EcommerceOrderPlacedV1;
   'ecommerce.order_status_changed.v1': EcommerceOrderStatusChangedV1;
+  'helpdesk.ticket_created.v1': HelpdeskTicketCreatedV1;
+  'helpdesk.ticket_assigned.v1': HelpdeskTicketAssignedV1;
+  'helpdesk.ticket_replied.v1': HelpdeskTicketRepliedV1;
+  'helpdesk.ticket_resolved.v1': HelpdeskTicketResolvedV1;
+  'helpdesk.sla_breached.v1': HelpdeskSlaBreachedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -171,4 +223,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'helpdesk', 'notifications', 'orders'] as const;

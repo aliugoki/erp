@@ -8,7 +8,7 @@ export class SetPreferenceDto {
 
 export class FeedQueryDto {
   @IsOptional() @IsIn(['unread', 'all', 'archived']) filter?: 'unread' | 'all' | 'archived';
-  @IsOptional() @IsIn(['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'system']) category?: string;
+  @IsOptional() @IsIn(['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'helpdesk', 'system']) category?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
 }

@@ -140,6 +140,25 @@ export interface SfOrder {
   lines: SfOrderLine[];
 }
 
+export interface SfTicketMessage {
+  id: string;
+  authorType: 'AGENT' | 'CUSTOMER' | 'SYSTEM';
+  authorName: string;
+  body: string;
+  createdAt: string | null;
+}
+export interface SfTicket {
+  id: string;
+  ticketNo: string;
+  subject: string;
+  status: string;
+  priority: string;
+  csatRating: number | null;
+  lastActivityAt: string | null;
+  createdAt: string | null;
+  messages?: SfTicketMessage[];
+}
+
 /** Build a storefront API path for the given slug. */
 export const sfPath = (slug: string, p = ''): string => `/shop/${slug}${p}`;
 

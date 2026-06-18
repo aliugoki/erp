@@ -3,13 +3,17 @@ import type {
   CrmLeadConvertedV1,
   EcommerceOrderPlacedV1,
   FinanceInvoicePaidV1,
+  HelpdeskSlaBreachedV1,
+  HelpdeskTicketAssignedV1,
+  HelpdeskTicketCreatedV1,
+  HelpdeskTicketRepliedV1,
   HrLeaveApprovedV1,
   HrPayrollRunCompletedV1,
   InventoryLowStockV1,
   ProductionOrderCompletedV1,
 } from '@metaxperts/shared';
 
-export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'system'] as const;
+export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'helpdesk', 'system'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 export type Severity = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
 
@@ -102,6 +106,50 @@ export function ecommerceOrderDraft(p: EcommerceOrderPlacedV1): NotificationDraf
     severity: 'SUCCESS',
     category: 'ecommerce',
     link: '/ecommerce',
+  };
+}
+
+export function ticketCreatedDraft(p: HelpdeskTicketCreatedV1): NotificationDraft {
+  return {
+    type: 'helpdesk.ticket_created',
+    title: `New ticket: ${p.ticketNo}`,
+    body: `${p.subject} (${p.priority.toLowerCase()} priority).`,
+    severity: p.priority === 'URGENT' ? 'WARNING' : 'INFO',
+    category: 'helpdesk',
+    link: '/helpdesk',
+  };
+}
+
+export function ticketAssignedDraft(p: HelpdeskTicketAssignedV1): NotificationDraft {
+  return {
+    type: 'helpdesk.ticket_assigned',
+    title: `Ticket assigned to you: ${p.ticketNo}`,
+    body: 'A support ticket was assigned to you.',
+    severity: 'INFO',
+    category: 'helpdesk',
+    link: '/helpdesk',
+  };
+}
+
+export function ticketCustomerReplyDraft(p: HelpdeskTicketRepliedV1): NotificationDraft {
+  return {
+    type: 'helpdesk.ticket_replied',
+    title: `Customer replied: ${p.ticketNo}`,
+    body: 'The customer added a new reply.',
+    severity: 'INFO',
+    category: 'helpdesk',
+    link: '/helpdesk',
+  };
+}
+
+export function slaBreachedDraft(p: HelpdeskSlaBreachedV1): NotificationDraft {
+  return {
+    type: 'helpdesk.sla_breached',
+    title: `SLA breached: ${p.ticketNo}`,
+    body: `${p.breachType === 'FIRST_RESPONSE' ? 'First-response' : 'Resolution'} target was missed.`,
+    severity: 'ERROR',
+    category: 'helpdesk',
+    link: '/helpdesk',
   };
 }
 

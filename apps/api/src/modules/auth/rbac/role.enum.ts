@@ -6,6 +6,7 @@ export enum Role {
   FINANCE_MANAGER = 'FINANCE_MANAGER',
   INVENTORY_MANAGER = 'INVENTORY_MANAGER',
   SALES_REP = 'SALES_REP',
+  SUPPORT_AGENT = 'SUPPORT_AGENT', // handles help-desk tickets
   VIEWER = 'VIEWER', // read-only
 }
 

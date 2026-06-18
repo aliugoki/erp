@@ -8,6 +8,10 @@ import {
   type EcommerceOrderPlacedV1,
   EVENT_TYPES,
   type FinanceInvoicePaidV1,
+  type HelpdeskSlaBreachedV1,
+  type HelpdeskTicketAssignedV1,
+  type HelpdeskTicketCreatedV1,
+  type HelpdeskTicketRepliedV1,
   type HrLeaveApprovedV1,
   type HrPayrollRunCompletedV1,
   type InventoryLowStockV1,
@@ -27,6 +31,10 @@ import {
   lowStockDraft,
   payrollDraft,
   productionCompletedDraft,
+  slaBreachedDraft,
+  ticketAssignedDraft,
+  ticketCreatedDraft,
+  ticketCustomerReplyDraft,
 } from './notifications.util';
 
 type Recipient = { id: string; email: string | null };
@@ -66,7 +74,11 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
     await reg(EVENT_TYPES.HR_PAYROLL_RUN_COMPLETED, 'notify-payroll', (e, m) => this.onPayroll(e, m));
     await reg(EVENT_TYPES.PRODUCTION_ORDER_COMPLETED, 'notify-production', (e, m) => this.onProductionCompleted(e, m));
     await reg(EVENT_TYPES.ECOMMERCE_ORDER_PLACED, 'notify-ecommerce-order', (e, m) => this.onEcommerceOrder(e, m));
-    this.logger.log('Notifications consumer registered (8 event types)');
+    await reg(EVENT_TYPES.HELPDESK_TICKET_CREATED, 'notify-ticket-created', (e, m) => this.onTicketCreated(e, m));
+    await reg(EVENT_TYPES.HELPDESK_TICKET_ASSIGNED, 'notify-ticket-assigned', (e, m) => this.onTicketAssigned(e, m));
+    await reg(EVENT_TYPES.HELPDESK_TICKET_REPLIED, 'notify-ticket-replied', (e, m) => this.onTicketReplied(e, m));
+    await reg(EVENT_TYPES.HELPDESK_SLA_BREACHED, 'notify-sla-breached', (e, m) => this.onSlaBreached(e, m));
+    this.logger.log('Notifications consumer registered (12 event types)');
   }
 
   /** crm.deal_closed → in-app notification for the deal's assignee (+ best-effort email if opted in). */
@@ -118,6 +130,37 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
     const p = event.payload as EcommerceOrderPlacedV1;
     const recipients = await this.notifications.resolveRoleRecipients(m, ['SALES_REP', 'TENANT_ADMIN']);
     await this.deliver(m, recipients, ecommerceOrderDraft(p), event.id);
+  }
+
+  /** helpdesk.ticket_created → notify the support team (agents + admins). */
+  async onTicketCreated(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HelpdeskTicketCreatedV1;
+    const recipients = p.assignedTo
+      ? [await this.userRecipient(m, p.assignedTo)]
+      : await this.notifications.resolveRoleRecipients(m, ['SUPPORT_AGENT', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, ticketCreatedDraft(p), event.id);
+  }
+
+  /** helpdesk.ticket_assigned → notify the agent it was assigned to. */
+  async onTicketAssigned(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HelpdeskTicketAssignedV1;
+    await this.deliver(m, [await this.userRecipient(m, p.assignedTo)], ticketAssignedDraft(p), event.id);
+  }
+
+  /** helpdesk.ticket_replied (by the CUSTOMER) → notify the assigned agent. */
+  async onTicketReplied(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HelpdeskTicketRepliedV1;
+    if (p.authorType !== 'CUSTOMER' || !p.assignedTo) return;
+    await this.deliver(m, [await this.userRecipient(m, p.assignedTo)], ticketCustomerReplyDraft(p), event.id);
+  }
+
+  /** helpdesk.sla_breached → alert the assigned agent (or the support team). */
+  async onSlaBreached(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as HelpdeskSlaBreachedV1;
+    const recipients = p.assignedTo
+      ? [await this.userRecipient(m, p.assignedTo)]
+      : await this.notifications.resolveRoleRecipients(m, ['SUPPORT_AGENT', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, slaBreachedDraft(p), event.id);
   }
 
   /** Create the in-app row per recipient (idempotent) and fan out opt-in emails (best effort). */

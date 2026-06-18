@@ -18,6 +18,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   [Role.INVENTORY_MANAGER]: ['inventory:product:read', 'inventory:product:write', 'inventory:stock:write'],
   [Role.SALES_REP]: ['crm:deal:read', 'crm:deal:write', 'crm:contact:write'],
+  [Role.SUPPORT_AGENT]: ['helpdesk:ticket:read', 'helpdesk:ticket:write'],
   [Role.VIEWER]: [
     'hr:employee:read',
     'finance:invoice:read',
