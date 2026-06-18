@@ -121,6 +121,14 @@ export interface EcommerceOrderPlacedV1 {
   lineCount: number;
 }
 
+export interface EcommerceOrderStatusChangedV1 {
+  orderId: string;
+  orderNo: string;
+  /** New fulfilment status (PENDING | PAID | FULFILLED | SHIPPED | CANCELLED | REFUNDED). */
+  status: string;
+  previousStatus: string;
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -134,6 +142,7 @@ export const EVENT_TYPES = {
   PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
   ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
   ECOMMERCE_ORDER_PLACED: 'ecommerce.order_placed.v1',
+  ECOMMERCE_ORDER_STATUS_CHANGED: 'ecommerce.order_status_changed.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -149,6 +158,7 @@ export interface EventPayloads {
   'production.order_completed.v1': ProductionOrderCompletedV1;
   'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
   'ecommerce.order_placed.v1': EcommerceOrderPlacedV1;
+  'ecommerce.order_status_changed.v1': EcommerceOrderStatusChangedV1;
 }
 
 export type EventType = keyof EventPayloads;

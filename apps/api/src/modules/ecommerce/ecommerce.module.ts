@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { FinanceModule } from '../finance/finance.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { TenantsModule } from '../tenants/tenants.module';
+import { EcommerceEmailConsumer } from './ecommerce-email.consumer';
 import { EcommerceGlConsumer } from './ecommerce-gl.consumer';
 import { EcommerceController } from './ecommerce.controller';
 import { EcommerceService } from './ecommerce.service';
@@ -15,8 +17,8 @@ import { StorefrontService } from './storefront.service';
  * (TenantsService) before reading through RLS.
  */
 @Module({
-  imports: [InventoryModule, FinanceModule, TenantsModule],
+  imports: [InventoryModule, FinanceModule, TenantsModule, NotificationsModule],
   controllers: [EcommerceController, StorefrontController],
-  providers: [EcommerceService, StorefrontService, EcommerceGlConsumer],
+  providers: [EcommerceService, StorefrontService, EcommerceGlConsumer, EcommerceEmailConsumer],
 })
 export class EcommerceModule {}

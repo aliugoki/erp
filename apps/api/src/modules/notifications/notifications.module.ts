@@ -12,6 +12,6 @@ import { EmailQueueService } from './email-queue.service';
 @Module({
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsConsumer, MailerService, EmailQueueService],
-  exports: [NotificationsService],
+  exports: [NotificationsService, EmailQueueService],
 })
 export class NotificationsModule {}

@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { EVENT_TYPES, type EcommerceOrderPlacedV1 } from '@metaxperts/shared';
+import { EVENT_TYPES, type EcommerceOrderPlacedV1, type EcommerceOrderStatusChangedV1 } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -25,6 +25,7 @@ import type {
 import {
   type DiscountInput,
   type EcGlAccounts,
+  type OrderEmailInfo,
   computeOrderTotals,
   mapCollection,
   mapDiscount,
@@ -170,7 +171,7 @@ export class EcommerceService {
   async updateCollection(id: string, dto: UpsertCollectionDto) {
     return this.tenantTx.run(async (m) => {
       const slug = dto.slug ? slugify(dto.slug) : undefined;
-      const rows = (await m.query(
+      const rows = rowsOf(await m.query(
         `UPDATE ec_collection SET title = COALESCE($2, title), slug = COALESCE($3, slug),
             description = $4, sort = COALESCE($5, sort), is_featured = COALESCE($6, is_featured), updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
@@ -244,7 +245,7 @@ export class EcommerceService {
   async updateProduct(id: string, dto: UpdateProductDto) {
     return this.tenantTx.run(async (m) => {
       const slug = dto.slug ? slugify(dto.slug) : undefined;
-      const rows = (await m.query(
+      const rows = rowsOf(await m.query(
         `UPDATE ec_product SET title = COALESCE($2, title), slug = COALESCE($3, slug), subtitle = $4,
             description = $5, price_minor = $6, compare_at_minor = $7, status = COALESCE($8, status),
             is_featured = COALESCE($9, is_featured), sort = COALESCE($10, sort), tax_rate = COALESCE($11, tax_rate),
@@ -437,11 +438,21 @@ export class EcommerceService {
         }
       }
       const paymentStatus = next === 'PAID' ? 'PAID' : next === 'REFUNDED' ? 'REFUNDED' : rows[0]!.payment_status;
-      const updated = (await m.query(
+      const updated = rowsOf(await m.query(
         `UPDATE ec_order SET status = $2, payment_status = $3, payment_reference = COALESCE($4, payment_reference), updated_at = now()
          WHERE id = $1 RETURNING *`,
         [id, next, paymentStatus, dto.paymentReference ?? null],
       )) as Row[];
+      // Emit a status-change event (outbox) so the customer-email consumer can notify the buyer.
+      if (next !== current) {
+        const payload: EcommerceOrderStatusChangedV1 = {
+          orderId: id,
+          orderNo: rows[0]!.order_no as string,
+          status: next,
+          previousStatus: current,
+        };
+        await this.outbox.write(m, EVENT_TYPES.ECOMMERCE_ORDER_STATUS_CHANGED, payload);
+      }
       return mapOrder(updated[0]!);
     });
   }
@@ -477,6 +488,32 @@ export class EcommerceService {
       );
       return this.glConfigInTx(m);
     });
+  }
+
+  /** Customer + order summary for the transactional-email consumer. Null if the order is gone. */
+  async orderForEmailInTx(m: Mgr, orderId: string): Promise<OrderEmailInfo | null> {
+    const rows = (await m.query(
+      `SELECT o.order_no, o.customer_name, o.customer_email, o.status, o.payment_method, o.payment_status,
+              o.total_minor, o.currency,
+              (SELECT count(*) FROM ec_order_line WHERE order_id = o.id) AS line_count,
+              COALESCE((SELECT name FROM ec_store WHERE tenant_id = current_setting('app.tenant_id')::uuid AND deleted_at IS NULL LIMIT 1), 'Our store') AS store_name
+       FROM ec_order o WHERE o.id = $1 AND o.deleted_at IS NULL`,
+      [orderId],
+    )) as Row[];
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      orderNo: r.order_no as string,
+      customerName: r.customer_name as string,
+      customerEmail: r.customer_email as string,
+      status: r.status as string,
+      paymentMethod: r.payment_method as string,
+      paymentStatus: r.payment_status as string,
+      totalMinor: Number(r.total_minor),
+      currency: r.currency as string,
+      lineCount: Number(r.line_count),
+      storeName: r.store_name as string,
+    };
   }
 
   /** Order financials for the GL consumer (occurredOn from placed_at). */
@@ -863,6 +900,13 @@ export class EcommerceService {
       return this.orderWithLines(m, rows[0]!.id as string);
     });
   }
+}
+
+/** TypeORM returns `[rows, affectedCount]` for UPDATE…RETURNING but a plain array for INSERT/SELECT;
+ * normalise to just the rows. */
+function rowsOf(res: unknown): unknown[] {
+  if (Array.isArray(res) && res.length === 2 && Array.isArray(res[0]) && typeof res[1] === 'number') return res[0];
+  return (res ?? []) as unknown[];
 }
 
 function isUnique(e: unknown): boolean {

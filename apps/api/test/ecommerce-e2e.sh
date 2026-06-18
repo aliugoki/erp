@@ -93,6 +93,13 @@ CARD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quant
 check "CARD order PAID" "$(echo "$CARD" | jget data.status)" "PAID"
 check "CARD payment reference set" "$(echo "$CARD" | jget data.paymentStatus)" "PAID"
 
+echo "== admin: fulfil an order → emits ecommerce.order_status_changed (drives customer email) =="
+OID=$(ownerq "SELECT id FROM ec_order WHERE tenant_id='$T' AND order_no='$ORDNO'")
+UP=$(patch "$A" "ecommerce/orders/$OID/status" '{"status":"SHIPPED"}')
+check "order now SHIPPED" "$(echo "$UP" | jget data.status)" "SHIPPED"
+check "order_status_changed in outbox" "$(ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T' AND type='ecommerce.order_status_changed.v1'")" "1"
+check "no-op status change emits nothing new" "$(patch "$A" "ecommerce/orders/$OID/status" '{"status":"SHIPPED"}' >/dev/null; ownerq "SELECT count(*) FROM outbox_event WHERE tenant_id='$T' AND type='ecommerce.order_status_changed.v1'")" "1"
+
 echo "== isolation: a second tenant's unpublished store is a flat 404 =="
 curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d "{\"name\":\"Shop Two\",\"adminEmail\":\"admin@shoptwo.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"enterprise\"}" >/dev/null
 SLUG2=$(ownerq "SELECT slug FROM tenants WHERE name='Shop Two'")

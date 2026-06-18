@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type OrderEmailInfo,
   computeOrderTotals,
+  customerOrderEmail,
   discountMinorFor,
   ecOrderVoucher,
   priceLine,
@@ -77,5 +79,30 @@ describe('ecommerce.util GL voucher', () => {
   it('returns null without the minimum accounts or a zero total', () => {
     expect(ecOrderVoucher({ ...accounts, clearingAccountId: null }, order)).toBeNull();
     expect(ecOrderVoucher(accounts, { ...order, totalMinor: 0 })).toBeNull();
+  });
+});
+
+describe('ecommerce.util customer emails', () => {
+  const info: OrderEmailInfo = {
+    orderNo: 'ORD-000007', customerName: 'Ada Lovelace', customerEmail: 'ada@buyer.test', status: 'PENDING',
+    paymentMethod: 'COD', paymentStatus: 'UNPAID', totalMinor: 480_000, currency: 'PKR', lineCount: 2, storeName: 'Shop Co',
+  };
+
+  it('placed confirmation names the order, total, store, and payment expectation', () => {
+    const cod = customerOrderEmail(info, 'placed')!;
+    expect(cod.subject).toBe('Shop Co — order ORD-000007 confirmed');
+    expect(cod.text).toContain('PKR 4,800.00');
+    expect(cod.text).toContain('pay on delivery');
+    const paid = customerOrderEmail({ ...info, paymentStatus: 'PAID' }, 'placed')!;
+    expect(paid.text).toContain('payment has been received');
+  });
+
+  it('status emails are sent only for notable statuses', () => {
+    expect(customerOrderEmail(info, 'SHIPPED')!.subject).toContain('shipped');
+    expect(customerOrderEmail(info, 'PAID')!.text).toContain('being prepared');
+    expect(customerOrderEmail(info, 'CANCELLED')!.subject).toContain('cancelled');
+    expect(customerOrderEmail({ ...info, status: 'REFUNDED' }, 'REFUNDED')!.text).toContain('refund of PKR 4,800.00');
+    expect(customerOrderEmail(info, 'PENDING')).toBeNull(); // no email for a return-to-pending
+    expect(customerOrderEmail(info, 'WHATEVER')).toBeNull();
   });
 });

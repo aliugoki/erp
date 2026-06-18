@@ -158,6 +158,59 @@ export function ecOrderVoucher(
   return { description: `Online order ${order.orderNo}`, voucherType: 'JV', occurredOn: order.occurredOn, reference: order.orderNo, entries };
 }
 
+// ── Customer transactional emails ───────────────────────────────────────────────
+export interface OrderEmailInfo {
+  orderNo: string;
+  customerName: string;
+  customerEmail: string;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  totalMinor: number;
+  currency: string;
+  lineCount: number;
+  storeName: string;
+}
+
+/** Format integer minor units for an email body. */
+function emailMoney(minor: number, currency: string): string {
+  return `${currency} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Build the customer-facing email for an order event. `kind` is 'placed' (confirmation) or a fulfilment
+ * status. Returns null for statuses that don't warrant a customer email (e.g. PENDING), so the consumer
+ * skips silently. Plain text — the mailer sends `{ to, subject, text }`.
+ */
+export function customerOrderEmail(info: OrderEmailInfo, kind: 'placed' | string): { subject: string; text: string } | null {
+  const total = emailMoney(info.totalMinor, info.currency);
+  const hi = `Hi ${info.customerName.split(' ')[0] || 'there'},`;
+  const sign = `\n\nThank you,\n${info.storeName}`;
+
+  if (kind === 'placed') {
+    const pay = info.paymentStatus === 'PAID' ? 'Your payment has been received.' : 'You’ll pay on delivery.';
+    return {
+      subject: `${info.storeName} — order ${info.orderNo} confirmed`,
+      text: `${hi}\n\nThanks for your order! We’ve received order ${info.orderNo} (${info.lineCount} item(s)) totalling ${total}. ${pay}\n\nWe’ll email you as it progresses.${sign}`,
+    };
+  }
+
+  switch (kind) {
+    case 'PAID':
+      return { subject: `${info.storeName} — payment received for ${info.orderNo}`, text: `${hi}\n\nWe’ve received your payment of ${total} for order ${info.orderNo}. It’s now being prepared.${sign}` };
+    case 'FULFILLED':
+      return { subject: `${info.storeName} — order ${info.orderNo} is being prepared`, text: `${hi}\n\nGood news — order ${info.orderNo} is packed and being prepared for shipment.${sign}` };
+    case 'SHIPPED':
+      return { subject: `${info.storeName} — order ${info.orderNo} has shipped 🚚`, text: `${hi}\n\nYour order ${info.orderNo} is on its way! You’ll receive it soon.${sign}` };
+    case 'CANCELLED':
+      return { subject: `${info.storeName} — order ${info.orderNo} cancelled`, text: `${hi}\n\nYour order ${info.orderNo} has been cancelled. If this is unexpected, please reply to this email.${sign}` };
+    case 'REFUNDED':
+      return { subject: `${info.storeName} — order ${info.orderNo} refunded`, text: `${hi}\n\nA refund of ${total} for order ${info.orderNo} has been processed. It may take a few days to appear.${sign}` };
+    default:
+      return null; // PENDING or any other status → no customer email
+  }
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 const money = (amountMinor: unknown, currency: unknown): Money => ({
   amountMinor: Number(amountMinor ?? 0),
