@@ -316,6 +316,14 @@ export class EcommerceController {
     return this.ec.updateOrderStatus(id, dto);
   }
 
+  /** Cancel + restock card orders whose payment session lapsed unpaid (also runs automatically). */
+  @Post('orders/release-expired')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  releaseExpired() {
+    return this.ec.releaseExpired();
+  }
+
   // ── GL posting config ───────────────────────────────────────────────────────
   @Get('gl-config')
   @Roles(...FINANCE)

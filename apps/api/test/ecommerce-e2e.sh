@@ -187,6 +187,18 @@ check "webhook with bad signature → 401" "$(code -XPOST "$B/shop/$SLUG/pay/web
 ppost "shop/$SLUG/pay/webhook" "{\"paymentId\":\"$PID2\",\"status\":\"PAID\",\"signature\":\"$SIG\"}" >/dev/null
 check "signed webhook marks the order PAID" "$(ownerq "SELECT status FROM ec_order WHERE id='$HID'")" "PAID"
 
+echo "== payment expiry: an abandoned card order releases its stock =="
+put "$A" ecommerce/payment-config '{"provider":"SIMULATED"}' >/dev/null   # prior test left it on HTTP
+S_BEFORE=$(onhand)
+EXP_ORD=$(ppost "shop/$SLUG/checkout" "{\"items\":[{\"productId\":\"$EPID\",\"quantity\":1}],\"customerName\":\"Abandoner\",\"customerEmail\":\"abandon@buyer.test\",\"paymentMethod\":\"CARD\"}")
+EXP_PID=$(echo "$EXP_ORD" | jget data.payment.paymentId); EXP_SEC=$(echo "$EXP_ORD" | jget data.payment.clientSecret); EXP_NO=$(echo "$EXP_ORD" | jget data.orderNo)
+check "card order decremented stock" "$(onhand)" "$((S_BEFORE-1))"
+ownerq "UPDATE ec_payment SET expires_at = now() - interval '1 hour' WHERE tenant_id='$T' AND id='$EXP_PID'" >/dev/null
+check "expired session can't be paid → 400" "$(code -XPOST "$B/shop/$SLUG/pay/$EXP_PID/confirm" -H 'Content-Type: application/json' -d "{\"clientSecret\":\"$EXP_SEC\"}")" "400"
+check "release reports the order" "$(post "$A" ecommerce/orders/release-expired '{}' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['released']>=1)")" "True"
+check "expired order CANCELLED" "$(ownerq "SELECT status FROM ec_order WHERE tenant_id='$T' AND order_no='$EXP_NO'")" "CANCELLED"
+check "stock restored after release" "$(onhand)" "$S_BEFORE"
+
 echo "== shipping zones: the destination country selects the rate =="
 ZP=$(post "$A" ecommerce/shipping-zones '{"name":"Pakistan","countries":["Pakistan"],"rateMinor":0}' | jget data.id)
 ZI=$(post "$A" ecommerce/shipping-zones '{"name":"International","countries":[],"rateMinor":200000}' | jget data.id)

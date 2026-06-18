@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, PackageOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { ApiError, apiGet, apiPatch } from '@/lib/api';
+import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api';
 import type { EcOrder } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,13 +35,22 @@ export function OrdersAdmin() {
   });
 
   const o = detail.data;
+  const release = useMutation({
+    mutationFn: () => apiPost<{ released: number }>('/ecommerce/orders/release-expired', {}),
+    onSuccess: (r) => { toast.success(r.released ? `Released ${r.released} expired hold(s)` : 'No expired holds to release'); void qc.invalidateQueries({ queryKey: ['ec-orders'] }); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm">
           <option value="">All statuses</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        <Button size="sm" variant="outline" disabled={release.isPending} onClick={() => release.mutate()} title="Cancel + restock unpaid card orders past their payment window (also runs automatically)">
+          {release.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Release expired holds
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border">

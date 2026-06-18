@@ -90,8 +90,8 @@ export class PaymentService {
     const cfg = await this.getConfigInTx(m);
     const cs = newClientSecret();
     const rows = (await m.query(
-      `INSERT INTO ec_payment (tenant_id, order_id, provider, status, amount_minor, currency, client_secret)
-       VALUES (current_setting('app.tenant_id')::uuid, $1, $2, 'PENDING', $3, $4, $5) RETURNING id`,
+      `INSERT INTO ec_payment (tenant_id, order_id, provider, status, amount_minor, currency, client_secret, expires_at)
+       VALUES (current_setting('app.tenant_id')::uuid, $1, $2, 'PENDING', $3, $4, $5, now() + interval '30 minutes') RETURNING id`,
       [order.id, cfg.provider, order.totalMinor, order.currency, cs],
     )) as Array<{ id: string }>;
     const paymentId = rows[0]!.id;
@@ -122,15 +122,20 @@ export class PaymentService {
   async confirmSimulated(paymentId: string, presentedSecret: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, order_id, provider, status, client_secret FROM ec_payment WHERE id = $1 AND deleted_at IS NULL`,
+        `SELECT id, order_id, provider, status, client_secret, (expires_at IS NOT NULL AND expires_at < now()) AS expired
+         FROM ec_payment WHERE id = $1 AND deleted_at IS NULL`,
         [paymentId],
-      )) as Array<{ id: string; order_id: string; provider: string; status: string; client_secret: string }>;
+      )) as Array<{ id: string; order_id: string; provider: string; status: string; client_secret: string; expired: boolean }>;
       const p = rows[0];
       if (!p) throw new NotFoundException('Payment not found');
       if (p.provider !== 'SIMULATED') throw new BadRequestException('This payment is handled by an external gateway');
       if (p.client_secret !== presentedSecret) throw new UnauthorizedException('Invalid payment secret');
       if (p.status === 'PAID') return { status: 'PAID' as const };
       if (p.status !== 'PENDING') throw new BadRequestException(`Payment is ${p.status}`);
+      if (p.expired) {
+        await m.query(`UPDATE ec_payment SET status = 'CANCELLED', updated_at = now() WHERE id = $1`, [paymentId]);
+        throw new BadRequestException('This payment session has expired — please place the order again');
+      }
       await this.markPaidInTx(m, paymentId, `SIM..${paymentId.slice(0, 8)}`);
       return { status: 'PAID' as const };
     });
@@ -172,7 +177,8 @@ export class PaymentService {
     if (!orderId) return;
     const ordRows = (await m.query(`SELECT order_no, status FROM ec_order WHERE id = $1 AND deleted_at IS NULL`, [orderId])) as Array<{ order_no: string; status: string }>;
     const order = ordRows[0];
-    if (!order || order.status === 'PAID') return;
+    // Idempotent, and never resurrect an order the expiry sweep already cancelled/restocked.
+    if (!order || ['PAID', 'CANCELLED', 'REFUNDED'].includes(order.status)) return;
     await m.query(
       `UPDATE ec_order SET status = 'PAID', payment_status = 'PAID', payment_reference = COALESCE($2, payment_reference), updated_at = now() WHERE id = $1`,
       [orderId, providerRef],

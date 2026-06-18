@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { EntityManager } from 'typeorm';
+import { DataSource, type EntityManager } from 'typeorm';
 import { EVENT_TYPES, type EcommerceOrderPlacedV1, type EcommerceOrderStatusChangedV1 } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
@@ -77,6 +77,7 @@ export class EcommerceService {
     private readonly inventoryDocs: InventoryDocsService,
     private readonly outbox: OutboxService,
     private readonly payments: PaymentService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ── Store settings ──────────────────────────────────────────────────────────
@@ -669,6 +670,67 @@ export class EcommerceService {
       }
       return mapOrder(updated[0]!);
     });
+  }
+
+  // ── Expired-order release (stock held by unpaid card orders) ──────────────────
+  /** Cancel + restock one order (used by the expiry sweep). Returns true if it acted. */
+  private async cancelAndRestockInTx(m: Mgr, orderId: string): Promise<boolean> {
+    const rows = (await m.query(`SELECT order_no, status, warehouse_id FROM ec_order WHERE id = $1 AND deleted_at IS NULL`, [orderId])) as Row[];
+    const o = rows[0];
+    if (!o || ['CANCELLED', 'REFUNDED'].includes(o.status as string)) return false;
+    const lines = (await m.query(
+      `SELECT product_id, quantity, unit_cost_minor FROM ec_order_line WHERE order_id = $1`,
+      [orderId],
+    )) as Array<{ product_id: string | null; quantity: number; unit_cost_minor: number }>;
+    for (const l of lines) {
+      if (!l.product_id) continue;
+      await this.inventoryDocs.applyStockMovement(m, {
+        productId: l.product_id,
+        warehouseId: (o.warehouse_id as string) ?? null,
+        docType: 'EC_ORDER_EXPIRE',
+        docId: orderId,
+        docNo: o.order_no as string,
+        qtyIn: Number(l.quantity),
+        unitCostMinor: Number(l.unit_cost_minor),
+        narration: `Auto-released — order ${o.order_no as string} unpaid past expiry`,
+      });
+    }
+    await m.query(`UPDATE ec_order SET status = 'CANCELLED', updated_at = now() WHERE id = $1`, [orderId]);
+    await m.query(`UPDATE ec_payment SET status = 'CANCELLED', updated_at = now() WHERE order_id = $1 AND status = 'PENDING'`, [orderId]);
+    const payload: EcommerceOrderStatusChangedV1 = { orderId, orderNo: o.order_no as string, status: 'CANCELLED', previousStatus: o.status as string };
+    await this.outbox.write(m, EVENT_TYPES.ECOMMERCE_ORDER_STATUS_CHANGED, payload);
+    return true;
+  }
+
+  /** Cancel + restock every card order whose payment session lapsed unpaid. */
+  private async releaseExpiredInTx(m: Mgr): Promise<number> {
+    const orders = (await m.query(
+      `SELECT DISTINCT o.id FROM ec_order o JOIN ec_payment p ON p.order_id = o.id
+       WHERE o.status = 'PENDING' AND o.payment_method = 'CARD' AND o.payment_status = 'UNPAID' AND o.deleted_at IS NULL
+         AND p.status = 'PENDING' AND p.expires_at IS NOT NULL AND p.expires_at < now()`,
+    )) as Array<{ id: string }>;
+    let n = 0;
+    for (const { id } of orders) if (await this.cancelAndRestockInTx(m, id)) n++;
+    return n;
+  }
+
+  /** Release expired holds for the current tenant (admin-triggered). */
+  async releaseExpired() {
+    return this.tenantTx.run(async (m) => ({ released: await this.releaseExpiredInTx(m) }));
+  }
+
+  /** Release expired holds across all tenants (the scheduled sweep). */
+  async releaseExpiredAllTenants(): Promise<number> {
+    const tenants = (await this.dataSource.query(`SELECT id FROM tenants WHERE deleted_at IS NULL`)) as Array<{ id: string }>;
+    let total = 0;
+    for (const { id } of tenants) {
+      try {
+        total += await this.tenantTx.runFor(id, (m) => this.releaseExpiredInTx(m));
+      } catch {
+        /* one tenant's failure shouldn't stop the sweep */
+      }
+    }
+    return total;
   }
 
   // ── GL config + consumer reads ──────────────────────────────────────────────
