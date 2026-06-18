@@ -47,6 +47,14 @@ const deal = (tenantId: string, assignedTo: string | null, overrides: Record<str
   payload: { dealId: randomUUID(), title: 'Big Deal', clientId: randomUUID(), valueMinor: 1_000_000, currency: 'PKR', assignedTo, ...overrides },
 });
 
+const ecommerceOrder = (tenantId: string): BaseEvent => ({
+  id: randomUUID(),
+  type: EVENT_TYPES.ECOMMERCE_ORDER_PLACED,
+  tenantId,
+  occurredAt: '2026-06-18T00:00:00Z',
+  payload: { orderId: randomUUID(), orderNo: 'ORD-000042', clientId: null, paymentMethod: 'CARD', totalMinor: 480_000, taxMinor: 0, shippingMinor: 30_000, cogsMinor: 120_000, currency: 'PKR', lineCount: 2 },
+});
+
 const countFor = async (tenant: string, userId: string) =>
   Number((await ds.query(`SELECT count(*)::int c FROM notification WHERE tenant_id=$1 AND user_id=$2`, [tenant, userId]))[0].c);
 
@@ -77,6 +85,7 @@ beforeEach(async () => {
   for (const t of [TA, TB]) {
     await ds.query(`DELETE FROM notification WHERE tenant_id=$1`, [t]);
     await ds.query(`DELETE FROM processed_event WHERE tenant_id=$1`, [t]);
+    await ds.query(`DELETE FROM users WHERE tenant_id=$1 AND email LIKE 'rep-%@store.test'`, [t]);
   }
 });
 
@@ -115,6 +124,26 @@ describe('notifications: deal_closed → in-app', () => {
     expect(await countFor(TA, userA)).toBe(1);
     expect(await countFor(TB, userB)).toBe(1);
     expect(await countFor(TA, userB)).toBe(0);
+  });
+});
+
+describe('notifications: ecommerce order → in-app', () => {
+  it('fans a new-order notification out to store managers (sales rep), idempotent under redelivery', async () => {
+    const rep = randomUUID();
+    // An active SALES_REP in the tenant so role resolution finds a recipient.
+    await ds.query(
+      `INSERT INTO users (id, tenant_id, email, password_hash, is_active, roles) VALUES ($1,$2,$3,'x',true,'{SALES_REP}')`,
+      [rep, TA, `rep-${rep}@store.test`],
+    );
+    const e = ecommerceOrder(TA);
+    const C = 'notify-ecommerce-order';
+    expect(await idem.handleOnce(C, e, (ev, m) => consumer.onEcommerceOrder(ev, m))).toBe('processed');
+    expect(await idem.handleOnce(C, e, (ev, m) => consumer.onEcommerceOrder(ev, m))).toBe('duplicate'); // redelivery
+    expect(await countFor(TA, rep)).toBe(1);
+    const row = (await ds.query(`SELECT type, category, title FROM notification WHERE tenant_id=$1 AND user_id=$2`, [TA, rep]))[0];
+    expect(row.type).toBe('ecommerce.order_placed');
+    expect(row.category).toBe('ecommerce');
+    expect(row.title).toBe('New online order: ORD-000042');
   });
 });
 

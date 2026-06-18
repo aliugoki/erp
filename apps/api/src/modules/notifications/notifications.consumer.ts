@@ -5,6 +5,7 @@ import {
   type BaseEvent,
   type CrmDealClosedV1,
   type CrmLeadConvertedV1,
+  type EcommerceOrderPlacedV1,
   EVENT_TYPES,
   type FinanceInvoicePaidV1,
   type HrLeaveApprovedV1,
@@ -19,6 +20,7 @@ import { EmailQueueService } from './email-queue.service';
 import {
   type NotificationDraft,
   dealWonDraft,
+  ecommerceOrderDraft,
   invoicePaidDraft,
   leadConvertedDraft,
   leaveApprovedDraft,
@@ -63,7 +65,8 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
     await reg(EVENT_TYPES.HR_LEAVE_APPROVED, 'notify-leave-approved', (e, m) => this.onLeaveApproved(e, m));
     await reg(EVENT_TYPES.HR_PAYROLL_RUN_COMPLETED, 'notify-payroll', (e, m) => this.onPayroll(e, m));
     await reg(EVENT_TYPES.PRODUCTION_ORDER_COMPLETED, 'notify-production', (e, m) => this.onProductionCompleted(e, m));
-    this.logger.log('Notifications consumer registered (7 event types)');
+    await reg(EVENT_TYPES.ECOMMERCE_ORDER_PLACED, 'notify-ecommerce-order', (e, m) => this.onEcommerceOrder(e, m));
+    this.logger.log('Notifications consumer registered (8 event types)');
   }
 
   /** crm.deal_closed → in-app notification for the deal's assignee (+ best-effort email if opted in). */
@@ -108,6 +111,13 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
     const p = event.payload as ProductionOrderCompletedV1;
     const recipients = await this.notifications.resolveRoleRecipients(m, ['INVENTORY_MANAGER', 'TENANT_ADMIN']);
     await this.deliver(m, recipients, productionCompletedDraft(p), event.id);
+  }
+
+  /** ecommerce.order_placed → notify the store's managers (sales reps + admins) of a new online order. */
+  async onEcommerceOrder(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as EcommerceOrderPlacedV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['SALES_REP', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, ecommerceOrderDraft(p), event.id);
   }
 
   /** Create the in-app row per recipient (idempotent) and fan out opt-in emails (best effort). */

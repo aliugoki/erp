@@ -73,7 +73,7 @@ export default function NotificationsPage() {
     <div className="space-y-6 animate-fade-up">
       <PageHeader
         title="Notifications"
-        description="Your activity feed across CRM, inventory, finance, HR, and production."
+        description="Your activity feed across CRM, inventory, finance, HR, production, and the online store."
         action={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowPrefs((s) => !s)}>

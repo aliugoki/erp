@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dealWonDraft,
+  ecommerceOrderDraft,
   formatMinor,
   invoicePaidDraft,
   lowStockDraft,
@@ -41,5 +42,18 @@ describe('notifications.util', () => {
     expect(prod.category).toBe('production');
     expect(prod.body).toContain('5 unit');
     expect(prod.body).toContain('1,100.00');
+  });
+
+  it('ecommerceOrderDraft names the order, totals, and payment method', () => {
+    const card = ecommerceOrderDraft({ orderId: 'o', orderNo: 'ORD-000007', clientId: 'c', paymentMethod: 'CARD', totalMinor: 480_000, taxMinor: 0, shippingMinor: 30_000, cogsMinor: 120_000, currency: 'PKR', lineCount: 2 });
+    expect(card.type).toBe('ecommerce.order_placed');
+    expect(card.title).toBe('New online order: ORD-000007');
+    expect(card.body).toContain('2 item');
+    expect(card.body).toContain('4,800.00');
+    expect(card.body).toContain('paid by card');
+    expect(card.category).toBe('ecommerce');
+    expect(card.link).toBe('/ecommerce');
+    const cod = ecommerceOrderDraft({ orderId: 'o', orderNo: 'ORD-1', clientId: null, paymentMethod: 'COD', totalMinor: 1000, taxMinor: 0, shippingMinor: 0, cogsMinor: 0, currency: 'PKR', lineCount: 1 });
+    expect(cod.body).toContain('cash on delivery');
   });
 });

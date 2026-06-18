@@ -1,6 +1,7 @@
 import type {
   CrmDealClosedV1,
   CrmLeadConvertedV1,
+  EcommerceOrderPlacedV1,
   FinanceInvoicePaidV1,
   HrLeaveApprovedV1,
   HrPayrollRunCompletedV1,
@@ -8,7 +9,7 @@ import type {
   ProductionOrderCompletedV1,
 } from '@metaxperts/shared';
 
-export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'system'] as const;
+export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'system'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 export type Severity = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
 
@@ -90,6 +91,17 @@ export function payrollDraft(p: HrPayrollRunCompletedV1): NotificationDraft {
     severity: 'INFO',
     category: 'hr',
     link: '/hr/payroll',
+  };
+}
+
+export function ecommerceOrderDraft(p: EcommerceOrderPlacedV1): NotificationDraft {
+  return {
+    type: 'ecommerce.order_placed',
+    title: `New online order: ${p.orderNo}`,
+    body: `${p.lineCount} item(s), ${formatMinor(p.totalMinor, p.currency)} — ${p.paymentMethod === 'CARD' ? 'paid by card' : 'cash on delivery'}.`,
+    severity: 'SUCCESS',
+    category: 'ecommerce',
+    link: '/ecommerce',
   };
 }
 
