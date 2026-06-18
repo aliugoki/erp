@@ -229,13 +229,17 @@ services:
       context: ..
       dockerfile: apps/web/Dockerfile
       args:
-        # Browser-facing API URL baked into the client bundle. Set PUBLIC_API_URL to the API's public
-        # address (e.g. http://YOUR_SERVER_IP:3300) to view the storefront from a remote browser.
-        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3300}
+        # Browser-facing API base URL baked into the client bundle. Default `/api` routes all API calls
+        # through the web origin (next.config.js rewrites `/api/*` → the internal API), so only the web
+        # port needs to be public — no separate API port, no CORS. Override with PUBLIC_API_URL only if
+        # you want the browser to call the API directly at an absolute URL (then expose that port).
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-/api}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: "3001"
+      # Upstream the `/api/*` proxy forwards to (internal docker network). Service name `api`, port 3000.
+      API_PROXY_TARGET: http://api:3000
     ports:
       - "3001:3001"
     networks: [erp]
