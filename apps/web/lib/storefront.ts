@@ -63,6 +63,7 @@ export interface SfProduct {
   price: Money;
   compareAt: Money | null;
   sku: string | null;
+  category: string | null;
   onHand: number | null;
   primaryImageId: string | null;
   imageCount?: number;

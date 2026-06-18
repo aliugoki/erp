@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Loader2, ShieldCheck, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, Loader2, RotateCcw, ShieldCheck, ShoppingBag, ShoppingCart, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet } from '@/lib/api';
 import { type SfProduct, customerPost, productImageUrl, sfPath } from '@/lib/storefront';
@@ -79,6 +79,7 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
 
         {/* Details */}
         <div>
+          {p.category ? <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">{p.category}</p> : null}
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{p.title}</h1>
           {p.subtitle ? <p className="mt-1 text-lg text-zinc-500">{p.subtitle}</p> : null}
           {p.ratingCount ? (
@@ -147,6 +148,20 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
             </button>
           </div>
           {p.sku ? <p className="mt-4 text-xs text-zinc-400">SKU: {p.sku}</p> : null}
+
+          {/* Trust strip */}
+          <div className="mt-6 grid grid-cols-3 gap-3 border-t border-zinc-100 pt-6">
+            {[
+              { icon: Truck, label: 'Fast, tracked delivery' },
+              { icon: ShieldCheck, label: 'Secure checkout' },
+              { icon: RotateCcw, label: 'Easy returns' },
+            ].map((t) => (
+              <div key={t.label} className="flex flex-col items-center gap-1.5 text-center">
+                <t.icon className="h-5 w-5" style={{ color: store.accentColor }} />
+                <span className="text-[11px] font-medium leading-tight text-zinc-500">{t.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

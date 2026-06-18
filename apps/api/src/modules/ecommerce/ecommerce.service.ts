@@ -55,10 +55,12 @@ type Mgr = EntityManager;
 const PRODUCT_SELECT = `
   SELECT p.id, p.product_id, p.slug, p.title, p.subtitle, p.description, p.status, p.is_featured,
          p.sort, p.tax_rate, p.price_minor, p.compare_at_minor, p.seo_title, p.seo_description,
-         ip.sku, ip.sell_price_minor, ip.cost_price_minor, ip.on_hand,
+         ip.sku, ip.sell_price_minor, ip.cost_price_minor, ip.on_hand, ip.category,
          (SELECT pi.attachment_id FROM ec_product_image pi WHERE pi.product_id = p.id AND pi.deleted_at IS NULL
             ORDER BY pi.is_primary DESC, pi.sort, pi.created_at LIMIT 1) AS primary_image_id,
-         (SELECT count(*) FROM ec_product_image pi WHERE pi.product_id = p.id AND pi.deleted_at IS NULL) AS image_count
+         (SELECT count(*) FROM ec_product_image pi WHERE pi.product_id = p.id AND pi.deleted_at IS NULL) AS image_count,
+         (SELECT round(avg(rating), 2) FROM ec_review rv WHERE rv.product_id = p.id AND rv.status = 'APPROVED' AND rv.deleted_at IS NULL) AS rating_avg,
+         (SELECT count(*) FROM ec_review rv WHERE rv.product_id = p.id AND rv.status = 'APPROVED' AND rv.deleted_at IS NULL) AS rating_count
   FROM ec_product p
   JOIN inventory_product ip ON ip.id = p.product_id AND ip.deleted_at IS NULL`;
 

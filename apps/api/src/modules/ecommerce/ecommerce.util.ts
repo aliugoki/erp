@@ -270,9 +270,12 @@ export function mapProduct(r: Row, currency: unknown) {
     price: money(priceMinor, currency),
     compareAt: r.compare_at_minor == null ? null : money(r.compare_at_minor, currency),
     sku: (r.sku as string) ?? null,
+    category: (r.category as string) ?? null,
     onHand: r.on_hand == null ? null : Number(r.on_hand),
     primaryImageId: (r.primary_image_id as string) ?? null,
     imageCount: r.image_count == null ? undefined : Number(r.image_count),
+    ratingAvg: r.rating_avg == null ? 0 : Number(r.rating_avg),
+    ratingCount: r.rating_count == null ? 0 : Number(r.rating_count),
   };
 }
 
