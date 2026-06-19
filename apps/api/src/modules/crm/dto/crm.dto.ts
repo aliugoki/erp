@@ -29,9 +29,32 @@ export class CreateClientDto {
   @IsOptional() @IsInt() @Min(0) annualRevenueMinor?: number;
 }
 
+/** Partial update of an account — every field optional. */
+export class UpdateClientDto {
+  @IsOptional() @IsString() @MinLength(1) companyName?: string;
+  @IsOptional() @IsString() industry?: string;
+  @IsOptional() @IsString() website?: string;
+  @IsOptional() @IsIn(['PROSPECT', 'ACTIVE', 'INACTIVE']) status?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() city?: string;
+  @IsOptional() @IsString() country?: string;
+  @IsOptional() @IsUUID() ownerId?: string;
+  @IsOptional() @IsInt() @Min(0) annualRevenueMinor?: number;
+}
+
 export class CreateContactDto {
   @IsUUID() clientId!: string;
   @IsString() @MinLength(1) name!: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsBoolean() isPrimary?: boolean;
+}
+
+/** Partial update of a contact — every field optional. */
+export class UpdateContactDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
@@ -57,6 +80,18 @@ export class UpdateDealStageDto {
   @IsOptional() @IsString() lostReason?: string;
 }
 
+/** Edit a deal's details (not its stage — use the stage endpoint for that, which has side effects). */
+export class UpdateDealDto {
+  @IsOptional() @IsString() @MinLength(1) title?: string;
+  @IsOptional() @IsInt() @Min(0) valueMinor?: number;
+  @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  @IsOptional() @IsISO8601() expectedCloseDate?: string;
+  @IsOptional() @IsUUID() assignedTo?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(100) probability?: number;
+  @IsOptional() @IsUUID() ownerId?: string;
+  @IsOptional() @IsString() source?: string;
+}
+
 // ── Leads ─────────────────────────────────────────────────────────────────────
 export class CreateLeadDto {
   @IsString() @MinLength(1) name!: string;
@@ -73,6 +108,20 @@ export class CreateLeadDto {
 
 export class UpdateLeadStatusDto {
   @IsIn(LEAD_STATUSES.filter((s) => s !== 'CONVERTED') as readonly string[]) status!: string;
+}
+
+/** Partial update of a lead's details — every field optional (status uses its own endpoint). */
+export class UpdateLeadDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsString() company?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsIn(LEAD_RATINGS as readonly string[]) rating?: string;
+  @IsOptional() @IsInt() @Min(0) estValueMinor?: number;
+  @IsOptional() @IsString() @Length(3, 3) currency?: string;
+  @IsOptional() @IsUUID() ownerId?: string;
+  @IsOptional() @IsString() notes?: string;
 }
 
 /** Convert a qualified lead into an account (+ primary contact) and, optionally, an opportunity.
@@ -99,6 +148,15 @@ export class CreateActivityDto {
 
 export class CompleteActivityDto {
   @IsOptional() @IsString() outcome?: string;
+}
+
+/** Partial update of an activity — every field optional. */
+export class UpdateActivityDto {
+  @IsOptional() @IsIn(ACTIVITY_TYPES as readonly string[]) type?: string;
+  @IsOptional() @IsString() @MinLength(1) subject?: string;
+  @IsOptional() @IsString() body?: string;
+  @IsOptional() @IsISO8601() dueAt?: string;
+  @IsOptional() @IsUUID() ownerId?: string;
 }
 
 /** Query filters for the activity timeline (any subset). */

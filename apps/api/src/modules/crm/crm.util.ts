@@ -3,6 +3,13 @@ import type { Money } from '@metaxperts/shared';
 /** Minimal structural manager type (mirrors inventory-docs) so helpers stay DB-driver-agnostic. */
 type Mgr = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
 
+/** Normalize a query result. This driver returns `[rows, affectedCount]` for `UPDATE…RETURNING` but a
+ * plain array for `INSERT`/`SELECT`; unwrap the former so callers always get the row array. */
+export function rowsOf<T = Record<string, unknown>>(res: unknown): T[] {
+  if (Array.isArray(res) && res.length === 2 && Array.isArray(res[0]) && typeof res[1] === 'number') return res[0] as T[];
+  return (res ?? []) as T[];
+}
+
 /** Allocate the next per-tenant, per-type document number (e.g. ACC-0001, LEAD-0007) atomically from
  * `crm_doc_seq`. Mirrors inventory's `nextDocNo`. */
 export async function nextCrmDocNo(m: Mgr, prefix: string, docType: string): Promise<string> {
@@ -14,6 +21,79 @@ export async function nextCrmDocNo(m: Mgr, prefix: string, docType: string): Pro
     [docType],
   )) as Array<{ last_no: string }>;
   return `${prefix}-${String(Number(seq[0]!.last_no)).padStart(4, '0')}`;
+}
+
+// ── Accounts (clients) ──────────────────────────────────────────────────────────
+export interface ClientRow {
+  id: string;
+  account_no: string | null;
+  company_name: string;
+  industry: string | null;
+  website: string | null;
+  status: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  owner_id: string | null;
+  annual_revenue_minor: string | number | null;
+}
+
+export interface ClientView {
+  id: string;
+  accountNo: string | null;
+  companyName: string;
+  industry: string | null;
+  website: string | null;
+  status: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  ownerId: string | null;
+  annualRevenueMinor: number;
+}
+
+export function mapClientRow(r: ClientRow): ClientView {
+  return {
+    id: r.id,
+    accountNo: r.account_no,
+    companyName: r.company_name,
+    industry: r.industry,
+    website: r.website,
+    status: r.status,
+    phone: r.phone,
+    email: r.email,
+    address: r.address,
+    city: r.city,
+    country: r.country,
+    ownerId: r.owner_id,
+    annualRevenueMinor: Number(r.annual_revenue_minor ?? 0),
+  };
+}
+
+export interface ContactRow {
+  id: string;
+  client_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  is_primary: boolean;
+}
+
+export interface ContactView {
+  id: string;
+  clientId: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+}
+
+export function mapContactRow(r: ContactRow): ContactView {
+  return { id: r.id, clientId: r.client_id, name: r.name, email: r.email, phone: r.phone, isPrimary: r.is_primary };
 }
 
 export const DEAL_STAGES = [

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -12,7 +13,10 @@ import {
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
-import { CreateClientDto, CreateContactDto, CreateDealDto, UpdateDealStageDto } from './dto/crm.dto';
+import {
+  CreateClientDto, CreateContactDto, CreateDealDto,
+  UpdateClientDto, UpdateContactDto, UpdateDealDto, UpdateDealStageDto,
+} from './dto/crm.dto';
 import { CrmService } from './crm.service';
 
 const WRITE = [Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -41,12 +45,43 @@ export class CrmController {
     return this.crm.listContacts(id);
   }
 
+  @Get('clients/:id')
+  getClient(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.getClient(id);
+  }
+
+  @Patch('clients/:id')
+  @Roles(...WRITE)
+  updateClient(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClientDto) {
+    return this.crm.updateClient(id, dto);
+  }
+
+  @Delete('clients/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteClient(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.deleteClient(id);
+  }
+
   // Contacts
   @Post('contacts')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.CREATED)
   createContact(@Body() dto: CreateContactDto) {
     return this.crm.createContact(dto);
+  }
+
+  @Patch('contacts/:id')
+  @Roles(...WRITE)
+  updateContact(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContactDto) {
+    return this.crm.updateContact(id, dto);
+  }
+
+  @Delete('contacts/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteContact(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.deleteContact(id);
   }
 
   // Deals — pipeline declared before :id so it isn't shadowed
@@ -76,5 +111,18 @@ export class CrmController {
   @Roles(...WRITE)
   updateStage(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealStageDto) {
     return this.crm.updateStage(id, dto.stage, dto.lostReason ?? null);
+  }
+
+  @Patch('deals/:id')
+  @Roles(...WRITE)
+  updateDeal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealDto) {
+    return this.crm.updateDeal(id, dto);
+  }
+
+  @Delete('deals/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteDeal(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.deleteDeal(id);
   }
 }

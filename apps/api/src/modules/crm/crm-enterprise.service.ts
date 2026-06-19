@@ -7,6 +7,8 @@ import type {
   CreateActivityDto,
   CreateLeadDto,
   ListActivityQueryDto,
+  UpdateActivityDto,
+  UpdateLeadDto,
 } from './dto/crm.dto';
 import {
   type ActivityRow,
@@ -15,6 +17,7 @@ import {
   mapActivityRow,
   mapLeadRow,
   nextCrmDocNo,
+  rowsOf,
 } from './crm.util';
 
 const LEAD_COLS =
@@ -83,14 +86,39 @@ export class CrmEnterpriseService {
    * terminal CONVERTED status is set only by {@link convertLead}. */
   async updateLeadStatus(id: string, status: string) {
     return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
+      const rows = rowsOf<LeadRow>(await m.query(
         `UPDATE crm_lead SET status=$2, updated_at=now()
          WHERE id=$1 AND deleted_at IS NULL AND status <> 'CONVERTED'
          RETURNING ${LEAD_COLS}`,
         [id, status],
-      )) as LeadRow[];
+      ));
       if (!rows[0]) throw new NotFoundException('Lead not found or already converted');
       return mapLeadRow(rows[0]);
+    });
+  }
+
+  /** Edit a lead's details (status + conversion use their own endpoints). */
+  async updateLead(id: string, dto: UpdateLeadDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf<LeadRow>(await m.query(
+        `UPDATE crm_lead SET
+            name=COALESCE($2,name), company=COALESCE($3,company), email=COALESCE($4,email), phone=COALESCE($5,phone),
+            source=COALESCE($6,source), rating=COALESCE($7,rating), est_value_minor=COALESCE($8,est_value_minor),
+            currency=COALESCE($9,currency), owner_id=COALESCE($10,owner_id), notes=COALESCE($11,notes), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING ${LEAD_COLS}`,
+        [id, dto.name ?? null, dto.company ?? null, dto.email ?? null, dto.phone ?? null, dto.source ?? null,
+          dto.rating ?? null, dto.estValueMinor ?? null, dto.currency ?? null, dto.ownerId ?? null, dto.notes ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Lead not found');
+      return mapLeadRow(rows[0]);
+    });
+  }
+
+  async deleteLead(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf<{ id: string }>(await m.query(`UPDATE crm_lead SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [id]));
+      if (!rows[0]) throw new NotFoundException('Lead not found');
+      return { ok: true };
     });
   }
 
@@ -247,13 +275,34 @@ export class CrmEnterpriseService {
 
   async completeActivity(id: string, outcome?: string | null) {
     return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
+      const rows = rowsOf<ActivityRow>(await m.query(
         `UPDATE crm_activity SET completed=true, completed_at=now(), outcome=COALESCE($2, outcome), updated_at=now()
          WHERE id=$1 AND deleted_at IS NULL RETURNING ${ACTIVITY_COLS}`,
         [id, outcome ?? null],
-      )) as ActivityRow[];
+      ));
       if (!rows[0]) throw new NotFoundException('Activity not found');
       return mapActivityRow(rows[0]);
+    });
+  }
+
+  async updateActivity(id: string, dto: UpdateActivityDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf<ActivityRow>(await m.query(
+        `UPDATE crm_activity SET type=COALESCE($2,type), subject=COALESCE($3,subject), body=COALESCE($4,body),
+            due_at=COALESCE($5,due_at), owner_id=COALESCE($6,owner_id), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING ${ACTIVITY_COLS}`,
+        [id, dto.type ?? null, dto.subject ?? null, dto.body ?? null, dto.dueAt ?? null, dto.ownerId ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Activity not found');
+      return mapActivityRow(rows[0]);
+    });
+  }
+
+  async deleteActivity(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf<{ id: string }>(await m.query(`UPDATE crm_activity SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [id]));
+      if (!rows[0]) throw new NotFoundException('Activity not found');
+      return { ok: true };
     });
   }
 

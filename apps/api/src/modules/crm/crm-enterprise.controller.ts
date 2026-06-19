@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -20,6 +21,8 @@ import {
   CreateActivityDto,
   CreateLeadDto,
   ListActivityQueryDto,
+  UpdateActivityDto,
+  UpdateLeadDto,
   UpdateLeadStatusDto,
 } from './dto/crm.dto';
 
@@ -62,6 +65,19 @@ export class CrmEnterpriseController {
     return this.crm.convertLead(id, dto);
   }
 
+  @Patch('leads/:id')
+  @Roles(...WRITE)
+  updateLead(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLeadDto) {
+    return this.crm.updateLead(id, dto);
+  }
+
+  @Delete('leads/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteLead(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.deleteLead(id);
+  }
+
   // ── Activities / tasks ────────────────────────────────────────────────────────
   @Get('activities')
   listActivities(@Query() q: ListActivityQueryDto) {
@@ -85,6 +101,19 @@ export class CrmEnterpriseController {
   @Roles(...WRITE)
   completeActivity(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CompleteActivityDto) {
     return this.crm.completeActivity(id, dto.outcome ?? null);
+  }
+
+  @Patch('activities/:id')
+  @Roles(...WRITE)
+  updateActivity(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateActivityDto) {
+    return this.crm.updateActivity(id, dto);
+  }
+
+  @Delete('activities/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteActivity(@Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.deleteActivity(id);
   }
 
   // ── Sales reports ─────────────────────────────────────────────────────────────
