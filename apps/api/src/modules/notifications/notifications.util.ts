@@ -11,9 +11,11 @@ import type {
   HrPayrollRunCompletedV1,
   InventoryLowStockV1,
   ProductionOrderCompletedV1,
+  SubscriptionCanceledV1,
+  SubscriptionPaymentFailedV1,
 } from '@metaxperts/shared';
 
-export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'helpdesk', 'system'] as const;
+export const NOTIFICATION_CATEGORIES = ['crm', 'inventory', 'finance', 'hr', 'production', 'ecommerce', 'helpdesk', 'subscription', 'system'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 export type Severity = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
 
@@ -150,6 +152,28 @@ export function slaBreachedDraft(p: HelpdeskSlaBreachedV1): NotificationDraft {
     severity: 'ERROR',
     category: 'helpdesk',
     link: '/helpdesk',
+  };
+}
+
+export function subscriptionPaymentFailedDraft(p: SubscriptionPaymentFailedV1): NotificationDraft {
+  return {
+    type: 'subscription.payment_failed',
+    title: `Payment failed: invoice ${p.invoiceNo}`,
+    body: `Couldn't collect ${formatMinor(p.totalMinor, p.currency)} (attempt ${p.attemptCount}). The subscription is past due.`,
+    severity: 'WARNING',
+    category: 'subscription',
+    link: '/subscriptions',
+  };
+}
+
+export function subscriptionCanceledDraft(p: SubscriptionCanceledV1): NotificationDraft {
+  return {
+    type: 'subscription.canceled',
+    title: `Subscription cancelled: ${p.subscriptionNo}`,
+    body: p.reason === 'DUNNING' ? 'Cancelled after repeated failed payments.' : 'The subscription has been cancelled.',
+    severity: p.reason === 'DUNNING' ? 'ERROR' : 'INFO',
+    category: 'subscription',
+    link: '/subscriptions',
   };
 }
 

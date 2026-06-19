@@ -159,6 +159,33 @@ export interface SfTicket {
   messages?: SfTicketMessage[];
 }
 
+export interface SfMoney { amountMinor: number; currency: string; }
+export interface SfSubInvoice {
+  id: string;
+  invoiceNo: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  total: SfMoney;
+  status: string;
+  issuedAt: string | null;
+  paidAt: string | null;
+}
+export interface SfSubscription {
+  id: string;
+  subscriptionNo: string;
+  planName: string | null;
+  status: string;
+  amount: SfMoney;
+  billingInterval: string;
+  intervalCount: number;
+  currentPeriodEnd: string | null;
+  trialEnd: string | null;
+  nextBillingAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  canceledAt: string | null;
+  invoices?: SfSubInvoice[];
+}
+
 /** Build a storefront API path for the given slug. */
 export const sfPath = (slug: string, p = ''): string => `/shop/${slug}${p}`;
 

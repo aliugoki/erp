@@ -1535,3 +1535,84 @@ export interface HdSlaPolicy { id: string; priority: string; firstResponseMins: 
 export interface HdCannedResponse { id: string; title: string; body: string; }
 export interface HdAgent { id: string; email: string; }
 export interface HdOverview { byStatus: Record<string, number>; open: number; unassigned: number; breached: number; csatAvg: number | null; csatCount: number; }
+
+// ── Subscriptions & recurring billing ────────────────────────────────────────────
+export interface SubPlan {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  price: Money;
+  taxRate: number;
+  billingInterval: string;
+  intervalCount: number;
+  trialDays: number;
+  setupFee: Money;
+  status: string;
+  activeSubscriptions?: number;
+}
+
+export interface SubInvoice {
+  id: string;
+  invoiceNo: string;
+  subscriptionId: string;
+  subscriptionNo: string | null;
+  clientId: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  amount: Money;
+  tax: Money;
+  total: Money;
+  status: string;
+  dueDate: string | null;
+  issuedAt: string | null;
+  paidAt: string | null;
+  attemptCount: number;
+  paymentRef: string | null;
+}
+
+export interface Subscription {
+  id: string;
+  subscriptionNo: string;
+  planId: string;
+  planName: string | null;
+  clientId: string | null;
+  customerName: string;
+  customerEmail: string;
+  quantity: number;
+  collectionMode: string;
+  status: string;
+  amount: Money;
+  taxRate: number;
+  billingInterval: string;
+  intervalCount: number;
+  startDate: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  trialEnd: string | null;
+  nextBillingAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  canceledAt: string | null;
+  failedAttempts: number;
+  mrr: Money;
+  invoiceCount?: number;
+  createdAt: string | null;
+  invoices?: SubInvoice[];
+}
+
+export interface SubMetrics {
+  mrr: Money;
+  arr: Money;
+  active: number;
+  trialing: number;
+  pastDue: number;
+  churned30: number;
+  churnRate: number;
+  byPlan: { name: string; count: number; mrr: Money }[];
+}
+
+export interface SubGlConfig {
+  clearingAccountId: string | null;
+  revenueAccountId: string | null;
+  taxAccountId: string | null;
+}

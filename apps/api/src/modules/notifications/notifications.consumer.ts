@@ -16,6 +16,8 @@ import {
   type HrPayrollRunCompletedV1,
   type InventoryLowStockV1,
   type ProductionOrderCompletedV1,
+  type SubscriptionCanceledV1,
+  type SubscriptionPaymentFailedV1,
 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
@@ -32,6 +34,8 @@ import {
   payrollDraft,
   productionCompletedDraft,
   slaBreachedDraft,
+  subscriptionCanceledDraft,
+  subscriptionPaymentFailedDraft,
   ticketAssignedDraft,
   ticketCreatedDraft,
   ticketCustomerReplyDraft,
@@ -78,7 +82,9 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
     await reg(EVENT_TYPES.HELPDESK_TICKET_ASSIGNED, 'notify-ticket-assigned', (e, m) => this.onTicketAssigned(e, m));
     await reg(EVENT_TYPES.HELPDESK_TICKET_REPLIED, 'notify-ticket-replied', (e, m) => this.onTicketReplied(e, m));
     await reg(EVENT_TYPES.HELPDESK_SLA_BREACHED, 'notify-sla-breached', (e, m) => this.onSlaBreached(e, m));
-    this.logger.log('Notifications consumer registered (12 event types)');
+    await reg(EVENT_TYPES.SUBSCRIPTION_PAYMENT_FAILED, 'notify-subscription-failed', (e, m) => this.onSubscriptionPaymentFailed(e, m));
+    await reg(EVENT_TYPES.SUBSCRIPTION_CANCELED, 'notify-subscription-canceled', (e, m) => this.onSubscriptionCanceled(e, m));
+    this.logger.log('Notifications consumer registered (14 event types)');
   }
 
   /** crm.deal_closed → in-app notification for the deal's assignee (+ best-effort email if opted in). */
@@ -161,6 +167,20 @@ export class NotificationsConsumer implements OnApplicationBootstrap {
       ? [await this.userRecipient(m, p.assignedTo)]
       : await this.notifications.resolveRoleRecipients(m, ['SUPPORT_AGENT', 'TENANT_ADMIN']);
     await this.deliver(m, recipients, slaBreachedDraft(p), event.id);
+  }
+
+  /** subscription.payment_failed → alert the billing/finance team that a charge failed. */
+  async onSubscriptionPaymentFailed(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as SubscriptionPaymentFailedV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['FINANCE_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, subscriptionPaymentFailedDraft(p), event.id);
+  }
+
+  /** subscription.canceled → tell the billing/finance team (notably dunning-driven cancellations). */
+  async onSubscriptionCanceled(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as SubscriptionCanceledV1;
+    const recipients = await this.notifications.resolveRoleRecipients(m, ['FINANCE_MANAGER', 'TENANT_ADMIN']);
+    await this.deliver(m, recipients, subscriptionCanceledDraft(p), event.id);
   }
 
   /** Create the in-app row per recipient (idempotent) and fan out opt-in emails (best effort). */

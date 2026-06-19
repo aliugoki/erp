@@ -171,6 +171,44 @@ export interface HelpdeskSlaBreachedV1 {
   teamId: string | null;
 }
 
+export interface SubscriptionCreatedV1 {
+  subscriptionId: string;
+  subscriptionNo: string;
+  planId: string;
+  customerEmail: string;
+  clientId: string | null;
+  amountMinor: number;
+  currency: string;
+}
+
+export interface SubscriptionInvoicePaidV1 {
+  invoiceId: string;
+  invoiceNo: string;
+  subscriptionId: string;
+  clientId: string | null;
+  customerEmail: string;
+  totalMinor: number;
+  currency: string;
+}
+
+export interface SubscriptionPaymentFailedV1 {
+  invoiceId: string;
+  invoiceNo: string;
+  subscriptionId: string;
+  customerEmail: string;
+  attemptCount: number;
+  totalMinor: number;
+  currency: string;
+}
+
+export interface SubscriptionCanceledV1 {
+  subscriptionId: string;
+  subscriptionNo: string;
+  customerEmail: string;
+  /** Why it ended — e.g. customer request or exhausted dunning attempts. */
+  reason: 'CUSTOMER' | 'DUNNING' | 'ADMIN';
+}
+
 /** Canonical event type strings. */
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
@@ -190,6 +228,10 @@ export const EVENT_TYPES = {
   HELPDESK_TICKET_REPLIED: 'helpdesk.ticket_replied.v1',
   HELPDESK_TICKET_RESOLVED: 'helpdesk.ticket_resolved.v1',
   HELPDESK_SLA_BREACHED: 'helpdesk.sla_breached.v1',
+  SUBSCRIPTION_CREATED: 'subscription.created.v1',
+  SUBSCRIPTION_INVOICE_PAID: 'subscription.invoice_paid.v1',
+  SUBSCRIPTION_PAYMENT_FAILED: 'subscription.payment_failed.v1',
+  SUBSCRIPTION_CANCELED: 'subscription.canceled.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -211,6 +253,10 @@ export interface EventPayloads {
   'helpdesk.ticket_replied.v1': HelpdeskTicketRepliedV1;
   'helpdesk.ticket_resolved.v1': HelpdeskTicketResolvedV1;
   'helpdesk.sla_breached.v1': HelpdeskSlaBreachedV1;
+  'subscription.created.v1': SubscriptionCreatedV1;
+  'subscription.invoice_paid.v1': SubscriptionInvoicePaidV1;
+  'subscription.payment_failed.v1': SubscriptionPaymentFailedV1;
+  'subscription.canceled.v1': SubscriptionCanceledV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -223,4 +269,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'helpdesk', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'helpdesk', 'subscription', 'notifications', 'orders'] as const;

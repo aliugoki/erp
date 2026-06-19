@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { LifeBuoy, Loader2, LogOut, PackageOpen } from 'lucide-react';
+import { LifeBuoy, Loader2, LogOut, PackageOpen, Repeat } from 'lucide-react';
 import { type SfOrder, customerGet, getCustomerToken, sfPath } from '@/lib/storefront';
 import { accentStyle, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
@@ -43,6 +43,9 @@ export default function OrderHistory({ params }: { params: { slug: string } }) {
           <p className="text-sm text-zinc-500">Signed in as {customer.name} · {customer.email}</p>
         </div>
         <div className="flex items-center gap-4">
+          <Link href={sfPath(slug, '/account/subscriptions')} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">
+            <Repeat className="h-4 w-4" /> Subscriptions
+          </Link>
           <Link href={sfPath(slug, '/account/support')} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-900">
             <LifeBuoy className="h-4 w-4" /> Support
           </Link>
