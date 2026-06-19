@@ -249,7 +249,12 @@ export class InventoryDocsService {
          WHERE ri.requisition_id=$1 ORDER BY ri.created_at`,
         [id],
       )) as Row[];
-      return { ...h[0], items };
+      const r = h[0]!;
+      return {
+        id: r.id, reqNo: r.req_no, status: r.status, requestedBy: r.requested_by ?? null,
+        department: r.department ?? null, neededBy: r.needed_by ?? null, notes: r.notes ?? null,
+        items: items.map((i) => ({ id: i.id, productId: i.product_id, sku: i.sku, name: i.name, qty: Number(i.qty), issuedQty: Number(i.issued_qty) })),
+      };
     });
   }
 
@@ -323,10 +328,11 @@ export class InventoryDocsService {
          WHERE pi.po_id=$1 ORDER BY pi.created_at`,
         [id],
       )) as Row[];
-      const cur = h[0].currency as string;
+      const r = h[0]!;
+      const cur = r.currency as string;
       return {
-        ...h[0],
-        total: money(h[0].total_minor, cur),
+        id: r.id, poNo: r.po_no, status: r.status, currency: cur, expectedOn: r.expected_on ?? null,
+        notes: r.notes ?? null, vendor: r.vendor ?? null, total: money(r.total_minor, cur),
         items: items.map((i) => ({ id: i.id, productId: i.product_id, sku: i.sku, name: i.name, qty: Number(i.qty), receivedQty: Number(i.received_qty), unitPrice: money(i.unit_price_minor, cur) })),
       };
     });
@@ -574,6 +580,98 @@ export class InventoryDocsService {
         if (l.issueItemId) await m.query(`UPDATE inventory_issue_item SET returned_qty = returned_qty + $1, updated_at=now() WHERE id=$2`, [l.qty, l.issueItemId]);
       }
       return { id: mrn.id, mrnNo, status: mrn.status, lines: lines.length };
+    });
+  }
+
+  // ── Document detail (header + line items) ───────────────────────────────────
+  async getGrn(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const h = (await m.query(
+        `SELECT g.id, g.grn_no, g.status, g.received_on::text AS received_on, g.notes, po.po_no, v.name AS vendor, w.name AS warehouse
+         FROM inventory_grn g LEFT JOIN inventory_purchase_order po ON po.id=g.po_id
+         LEFT JOIN vendor v ON v.id=g.vendor_id LEFT JOIN inventory_warehouse w ON w.id=g.warehouse_id
+         WHERE g.id=$1 AND g.deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!h[0]) throw new NotFoundException('GRN not found');
+      const items = (await m.query(
+        `SELECT gi.id, gi.product_id, p.sku, p.name, gi.qty, gi.unit_cost_minor
+         FROM inventory_grn_item gi JOIN inventory_product p ON p.id=gi.product_id WHERE gi.grn_id=$1 ORDER BY gi.created_at`,
+        [id],
+      )) as Row[];
+      const r = h[0];
+      return {
+        id: r.id, grnNo: r.grn_no, status: r.status, receivedOn: r.received_on, notes: r.notes ?? null,
+        poNo: r.po_no ?? null, vendor: r.vendor ?? null, warehouse: r.warehouse ?? null,
+        items: items.map((i) => ({ id: i.id, productId: i.product_id, sku: i.sku, name: i.name, qty: Number(i.qty), unitCost: money(i.unit_cost_minor, 'PKR') })),
+      };
+    });
+  }
+
+  async getIssue(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const h = (await m.query(
+        `SELECT i.id, i.issue_no, i.status, i.issued_on::text AS issued_on, i.issued_to, i.department, i.notes, r.req_no, w.name AS warehouse
+         FROM inventory_issue i LEFT JOIN inventory_requisition r ON r.id=i.requisition_id
+         LEFT JOIN inventory_warehouse w ON w.id=i.warehouse_id WHERE i.id=$1 AND i.deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!h[0]) throw new NotFoundException('Issue not found');
+      const items = (await m.query(
+        `SELECT ii.id, ii.product_id, p.sku, p.name, ii.qty, ii.returned_qty, ii.unit_cost_minor
+         FROM inventory_issue_item ii JOIN inventory_product p ON p.id=ii.product_id WHERE ii.issue_id=$1 ORDER BY ii.created_at`,
+        [id],
+      )) as Row[];
+      const r = h[0];
+      return {
+        id: r.id, issueNo: r.issue_no, status: r.status, issuedOn: r.issued_on, issuedTo: r.issued_to ?? null,
+        department: r.department ?? null, notes: r.notes ?? null, reqNo: r.req_no ?? null, warehouse: r.warehouse ?? null,
+        items: items.map((i) => ({ id: i.id, productId: i.product_id, sku: i.sku, name: i.name, qty: Number(i.qty), returnedQty: Number(i.returned_qty), unitCost: money(i.unit_cost_minor, 'PKR') })),
+      };
+    });
+  }
+
+  async getMrn(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const h = (await m.query(
+        `SELECT n.id, n.mrn_no, n.status, n.returned_on::text AS returned_on, n.returned_by, n.notes, i.issue_no, w.name AS warehouse
+         FROM inventory_mrn n LEFT JOIN inventory_issue i ON i.id=n.issue_id
+         LEFT JOIN inventory_warehouse w ON w.id=n.warehouse_id WHERE n.id=$1 AND n.deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!h[0]) throw new NotFoundException('MRN not found');
+      const items = (await m.query(
+        `SELECT ni.id, ni.product_id, p.sku, p.name, ni.qty, ni.unit_cost_minor
+         FROM inventory_mrn_item ni JOIN inventory_product p ON p.id=ni.product_id WHERE ni.mrn_id=$1 ORDER BY ni.created_at`,
+        [id],
+      )) as Row[];
+      const r = h[0];
+      return {
+        id: r.id, mrnNo: r.mrn_no, status: r.status, returnedOn: r.returned_on, returnedBy: r.returned_by ?? null,
+        notes: r.notes ?? null, issueNo: r.issue_no ?? null, warehouse: r.warehouse ?? null,
+        items: items.map((i) => ({ id: i.id, productId: i.product_id, sku: i.sku, name: i.name, qty: Number(i.qty), unitCost: money(i.unit_cost_minor, 'PKR') })),
+      };
+    });
+  }
+
+  async getGatePass(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const h = (await m.query(
+        `SELECT g.id, g.gp_no, g.direction, g.returnable, g.party, g.vehicle_no, g.status, g.issued_on::text AS issued_on, g.remarks
+         FROM inventory_gate_pass g WHERE g.id=$1 AND g.deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!h[0]) throw new NotFoundException('Gate pass not found');
+      const items = (await m.query(
+        `SELECT i.id, i.product_id, i.description, i.qty FROM inventory_gate_pass_item i WHERE i.gate_pass_id=$1 ORDER BY i.created_at`,
+        [id],
+      )) as Row[];
+      const r = h[0];
+      return {
+        id: r.id, gpNo: r.gp_no, direction: r.direction, returnable: r.returnable, party: r.party ?? null,
+        vehicleNo: r.vehicle_no ?? null, status: r.status, issuedOn: r.issued_on, remarks: r.remarks ?? null,
+        items: items.map((i) => ({ id: i.id, productId: i.product_id ?? null, description: i.description, qty: Number(i.qty) })),
+      };
     });
   }
 

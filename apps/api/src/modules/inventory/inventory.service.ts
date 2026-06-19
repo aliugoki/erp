@@ -8,13 +8,14 @@ import { EVENT_TYPES } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
-import type { CreateMovementDto, CreateProductDto, CreateWarehouseDto } from './dto/inventory.dto';
+import type { CreateMovementDto, CreateProductDto, CreateWarehouseDto, UpdateProductDto, UpdateWarehouseDto } from './dto/inventory.dto';
 import {
   type MovementType,
   type ProductRow,
   deltaFor,
   isLowStockTransition,
   mapProductRow,
+  rowsOf,
 } from './inventory.util';
 
 const PRODUCT_COLS =
@@ -61,6 +62,18 @@ export class InventoryService {
     return this.tenantTx.run((m) =>
       m.query(`SELECT id, name, code, location FROM inventory_warehouse WHERE deleted_at IS NULL ORDER BY name`),
     );
+  }
+
+  async updateWarehouse(id: string, dto: UpdateWarehouseDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = rowsOf<Record<string, unknown>>(await m.query(
+        `UPDATE inventory_warehouse SET name=COALESCE($2,name), code=COALESCE($3,code), location=COALESCE($4,location), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, code, location`,
+        [id, dto.name ?? null, dto.code ?? null, dto.location ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Warehouse not found');
+      return rows[0];
+    });
   }
 
   // ── Products ────────────────────────────────────────────────────────────────
@@ -120,6 +133,39 @@ export class InventoryService {
       )) as ProductRow[];
       if (!rows[0]) throw new NotFoundException('Product not found');
       return mapProductRow(rows[0]);
+    });
+  }
+
+  /** Edit a product's master data (SKU is immutable — it keys the valued ledger). */
+  async updateProduct(id: string, dto: UpdateProductDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const updated = rowsOf<{ id: string }>(await m.query(
+          `UPDATE inventory_product SET name=COALESCE($2,name), category=COALESCE($3,category), category_id=COALESCE($4,category_id),
+              unit=COALESCE($5,unit), cost_price_minor=COALESCE($6,cost_price_minor), sell_price_minor=COALESCE($7,sell_price_minor),
+              min_stock=COALESCE($8,min_stock), updated_at=now()
+           WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
+          [id, dto.name ?? null, dto.category ?? null, dto.categoryId ?? null, dto.unit ?? null,
+            dto.costPriceMinor ?? null, dto.sellPriceMinor ?? null, dto.minStock ?? null],
+        ));
+        if (!updated[0]) throw new NotFoundException('Product not found');
+      } catch (err) {
+        if (isForeignKey(err)) throw new BadRequestException('Unknown category for this tenant');
+        throw err;
+      }
+      const rows = (await m.query(`${PRODUCT_SELECT} WHERE p.id=$1 AND p.deleted_at IS NULL`, [id])) as ProductRow[];
+      return mapProductRow(rows[0]!);
+    });
+  }
+
+  /** Soft-delete a product. Blocked while it still holds stock (on-hand must be zero). */
+  async deleteProduct(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const cur = (await m.query(`SELECT on_hand FROM inventory_product WHERE id=$1 AND deleted_at IS NULL`, [id])) as Array<{ on_hand: number }>;
+      if (!cur[0]) throw new NotFoundException('Product not found');
+      if (Number(cur[0].on_hand) !== 0) throw new BadRequestException('Cannot delete a product that still holds stock — adjust it to zero first');
+      await m.query(`UPDATE inventory_product SET deleted_at=now() WHERE id=$1`, [id]);
+      return { id, deleted: true };
     });
   }
 

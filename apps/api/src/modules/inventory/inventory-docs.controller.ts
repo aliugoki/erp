@@ -135,6 +135,11 @@ export class InventoryDocsController {
     return this.docs.createGrn(dto);
   }
 
+  @Get('grns/:id')
+  getGrn(@Param('id', ParseUUIDPipe) id: string) {
+    return this.docs.getGrn(id);
+  }
+
   // Gate passes
   @Get('gate-passes')
   listGatePasses() {
@@ -146,6 +151,11 @@ export class InventoryDocsController {
   @HttpCode(HttpStatus.CREATED)
   createGatePass(@Body() dto: CreateGatePassDto) {
     return this.docs.createGatePass(dto);
+  }
+
+  @Get('gate-passes/:id')
+  getGatePass(@Param('id', ParseUUIDPipe) id: string) {
+    return this.docs.getGatePass(id);
   }
 
   @Post('gate-passes/:id/close')
@@ -167,6 +177,11 @@ export class InventoryDocsController {
     return this.docs.createIssue(dto);
   }
 
+  @Get('issues/:id')
+  getIssue(@Param('id', ParseUUIDPipe) id: string) {
+    return this.docs.getIssue(id);
+  }
+
   // Material return notes
   @Get('mrns')
   listMrns() {
@@ -178,5 +193,10 @@ export class InventoryDocsController {
   @HttpCode(HttpStatus.CREATED)
   createMrn(@Body() dto: CreateMrnDto) {
     return this.docs.createMrn(dto);
+  }
+
+  @Get('mrns/:id')
+  getMrn(@Param('id', ParseUUIDPipe) id: string) {
+    return this.docs.getMrn(id);
   }
 }

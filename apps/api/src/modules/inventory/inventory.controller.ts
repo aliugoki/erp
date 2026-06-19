@@ -28,6 +28,8 @@ import {
   CreateWarehouseDto,
   SetProductCategoryDto,
   UpdateCategoryDto,
+  UpdateProductDto,
+  UpdateWarehouseDto,
 } from './dto/inventory.dto';
 import { InventoryCategoriesService } from './inventory-categories.service';
 import { InventoryService } from './inventory.service';
@@ -85,6 +87,12 @@ export class InventoryController {
     return this.inventory.createWarehouse(dto);
   }
 
+  @Patch('warehouses/:id')
+  @Roles(...WRITE)
+  updateWarehouse(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateWarehouseDto) {
+    return this.inventory.updateWarehouse(id, dto);
+  }
+
   @Get('products')
   listProducts() {
     return this.inventory.listProducts();
@@ -112,6 +120,19 @@ export class InventoryController {
   @Roles(...WRITE)
   setProductCategory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetProductCategoryDto) {
     return this.inventory.setProductCategory(id, dto.categoryId ?? null);
+  }
+
+  @Patch('products/:id')
+  @Roles(...WRITE)
+  updateProduct(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
+    return this.inventory.updateProduct(id, dto);
+  }
+
+  @Delete('products/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.OK)
+  deleteProduct(@Param('id', ParseUUIDPipe) id: string) {
+    return this.inventory.deleteProduct(id);
   }
 
   @Get('products/:id/movements')

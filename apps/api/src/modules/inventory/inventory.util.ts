@@ -2,6 +2,13 @@ import type { Money } from '@metaxperts/shared';
 
 export type MovementType = 'IN' | 'OUT' | 'TRANSFER';
 
+/** Normalize a query result. This driver returns `[rows, affectedCount]` for `UPDATE…RETURNING` but a
+ * plain array for `INSERT`/`SELECT`; unwrap the former so callers always get the row array. */
+export function rowsOf<T = Record<string, unknown>>(res: unknown): T[] {
+  if (Array.isArray(res) && res.length === 2 && Array.isArray(res[0]) && typeof res[1] === 'number') return res[0] as T[];
+  return (res ?? []) as T[];
+}
+
 /** Net change to a product's total on-hand for a movement. TRANSFER moves between warehouses, so
  * the product-level total is unchanged. */
 export function deltaFor(type: MovementType, quantity: number): number {
