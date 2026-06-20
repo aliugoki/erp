@@ -33,7 +33,7 @@ export function HelpdeskSettings({ agents, onClose }: { agents: HdAgent[]; onClo
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
 const DEFAULTS: Record<string, [number, number]> = { URGENT: [30, 240], HIGH: [60, 480], MEDIUM: [240, 1440], LOW: [480, 2880] };
 
-function SlaTab() {
+export function SlaTab() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['hd-sla'], queryFn: () => apiGet<HdSlaPolicy[]>('/helpdesk/sla-policies') });
   const save = useMutation({
@@ -62,7 +62,7 @@ function SlaRow({ priority, policy, onSave }: { priority: string; policy?: HdSla
   );
 }
 
-function TeamsTab({ agents }: { agents: HdAgent[] }) {
+export function TeamsTab({ agents }: { agents: HdAgent[] }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['hd-teams'], queryFn: () => apiGet<HdTeam[]>('/helpdesk/teams') });
   const [name, setName] = useState('');
@@ -95,7 +95,7 @@ function TeamsTab({ agents }: { agents: HdAgent[] }) {
   );
 }
 
-function CannedTab() {
+export function CannedTab() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['hd-canned'], queryFn: () => apiGet<HdCannedResponse[]>('/helpdesk/canned-responses') });
   const [title, setTitle] = useState('');
