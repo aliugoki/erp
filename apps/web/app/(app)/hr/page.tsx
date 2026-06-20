@@ -1,156 +1,121 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
-import { apiList } from '@/lib/api';
-import type { Employee } from '@/lib/types';
-import { cn, formatMoney } from '@/lib/utils';
-import { PageHeader } from '@/components/page-header';
-import { EmptyState } from '@/components/empty-state';
-import { HrTabs } from '@/components/hr/hr-tabs';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { BarChart3, Briefcase, Building2, CalendarCheck, FileText, Loader2, Plane, Search, Target, Users, Wallet } from 'lucide-react';
+import { apiGet } from '@/lib/api';
+import type { Department, Employee, HeadcountReport } from '@/lib/types';
+import { EmptyDetail, ListRow, Pane, PaneBody, PaneHeader, RailItem, ThreePane } from '@/components/ui/three-pane';
+import { HrStatusBadge } from '@/components/hr/hr-ui';
+import { EmployeeDetail } from '@/components/hr/employee-detail';
+import { AttendancePanel } from '@/components/hr/attendance-panel';
+import { LeavePanel } from '@/components/hr/leave-panel';
+import { PayrollPanel } from '@/components/hr/payroll-panel';
+import { PerformancePanel } from '@/components/hr/performance-panel';
+import { PoliciesPanel } from '@/components/hr/policies-panel';
+import { OrgPanel } from '@/components/hr/org-panel';
+import { HrReports } from '@/components/hr/hr-reports';
 import { NewEmployeeDialog } from '@/components/hr/new-employee-dialog';
-import { ManageOrgDialog } from '@/components/hr/manage-org-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const STATUS: Record<Employee['status'], { label: string; variant: 'success' | 'warning' | 'secondary' }> = {
-  ACTIVE: { label: 'Active', variant: 'success' },
-  ON_LEAVE: { label: 'On leave', variant: 'warning' },
-  TERMINATED: { label: 'Terminated', variant: 'secondary' },
-};
-
-const initials = (e: Employee) => (e.firstName[0] ?? '') + (e.lastName[0] ?? '');
+type Section = 'employees' | 'attendance' | 'leave' | 'payroll' | 'performance' | 'policies' | 'org' | 'reports';
+const STATUSES = ['ACTIVE', 'ON_LEAVE', 'TERMINATED'];
 
 export default function HrPage() {
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('ALL');
-  const [page, setPage] = useState(1);
-  const pageSize = 8;
+  const [section, setSection] = useState<Section>('employees');
+  const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
 
-  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (search) params.set('search', search);
-  if (status !== 'ALL') params.set('status', status);
+  const employees = useQuery({ queryKey: ['employees'], queryFn: () => apiGet<Employee[]>('/hr/employees?pageSize=200'), enabled: section === 'employees' });
+  const departments = useQuery({ queryKey: ['departments'], queryFn: () => apiGet<Department[]>('/hr/departments') });
+  const headcount = useQuery({ queryKey: ['headcount'], queryFn: () => apiGet<HeadcountReport>('/hr/reports/headcount') });
 
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['employees', search, status, page],
-    queryFn: () => apiList<Employee>(`/hr/employees?${params.toString()}`),
-    placeholderData: keepPreviousData,
-  });
+  const deptName = useMemo(() => new Map((departments.data ?? []).map((d) => [d.id, d.name])), [departments.data]);
+  const empList = useMemo(() => (employees.data ?? []).filter((e) => {
+    const name = `${e.firstName} ${e.lastName} ${e.employeeCode}`.toLowerCase();
+    return (!q || name.includes(q.toLowerCase())) && (!status || e.status === status);
+  }), [employees.data, q, status]);
 
-  const rows = data?.data ?? [];
-  const total = data?.meta.pagination.total ?? 0;
-  const totalPages = data?.meta.pagination.totalPages ?? 1;
+  const pick = (s: Section) => { setSection(s); setSel(null); setQ(''); };
+  const clear = () => setSel(null);
+  const fullPane = section !== 'employees';
+  const showDetail = !!sel || fullPane;
+  const hc = headcount.data;
+  const onLeave = hc?.byStatus.find((s) => s.status === 'ON_LEAVE')?.count ?? 0;
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
-      <PageHeader title="Human Resources" description="Manage your people." action={<div className="flex gap-2"><ManageOrgDialog /><NewEmployeeDialog /></div>} />
-      <HrTabs />
-
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 border-b p-4">
-          <div className="relative min-w-[14rem] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search name or code…"
-              className="pl-9"
-            />
-          </div>
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="ON_LEAVE">On leave</SelectItem>
-              <SelectItem value="TERMINATED">Terminated</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Employee</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead>Salary</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading
-              ? Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="size-9 rounded-full" />
-                        <Skeleton className="h-4 w-32" />
-                      </div>
-                    </TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
-                  </TableRow>
-                ))
-              : rows.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
-                          {initials(e)}
-                        </span>
-                        <div>
-                          <Link href={`/hr/employees/${e.id}`} className="font-medium hover:text-primary hover:underline">{e.firstName} {e.lastName}</Link>
-                          {e.email ? <p className="text-xs text-muted-foreground">{e.email}</p> : null}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{e.employeeCode}</TableCell>
-                    <TableCell className="tabular-nums">{e.salary ? formatMoney(e.salary.amountMinor, e.salary.currency) : '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant={STATUS[e.status].variant}>{STATUS[e.status].label}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-          </TableBody>
-        </Table>
-
-        {!isLoading && rows.length === 0 ? (
-          <div className="p-4">
-            <EmptyState icon={Users} title="No employees yet" description="Add your first team member to get started." action={<NewEmployeeDialog />} />
-          </div>
-        ) : null}
-
-        <div className={cn('flex items-center justify-between border-t p-4 text-sm text-muted-foreground transition-opacity', isFetching && 'opacity-60')}>
-          <span>{total} employee{total === 1 ? '' : 's'}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span className="tabular-nums">Page {page} / {totalPages}</span>
-            <Button variant="outline" size="icon" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      </Card>
+  const rail = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
+      <RailItem icon={Users} label="Employees" count={hc?.total} active={section === 'employees'} onClick={() => pick('employees')} />
+      <RailItem icon={CalendarCheck} label="Attendance" active={section === 'attendance'} onClick={() => pick('attendance')} tone="sky" />
+      <RailItem icon={Plane} label="Leave" active={section === 'leave'} onClick={() => pick('leave')} tone="amber" />
+      <RailItem icon={Wallet} label="Payroll" active={section === 'payroll'} onClick={() => pick('payroll')} tone="emerald" />
+      <RailItem icon={Target} label="Performance" active={section === 'performance'} onClick={() => pick('performance')} tone="violet" />
+      <RailItem icon={FileText} label="Policies" active={section === 'policies'} onClick={() => pick('policies')} />
+      <RailItem icon={Building2} label="Organization" active={section === 'org'} onClick={() => pick('org')} />
+      <div className="my-1 border-t" />
+      <RailItem icon={BarChart3} label="Reports" active={section === 'reports'} onClick={() => pick('reports')} tone="violet" />
     </div>
   );
+
+  const list = (
+    <Pane>
+      {section === 'employees' ? (
+        <>
+          <PaneHeader>
+            <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff…" className="h-9 w-full pl-9" /></div>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm"><option value="">All</option>{STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select>
+            <NewEmployeeDialog />
+          </PaneHeader>
+          <PaneBody>
+            {employees.isLoading ? <Spinner /> : empList.length === 0 ? <Hint>No employees.</Hint> : (
+              <ul className="divide-y">{empList.map((e) => (
+                <li key={e.id}><ListRow active={sel === e.id} onClick={() => setSel(e.id)}>
+                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{e.firstName} {e.lastName}</div><div className="truncate text-xs text-muted-foreground">{e.employeeCode}{e.departmentId ? ` · ${deptName.get(e.departmentId) ?? ''}` : ''}</div></div>
+                  <HrStatusBadge status={e.status} />
+                </ListRow></li>
+              ))}</ul>
+            )}
+          </PaneBody>
+        </>
+      ) : (
+        <><PaneHeader><span className="flex-1 text-sm font-medium capitalize">{section}</span></PaneHeader><PaneBody><div className="p-2"><ListRow active><Briefcase className="h-4 w-4 text-primary" /><span className="flex-1 font-medium capitalize">{section}</span></ListRow></div></PaneBody></>
+      )}
+    </Pane>
+  );
+
+  const detail = (
+    <Pane>
+      {section === 'employees' ? (sel ? <EmployeeDetail id={sel} onBack={clear} onDeleted={clear} /> : <EmptyDetail icon={Users} title="Select an employee" hint="Full profile, lifecycle, leave balances, and documents." />)
+        : section === 'attendance' ? <AttendancePanel />
+        : section === 'leave' ? <LeavePanel />
+        : section === 'payroll' ? <PayrollPanel />
+        : section === 'performance' ? <PerformancePanel />
+        : section === 'policies' ? <PoliciesPanel />
+        : section === 'org' ? <OrgPanel />
+        : <HrReports />}
+    </Pane>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Human Resources</h1>
+        <p className="text-sm text-muted-foreground">People, attendance, leave, payroll, performance, and HR analytics.</p>
+      </div>
+      <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Headcount" value={hc ? String(hc.total) : '—'} icon={Users} />
+        <Kpi label="On leave" value={String(onLeave)} icon={Plane} tone={onLeave > 0 ? 'amber' : 'default'} />
+        <Kpi label="Departments" value={departments.data ? String(departments.data.length) : '—'} icon={Building2} tone="violet" />
+        <Kpi label="Active" value={hc ? String(hc.byStatus.find((s) => s.status === 'ACTIVE')?.count ?? 0) : '—'} icon={Briefcase} tone="emerald" />
+      </div>
+      <div className="min-h-0 flex-1"><ThreePane rail={rail} list={list} detail={detail} showDetail={showDetail} /></div>
+    </div>
+  );
+}
+
+function Spinner() { return <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>; }
+function Hint({ children }: { children: React.ReactNode }) { return <p className="px-4 py-12 text-center text-sm text-muted-foreground">{children}</p>; }
+function Kpi({ label, value, icon: Icon, tone = 'default' }: { label: string; value: string; icon: typeof Users; tone?: 'default' | 'amber' | 'emerald' | 'violet' }) {
+  const tones: Record<string, string> = { default: 'text-primary', amber: 'text-amber-600', emerald: 'text-emerald-600', violet: 'text-violet-600' };
+  return <div className="rounded-xl border p-4"><div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{label}</span><Icon className={`h-4 w-4 ${tones[tone]}`} /></div><p className="mt-2 text-xl font-bold tabular-nums">{value}</p></div>;
 }
