@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Banknote,
+  LayoutDashboard,
   Minus,
   Pause,
   Play,
@@ -316,6 +318,7 @@ export default function PosPage() {
           <NewRegisterDialog />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/pos/manage" className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium hover:bg-muted"><LayoutDashboard className="h-4 w-4" /> Back-office</Link>
           <OfflineBar onSynced={invalidate} />
           {shift ? (
             <>
