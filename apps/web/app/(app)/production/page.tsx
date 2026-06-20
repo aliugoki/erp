@@ -1,222 +1,174 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Factory, Gauge, Layers, PackageCheck, Trash2 } from 'lucide-react';
+import { BarChart3, Boxes, Factory, Layers, Loader2, Search, Settings2, Tag, Trash2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-import { ApiError, apiDelete, apiGet, apiPost } from '@/lib/api';
-import type { Bom, MaterialShortage, ProductionAttribute, ProductionOrder, WorkCenter } from '@/lib/types';
+import { ApiError, apiDelete, apiGet } from '@/lib/api';
+import type { Bom, ProductionAttribute, ProductionOrder, WorkCenter } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
-import { NewAttributeDialog } from '@/components/production/new-attribute-dialog';
-import { NewBomDialog } from '@/components/production/new-bom-dialog';
-import { NewOrderDialog } from '@/components/production/new-order-dialog';
-import { NewWorkCenterDialog } from '@/components/production/new-work-center-dialog';
-import { OrderDetailDialog } from '@/components/production/order-detail-dialog';
-import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
-import { PageHeader } from '@/components/page-header';
-import { StatCard } from '@/components/stat-card';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { EmptyDetail, ListRow, Pane, PaneBody, PaneHeader, RailItem, ThreePane } from '@/components/ui/three-pane';
+import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
+import { PriorityBadge, ProdBadge } from '@/components/production/prod-ui';
+import { OrderDetail } from '@/components/production/order-detail';
+import { BomDetail } from '@/components/production/bom-detail';
+import { WorkCenterDetail } from '@/components/production/work-center-detail';
+import { ProductionReports } from '@/components/production/production-reports';
+import { NewOrderDialog } from '@/components/production/new-order-dialog';
+import { NewBomDialog } from '@/components/production/new-bom-dialog';
+import { NewWorkCenterDialog } from '@/components/production/new-work-center-dialog';
+import { NewAttributeDialog } from '@/components/production/new-attribute-dialog';
 
-const TABS = ['orders', 'boms', 'work-centers', 'attributes', 'costing'] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABEL: Record<Tab, string> = { orders: 'Orders', boms: 'BOMs', 'work-centers': 'Work centers', attributes: 'Attributes', costing: 'Costing → GL' };
-const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  DRAFT: 'outline', PLANNED: 'secondary', RELEASED: 'secondary', IN_PROGRESS: 'default', COMPLETED: 'default', CANCELLED: 'destructive',
-  ACTIVE: 'default', ARCHIVED: 'outline',
-};
+type Section = 'orders' | 'boms' | 'workcenters' | 'attributes' | 'reports' | 'costing';
 
 export default function ProductionPage() {
+  const [section, setSection] = useState<Section>('orders');
+  const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [orderStatus, setOrderStatus] = useState('');
+
+  const orders = useQuery({ queryKey: ['prod-orders'], queryFn: () => apiGet<ProductionOrder[]>('/production/orders'), enabled: section === 'orders' });
+  const boms = useQuery({ queryKey: ['prod-boms'], queryFn: () => apiGet<Bom[]>('/production/boms'), enabled: section === 'boms' });
+  const workCenters = useQuery({ queryKey: ['prod-work-centers'], queryFn: () => apiGet<WorkCenter[]>('/production/work-centers'), enabled: section === 'workcenters' });
+  const attributes = useQuery({ queryKey: ['prod-attributes'], queryFn: () => apiGet<ProductionAttribute[]>('/production/attributes'), enabled: section === 'attributes' });
+
+  const pick = (s: Section) => { setSection(s); setSel(null); setQ(''); };
+  const clear = () => setSel(null);
+  const fullPane = section === 'reports' || section === 'costing';
+  const showDetail = !!sel || fullPane;
+
+  const orderList = useMemo(() => (orders.data ?? []).filter((o) => (!q || `${o.orderNo} ${o.productName ?? ''}`.toLowerCase().includes(q.toLowerCase())) && (!orderStatus || o.status === orderStatus)), [orders.data, q, orderStatus]);
+  const bomList = useMemo(() => (boms.data ?? []).filter((b) => !q || `${b.bomNo} ${b.name} ${b.productName ?? ''}`.toLowerCase().includes(q.toLowerCase())), [boms.data, q]);
+
+  const rail = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
+      <RailItem icon={Factory} label="Work Orders" count={orders.data?.length} active={section === 'orders'} onClick={() => pick('orders')} />
+      <RailItem icon={Layers} label="Bills of Materials" active={section === 'boms'} onClick={() => pick('boms')} tone="violet" />
+      <RailItem icon={Settings2} label="Work Centers" active={section === 'workcenters'} onClick={() => pick('workcenters')} tone="sky" />
+      <RailItem icon={Tag} label="Attributes" active={section === 'attributes'} onClick={() => pick('attributes')} tone="amber" />
+      <div className="my-1 border-t" />
+      <RailItem icon={BarChart3} label="Reports" active={section === 'reports'} onClick={() => pick('reports')} tone="violet" />
+      <RailItem icon={Wallet} label="Costing" active={section === 'costing'} onClick={() => pick('costing')} />
+    </div>
+  );
+
+  const list = (
+    <Pane>
+      {section === 'orders' ? (
+        <>
+          <PaneHeader>
+            <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search orders…" className="h-9 w-full pl-9" /></div>
+            <select value={orderStatus} onChange={(e) => setOrderStatus(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm"><option value="">All</option>{['DRAFT', 'PLANNED', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select>
+            <NewOrderDialog />
+          </PaneHeader>
+          <PaneBody>
+            {orders.isLoading ? <Spinner /> : orderList.length === 0 ? <Hint>No work orders.</Hint> : (
+              <ul className="divide-y">{orderList.map((o) => (
+                <li key={o.id}><ListRow active={sel === o.id} onClick={() => setSel(o.id)}>
+                  <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate font-medium">{o.orderNo}</span><PriorityBadge priority={o.priority} /></div><div className="truncate text-xs text-muted-foreground">{o.productName ?? '—'} · {o.plannedQty} pcs</div></div>
+                  <ProdBadge status={o.status} />
+                </ListRow></li>
+              ))}</ul>
+            )}
+          </PaneBody>
+        </>
+      ) : section === 'boms' ? (
+        <>
+          <PaneHeader><div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search BOMs…" className="h-9 w-full pl-9" /></div><NewBomDialog /></PaneHeader>
+          <PaneBody>
+            {boms.isLoading ? <Spinner /> : bomList.length === 0 ? <Hint>No BOMs.</Hint> : (
+              <ul className="divide-y">{bomList.map((b) => (
+                <li key={b.id}><ListRow active={sel === b.id} onClick={() => setSel(b.id)}>
+                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{b.name}</div><div className="truncate text-xs text-muted-foreground">{b.bomNo} · {b.productName ?? ''}</div></div>
+                  <ProdBadge status={b.status} />
+                </ListRow></li>
+              ))}</ul>
+            )}
+          </PaneBody>
+        </>
+      ) : section === 'workcenters' ? (
+        <>
+          <PaneHeader><span className="flex-1 text-sm font-medium">Work centers</span><NewWorkCenterDialog /></PaneHeader>
+          <PaneBody>
+            {workCenters.isLoading ? <Spinner /> : (workCenters.data ?? []).length === 0 ? <Hint>No work centers.</Hint> : (
+              <ul className="divide-y">{(workCenters.data ?? []).map((w) => (
+                <li key={w.id}><ListRow active={sel === w.id} onClick={() => setSel(w.id)}>
+                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{w.name}</div><div className="truncate text-xs text-muted-foreground">{w.code ?? ''} · {formatMoney(w.costPerHour.amountMinor, w.costPerHour.currency)}/hr</div></div>
+                  <ProdBadge status={w.status} />
+                </ListRow></li>
+              ))}</ul>
+            )}
+          </PaneBody>
+        </>
+      ) : section === 'attributes' ? (
+        <>
+          <PaneHeader><span className="flex-1 text-sm font-medium">Custom attributes</span><NewAttributeDialog /></PaneHeader>
+          <PaneBody><AttributesList attributes={attributes.data ?? []} loading={attributes.isLoading} /></PaneBody>
+        </>
+      ) : (
+        <><PaneHeader><span className="flex-1 text-sm font-medium capitalize">{section}</span></PaneHeader><PaneBody><div className="p-2"><ListRow active><Wallet className="h-4 w-4 text-violet-600" /><span className="flex-1 font-medium capitalize">{section}</span></ListRow></div></PaneBody></>
+      )}
+    </Pane>
+  );
+
+  const detail = (
+    <Pane>
+      {section === 'orders' ? (sel ? <OrderDetail id={sel} onBack={clear} /> : <EmptyDetail icon={Factory} title="Select a work order" hint="Plan, release, issue materials, and complete." />)
+        : section === 'boms' ? (sel ? <BomDetail id={sel} onBack={clear} onDeleted={clear} /> : <EmptyDetail icon={Layers} title="Select a BOM" hint="Components, operations, and version status." />)
+        : section === 'workcenters' ? (sel ? <WorkCenterDetail workCenter={(workCenters.data ?? []).find((w) => w.id === sel)!} onBack={clear} onDeleted={clear} /> : <EmptyDetail icon={Settings2} title="Select a work center" hint="Edit machine/labour cost rates." />)
+        : section === 'attributes' ? <EmptyDetail icon={Tag} title="Custom attributes" hint="EAV fields captured on each work order. Add or remove on the left." />
+        : section === 'reports' ? <ProductionReports />
+        : (
+          <>
+            <PaneHeader><span className="font-semibold">Manufacturing → general ledger</span></PaneHeader>
+            <PaneBody className="p-5">
+              <GlAccountsCard
+                title="Manufacturing → general ledger"
+                description="When set, each completed order posts Dr finished goods; Cr raw materials / labour / overhead. Requires background reactions enabled."
+                getPath="/production/gl-config" putPath="/production/gl-config" queryKey="production-gl-config"
+                slots={[
+                  { key: 'fgInventoryAccountId', label: 'Finished goods (Dr)', types: ['ASSET'], required: true },
+                  { key: 'rawMaterialsAccountId', label: 'Raw materials (Cr)', types: ['ASSET'], required: true },
+                  { key: 'laborAccountId', label: 'Labour applied (Cr)' },
+                  { key: 'overheadAccountId', label: 'Overhead applied (Cr)' },
+                ]}
+              />
+            </PaneBody>
+          </>
+        )}
+    </Pane>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Manufacturing</h1>
+        <p className="text-sm text-muted-foreground">Work orders, bills of materials, work centers, and production costing.</p>
+      </div>
+      <div className="min-h-0 flex-1"><ThreePane rail={rail} list={list} detail={detail} showDetail={showDetail} /></div>
+    </div>
+  );
+}
+
+function AttributesList({ attributes, loading }: { attributes: ProductionAttribute[]; loading: boolean }) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('orders');
-  const [openOrder, setOpenOrder] = useState<string | null>(null);
-
-  const orders = useQuery({ queryKey: ['prod-orders'], queryFn: () => apiGet<ProductionOrder[]>('/production/orders') });
-  const boms = useQuery({ queryKey: ['prod-boms'], queryFn: () => apiGet<Bom[]>('/production/boms') });
-  const workCenters = useQuery({ queryKey: ['prod-work-centers'], queryFn: () => apiGet<WorkCenter[]>('/production/work-centers') });
-  const attributes = useQuery({ queryKey: ['prod-attributes'], queryFn: () => apiGet<ProductionAttribute[]>('/production/attributes') });
-  const shortages = useQuery({ queryKey: ['prod-shortages'], queryFn: () => apiGet<MaterialShortage[]>('/production/reports/shortages') });
-
-  const list = orders.data ?? [];
-  const inProgress = list.filter((o) => ['RELEASED', 'IN_PROGRESS', 'PLANNED'].includes(o.status));
-  const wipValue = inProgress.reduce((s, o) => s + o.totalCost.amountMinor, 0);
-  const completed = list.filter((o) => o.status === 'COMPLETED');
-  const currency = list[0]?.totalCost.currency ?? 'PKR';
-
-  const setBomStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => apiPost(`/production/boms/${id}/status`, { status }),
-    onSuccess: () => { toast.success('BOM updated'); void qc.invalidateQueries({ queryKey: ['prod-boms'] }); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
-  });
-  const delAttr = useMutation({
+  const remove = useMutation({
     mutationFn: (id: string) => apiDelete(`/production/attributes/${id}`),
     onSuccess: () => { toast.success('Attribute removed'); void qc.invalidateQueries({ queryKey: ['prod-attributes'] }); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
-
+  if (loading) return <Spinner />;
+  if (attributes.length === 0) return <Hint>No attributes.</Hint>;
   return (
-    <div className="space-y-6 animate-fade-up">
-      <PageHeader title="Manufacturing" description="Bills of materials, work centers, and production orders with live costing." />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Factory} label="Orders in progress" value={inProgress.length} accent="primary" delayMs={0} />
-        <StatCard icon={Gauge} label="WIP value" value={wipValue} format={(v) => formatMoney(v, currency)} accent="warning" delayMs={60} />
-        <StatCard icon={PackageCheck} label="Completed orders" value={completed.length} accent="success" delayMs={120} />
-        <StatCard icon={AlertTriangle} label="Material shortages" value={shortages.data?.length ?? 0} accent="destructive" delayMs={180} />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center justify-between gap-2 border-b">
-        <div className="flex gap-1">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              {TAB_LABEL[t]}
-            </button>
-          ))}
-        </div>
-        <div className="pb-1">
-          {tab === 'orders' ? <NewOrderDialog /> : null}
-          {tab === 'boms' ? <NewBomDialog /> : null}
-          {tab === 'work-centers' ? <NewWorkCenterDialog /> : null}
-          {tab === 'attributes' ? <NewAttributeDialog /> : null}
-        </div>
-      </div>
-
-      {/* Orders */}
-      {tab === 'orders' ? (
-        <div className="space-y-2">
-          {(shortages.data ?? []).length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <span className="text-destructive">Short of:</span>
-              {(shortages.data ?? []).slice(0, 5).map((s) => (
-                <Badge key={s.componentProductId} variant="outline">{s.componentName} (−{s.shortBy})</Badge>
-              ))}
-            </div>
-          ) : null}
-          <Table
-            empty="No production orders yet."
-            rows={list}
-            cols={['Order', 'Product', 'Qty', 'Total cost', 'Status']}
-            render={(o: ProductionOrder) => (
-              <tr key={o.id} className="cursor-pointer border-t hover:bg-muted/40" onClick={() => setOpenOrder(o.id)}>
-                <Td className="font-medium">{o.orderNo}</Td>
-                <Td>{o.productName}</Td>
-                <Td>{o.producedQty}/{o.plannedQty}</Td>
-                <Td className="tabular-nums">{formatMoney(o.totalCost.amountMinor, o.totalCost.currency)}</Td>
-                <Td><Badge variant={STATUS_VARIANT[o.status] ?? 'outline'}>{o.status}</Badge></Td>
-              </tr>
-            )}
-          />
-        </div>
-      ) : null}
-
-      {/* BOMs */}
-      {tab === 'boms' ? (
-        <Table
-          empty="No BOMs yet. Create one to define how a product is made."
-          rows={boms.data ?? []}
-          cols={['BOM', 'Product', 'Name', 'Output', 'Status', '']}
-          render={(b: Bom) => (
-            <tr key={b.id} className="border-t">
-              <Td className="font-medium">{b.bomNo}</Td>
-              <Td>{b.productName}</Td>
-              <Td>{b.name}</Td>
-              <Td>{b.outputQty}</Td>
-              <Td><Badge variant={STATUS_VARIANT[b.status] ?? 'outline'}>{b.status}</Badge></Td>
-              <Td>
-                {b.status !== 'ACTIVE' ? (
-                  <Button size="sm" variant="outline" onClick={() => setBomStatus.mutate({ id: b.id, status: 'ACTIVE' })}>Activate</Button>
-                ) : (
-                  <Button size="sm" variant="ghost" onClick={() => setBomStatus.mutate({ id: b.id, status: 'ARCHIVED' })}>Archive</Button>
-                )}
-              </Td>
-            </tr>
-          )}
-        />
-      ) : null}
-
-      {/* Work centers */}
-      {tab === 'work-centers' ? (
-        <Table
-          empty="No work centers. Add stations to cost operations."
-          rows={workCenters.data ?? []}
-          cols={['Name', 'Code', 'Cost / hour', 'Status']}
-          render={(w: WorkCenter) => (
-            <tr key={w.id} className="border-t">
-              <Td className="font-medium">{w.name}</Td>
-              <Td>{w.code ?? '—'}</Td>
-              <Td className="tabular-nums">{formatMoney(w.costPerHour.amountMinor, w.costPerHour.currency)}</Td>
-              <Td><Badge variant={w.status === 'ACTIVE' ? 'secondary' : 'outline'}>{w.status}</Badge></Td>
-            </tr>
-          )}
-        />
-      ) : null}
-
-      {/* Attributes */}
-      {tab === 'attributes' ? (
-        <Table
-          empty="No custom attributes. Add fields captured on every production order."
-          rows={attributes.data ?? []}
-          cols={['Label', 'Key', 'Type', 'Required', '']}
-          render={(a: ProductionAttribute) => (
-            <tr key={a.id} className="border-t">
-              <Td className="font-medium">{a.label}</Td>
-              <Td className="font-mono text-xs">{a.attrKey}</Td>
-              <Td>{a.dataType}</Td>
-              <Td>{a.required ? 'Yes' : 'No'}</Td>
-              <Td>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => delAttr.mutate(a.id)} aria-label="Delete">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </Td>
-            </tr>
-          )}
-        />
-      ) : null}
-
-      {tab === 'costing' ? (
-        <GlAccountsCard
-          title="Production → general ledger"
-          description="When set, completing an order posts Dr finished-goods inventory; Cr raw materials, labour, and overhead. Requires background reactions enabled."
-          getPath="/production/gl-config"
-          putPath="/production/gl-config"
-          queryKey="production-gl-config"
-          slots={[
-            { key: 'fgInventoryAccountId', label: 'Finished goods (Dr)', types: ['ASSET'], required: true },
-            { key: 'rawMaterialsAccountId', label: 'Raw materials (Cr)', types: ['ASSET'], required: true },
-            { key: 'laborAccountId', label: 'Labour applied (Cr)' },
-            { key: 'overheadAccountId', label: 'Overhead applied (Cr)' },
-          ]}
-        />
-      ) : null}
-
-      <OrderDetailDialog orderId={openOrder} open={!!openOrder} onOpenChange={(v) => !v && setOpenOrder(null)} />
-    </div>
+    <ul className="divide-y">{attributes.map((a) => (
+      <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate font-medium">{a.label}</span><Boxes className="h-3 w-3 text-muted-foreground" /></div><div className="truncate text-xs text-muted-foreground">{a.attrKey} · {a.dataType}{a.required ? ' · required' : ''}</div></div>
+        <Button variant="ghost" size="icon" onClick={() => remove.mutate(a.id)} disabled={remove.isPending} title="Delete"><Trash2 className="h-4 w-4 text-muted-foreground" /></Button>
+      </li>
+    ))}</ul>
   );
 }
 
-function Table<T>({ rows, cols, render, empty }: { rows: T[]; cols: string[]; render: (r: T) => React.ReactNode; empty: string }) {
-  return (
-    <div className="overflow-hidden rounded-xl border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-          <tr>{cols.map((c, i) => <th key={i} className="px-4 py-2 font-medium">{c}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={cols.length} className="px-4 py-10 text-center text-muted-foreground"><Layers className="mx-auto mb-2 h-5 w-5" />{empty}</td></tr>
-          ) : (
-            rows.map(render)
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-2 ${className}`}>{children}</td>;
-}
+function Spinner() { return <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>; }
+function Hint({ children }: { children: React.ReactNode }) { return <p className="px-4 py-12 text-center text-sm text-muted-foreground">{children}</p>; }
