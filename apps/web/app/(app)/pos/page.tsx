@@ -387,14 +387,25 @@ export default function PosPage() {
                   key={p.id}
                   onClick={() => addProduct(p)}
                   disabled={!!resumingId}
-                  className="group overflow-hidden rounded-xl border text-left transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                  className="group overflow-hidden rounded-xl border bg-card text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <AuthImage path={p.primaryImageId ? `/inventory/products/${p.id}/images/${p.primaryImageId}` : null} alt={p.name} className="aspect-[4/3] w-full" />
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/30">
+                    <AuthImage
+                      path={p.primaryImageId ? `/inventory/products/${p.id}/images/${p.primaryImageId}` : null}
+                      alt={p.name}
+                      className="h-full w-full transition duration-500 ease-out group-hover:scale-105"
+                    />
+                    {p.onHand <= 0 ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
+                        <span className="rounded-full bg-foreground/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-background">Out of stock</span>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="p-3">
                   <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{p.sku}</p>
                   <div className="mt-2 flex items-center justify-between">
-                    <span className="font-semibold">{formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency)}</span>
+                    <span className="font-semibold tabular-nums">{formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency)}</span>
                     <Badge variant={p.onHand > 0 ? 'secondary' : 'outline'} className="text-[10px]">{p.onHand} in</Badge>
                   </div>
                   </div>

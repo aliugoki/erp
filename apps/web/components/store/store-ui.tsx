@@ -14,7 +14,7 @@ import {
   clearCustomerToken, customerGet, getCartToken, getCustomerToken,
   productImageUrl, setCartToken, sfPath, storeLogoUrl,
 } from '@/lib/storefront';
-import { formatMoney } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 
 // ── Store context ───────────────────────────────────────────────────────────────
 interface StoreCtx {
@@ -263,14 +263,43 @@ export function StoreFooter() {
   );
 }
 
+// ── Storefront image (public URL) with graceful fade-in + skeleton ───────────────
+export function StoreImage({ src, alt, className, sizes }: { src: string; alt: string; className?: string; sizes?: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <>
+      {!loaded && !failed ? <div className="absolute inset-0 animate-pulse bg-zinc-100" aria-hidden /> : null}
+      {!failed ? (
+        <img
+          src={src}
+          alt={alt}
+          sizes={sizes}
+          loading="lazy"
+          ref={(el) => { if (el?.complete) setLoaded(true); }}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={cn('transition-opacity duration-700 ease-out', loaded ? 'opacity-100' : 'opacity-0', className)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-zinc-50 text-zinc-300">
+          <ShoppingBag className="h-10 w-10" />
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Image placeholder (no product photo yet) ─────────────────────────────────────
 export function ProductPlaceholder({ store, label }: { store: SfStore; label?: string }) {
   return (
-    <div className="flex h-full w-full items-center justify-center" style={{ background: `linear-gradient(135deg, ${accentSoft(store, '22')}, ${accentSoft(store, '08')})` }}>
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden" style={{ background: `linear-gradient(135deg, ${accentSoft(store, '22')}, ${accentSoft(store, '08')})` }}>
+      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full" style={{ background: accentSoft(store, '14') }} aria-hidden />
+      <div className="absolute -bottom-8 -left-4 h-28 w-28 rounded-full" style={{ background: accentSoft(store, '0f') }} aria-hidden />
       {label ? (
-        <span className="text-4xl font-black uppercase tracking-tight" style={{ color: store.accentColor, opacity: 0.55 }}>{label.slice(0, 2)}</span>
+        <span className="relative text-4xl font-black uppercase tracking-tight" style={{ color: store.accentColor, opacity: 0.55 }}>{label.slice(0, 2)}</span>
       ) : (
-        <ShoppingBag className="h-12 w-12" style={{ color: store.accentColor, opacity: 0.5 }} />
+        <ShoppingBag className="relative h-12 w-12" style={{ color: store.accentColor, opacity: 0.5 }} />
       )}
     </div>
   );
@@ -300,11 +329,13 @@ export function ProductCard({ product }: { product: SfProduct }) {
       <div className="relative aspect-[4/5] overflow-hidden bg-zinc-50">
         <Link href={href} className="block h-full w-full">
           {product.primaryImageId ? (
-            <img src={productImageUrl(slug, product.primaryImageId)} alt={product.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+            <StoreImage src={productImageUrl(slug, product.primaryImageId)} alt={product.title} sizes="(max-width: 768px) 50vw, 25vw" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
           ) : (
             <ProductPlaceholder store={store} label={product.title} />
           )}
         </Link>
+        {/* Soft gradient for badge/CTA legibility on busy photos */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/10 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" aria-hidden />
         {/* Badges */}
         <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1.5">
           {onSale ? <span className="rounded-full bg-rose-500 px-2.5 py-1 text-[11px] font-bold text-white shadow">-{off}%</span> : null}

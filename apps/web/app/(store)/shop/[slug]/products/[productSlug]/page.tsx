@@ -6,7 +6,7 @@ import { ChevronLeft, Loader2, RotateCcw, ShieldCheck, ShoppingBag, ShoppingCart
 import { toast } from 'sonner';
 import { ApiError, apiGet } from '@/lib/api';
 import { type SfProduct, customerPost, productImageUrl, sfPath } from '@/lib/storefront';
-import { QtyStepper, Stars, accentStyle, useCart, useCustomer, useStore } from '@/components/store/store-ui';
+import { QtyStepper, Stars, StoreImage, accentStyle, useCart, useCustomer, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
 
 export default function ProductDetail({ params }: { params: { slug: string; productSlug: string } }) {
@@ -54,21 +54,23 @@ export default function ProductDetail({ params }: { params: { slug: string; prod
       <div className="grid gap-10 lg:grid-cols-2">
         {/* Gallery */}
         <div>
-          <div className="aspect-square overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
+          <div className="group relative aspect-square overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
             {selected ? (
-              <img src={productImageUrl(slug, selected.id)} alt={p.title} className="h-full w-full object-cover" />
+              <StoreImage src={productImageUrl(slug, selected.id)} alt={p.title} sizes="(max-width: 1024px) 100vw, 50vw" className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.03]" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-zinc-300"><ShoppingBag className="h-16 w-16" /></div>
             )}
           </div>
           {images.length > 1 ? (
-            <div className="mt-3 flex gap-3 overflow-x-auto">
+            <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
               {images.map((img, i) => (
                 <button
                   key={img.id}
                   type="button"
                   onClick={() => setActiveImg(i)}
-                  className={`h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${i === activeImg ? 'border-zinc-900' : 'border-transparent'}`}
+                  aria-label={`View image ${i + 1}`}
+                  className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition ${i === activeImg ? '' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                  style={i === activeImg ? { borderColor: store.accentColor } : undefined}
                 >
                   <img src={productImageUrl(slug, img.id)} alt="" className="h-full w-full object-cover" />
                 </button>

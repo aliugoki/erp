@@ -6,7 +6,7 @@ import { Loader2, ShoppingBag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { type SfCart, getCartToken, productImageUrl, sfPath } from '@/lib/storefront';
-import { QtyStepper, accentStyle, useCart, useStore } from '@/components/store/store-ui';
+import { QtyStepper, StoreImage, accentStyle, useCart, useStore } from '@/components/store/store-ui';
 import { formatMoney } from '@/lib/utils';
 
 export default function CartPage({ params }: { params: { slug: string } }) {
@@ -59,9 +59,9 @@ export default function CartPage({ params }: { params: { slug: string } }) {
         <div className="divide-y divide-zinc-100 rounded-2xl border border-zinc-200">
           {items.map((it) => (
             <div key={it.productId + (it.variantId ?? '')} className="flex items-center gap-4 p-4">
-              <Link href={sfPath(slug, `/products/${it.slug}`)} className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
+              <Link href={sfPath(slug, `/products/${it.slug}`)} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
                 {it.primaryImageId ? (
-                  <img src={productImageUrl(slug, it.primaryImageId)} alt={it.title} className="h-full w-full object-cover" />
+                  <StoreImage src={productImageUrl(slug, it.primaryImageId)} alt={it.title} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-zinc-300"><ShoppingBag className="h-6 w-6" /></div>
                 )}
