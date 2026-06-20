@@ -29,6 +29,9 @@ import {
   CreateEmployeeDto,
   CreatePositionDto,
   ListEmployeesQueryDto,
+  UpdateDepartmentDto,
+  UpdateDesignationDto,
+  UpdatePositionDto,
   UpdateEmployeeDto,
 } from './dto/hr.dto';
 import { HrService } from './hr.service';
@@ -103,6 +106,12 @@ export class HrController {
     return this.hr.createDepartment(dto);
   }
 
+  @Patch('departments/:id')
+  @Roles(...WRITE)
+  updateDepartment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDepartmentDto) {
+    return this.hr.updateDepartment(id, dto);
+  }
+
   @Delete('departments/:id')
   @Roles(...WRITE)
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -123,6 +132,19 @@ export class HrController {
     return this.hr.createPosition(dto);
   }
 
+  @Patch('positions/:id')
+  @Roles(...WRITE)
+  updatePosition(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePositionDto) {
+    return this.hr.updatePosition(id, dto);
+  }
+
+  @Delete('positions/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deletePosition(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hr.deletePosition(id);
+  }
+
   // Designations (managed list for the employee form dropdown)
   @Get('designations')
   listDesignations() {
@@ -134,6 +156,12 @@ export class HrController {
   @HttpCode(HttpStatus.CREATED)
   createDesignation(@Body() dto: CreateDesignationDto) {
     return this.hr.createDesignation(dto);
+  }
+
+  @Patch('designations/:id')
+  @Roles(...WRITE)
+  updateDesignation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDesignationDto) {
+    return this.hr.updateDesignation(id, dto);
   }
 
   @Delete('designations/:id')

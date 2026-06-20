@@ -11,6 +11,9 @@ import type {
   CreateEmployeeDto,
   CreatePositionDto,
   ListEmployeesQueryDto,
+  UpdateDepartmentDto,
+  UpdateDesignationDto,
+  UpdatePositionDto,
   UpdateEmployeeDto,
 } from './dto/hr.dto';
 import type { DepartmentView, EmployeeRow, EmployeeView, PositionView } from './hr.types';
@@ -52,6 +55,19 @@ export class HrService {
     });
   }
 
+  async updateDepartment(id: string, dto: UpdateDepartmentDto): Promise<DepartmentView> {
+    return this.tenantTx.run(async (m) => {
+      const rows = returningRows<Record<string, string | null>>(await m.query(
+        `UPDATE hr_department SET name=COALESCE($2,name), manager_id=COALESCE($3,manager_id),
+            parent_department_id=COALESCE($4,parent_department_id), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, manager_id, parent_department_id`,
+        [id, dto.name ?? null, dto.managerId ?? null, dto.parentDepartmentId ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Department not found');
+      return toDepartment(rows[0]);
+    });
+  }
+
   async deleteDepartment(id: string): Promise<void> {
     await this.softDelete('hr_department', id);
   }
@@ -79,6 +95,23 @@ export class HrService {
     });
   }
 
+  async updatePosition(id: string, dto: UpdatePositionDto): Promise<PositionView> {
+    return this.tenantTx.run(async (m) => {
+      const rows = returningRows<Record<string, string | null>>(await m.query(
+        `UPDATE hr_position SET title=COALESCE($2,title), description=COALESCE($3,description), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, title, description`,
+        [id, dto.title ?? null, dto.description ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Position not found');
+      const r = rows[0];
+      return { id: r.id!, title: r.title!, description: r.description ?? null };
+    });
+  }
+
+  async deletePosition(id: string): Promise<void> {
+    await this.softDelete('hr_position', id);
+  }
+
   // ── Designations (managed list) ─────────────────────────────────────────────
   async createDesignation(dto: CreateDesignationDto) {
     return this.tenantTx.run(async (m) => {
@@ -104,6 +137,19 @@ export class HrService {
         `SELECT id, name, description FROM hr_designation WHERE deleted_at IS NULL ORDER BY name`,
       )) as Array<Record<string, string | null>>;
       return rows.map((r) => ({ id: r.id!, name: r.name!, description: r.description ?? null }));
+    });
+  }
+
+  async updateDesignation(id: string, dto: UpdateDesignationDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = returningRows<Record<string, string | null>>(await m.query(
+        `UPDATE hr_designation SET name=COALESCE($2,name), description=COALESCE($3,description), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, description`,
+        [id, dto.name ?? null, dto.description ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Designation not found');
+      const r = rows[0];
+      return { id: r.id!, name: r.name!, description: r.description ?? null };
     });
   }
 

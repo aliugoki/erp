@@ -18,6 +18,8 @@ import type {
   LogAttendanceDto,
   SetLeaveBalanceDto,
   UpdateGoalDto,
+  UpdateLeaveTypeDto,
+  UpdateSalaryComponentDto,
 } from './dto/hr.dto';
 import {
   type PayComponent,
@@ -65,6 +67,23 @@ export class HrEnterpriseService {
       )) as Row[];
       return rows.map(mapLeaveType);
     });
+  }
+
+  async updateLeaveType(id: string, dto: UpdateLeaveTypeDto) {
+    return this.tenantTx.run(async (m) => {
+      const rows = returningRows<Row>(await m.query(
+        `UPDATE hr_leave_type SET name=COALESCE($2,name), code=$3, days_per_year=COALESCE($4,days_per_year),
+            paid=COALESCE($5,paid), color=$6, updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, code, days_per_year, paid, color`,
+        [id, dto.name ?? null, dto.code ?? null, dto.daysPerYear ?? null, dto.paid ?? null, dto.color ?? null],
+      ));
+      if (!rows[0]) throw new NotFoundException('Leave type not found');
+      return mapLeaveType(rows[0]);
+    });
+  }
+
+  async deleteLeaveType(id: string): Promise<void> {
+    await this.tenantTx.run((m) => m.query(`UPDATE hr_leave_type SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL`, [id]));
   }
 
   /** Set (upsert) an employee's annual entitlement for a leave type. */
@@ -215,6 +234,28 @@ export class HrEnterpriseService {
       )) as Row[];
       return rows.map(mapComponent);
     });
+  }
+
+  async updateComponent(id: string, dto: UpdateSalaryComponentDto) {
+    return this.tenantTx.run(async (m) => {
+      try {
+        const rows = returningRows<Row>(await m.query(
+          `UPDATE hr_salary_component SET name=COALESCE($2,name), code=COALESCE($3,code), type=COALESCE($4,type),
+              calc=COALESCE($5,calc), value_minor=COALESCE($6,value_minor), percent=COALESCE($7,percent), updated_at=now()
+           WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, code, type, calc, value_minor, percent, active`,
+          [id, dto.name ?? null, dto.code ?? null, dto.type ?? null, dto.calc ?? null, dto.valueMinor ?? null, dto.percent ?? null],
+        ));
+        if (!rows[0]) throw new NotFoundException('Component not found');
+        return mapComponent(rows[0]);
+      } catch (err) {
+        if (isUnique(err)) throw new BadRequestException(`Component code "${dto.code}" already exists`);
+        throw err;
+      }
+    });
+  }
+
+  async deleteComponent(id: string): Promise<void> {
+    await this.tenantTx.run((m) => m.query(`UPDATE hr_salary_component SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL`, [id]));
   }
 
   // ── Payroll: runs ───────────────────────────────────────────────────────────

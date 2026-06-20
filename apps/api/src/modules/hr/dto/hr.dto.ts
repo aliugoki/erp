@@ -106,6 +106,12 @@ export class CreateDepartmentDto {
   @IsOptional() @IsUUID() parentDepartmentId?: string;
 }
 
+export class UpdateDepartmentDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsUUID() managerId?: string;
+  @IsOptional() @IsUUID() parentDepartmentId?: string;
+}
+
 export class CreatePositionDto {
   @IsString() @MinLength(1) title!: string;
   @IsOptional() @IsString() description?: string;
@@ -159,6 +165,34 @@ export class CreateSalaryComponentDto {
   @IsString() @MinLength(1) code!: string;
   @IsIn(['EARNING', 'DEDUCTION']) type!: string;
   @IsIn(['FIXED', 'PCT_OF_BASIC']) calc!: string;
+  @IsOptional() @IsInt() @Min(0) valueMinor?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(100) percent?: number;
+}
+
+// ── Partial-update DTOs (every field optional) for the org + payroll reference lists ──
+export class UpdatePositionDto {
+  @IsOptional() @IsString() @MinLength(1) title?: string;
+  @IsOptional() @IsString() description?: string;
+}
+
+export class UpdateDesignationDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsString() description?: string;
+}
+
+export class UpdateLeaveTypeDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsString() code?: string;
+  @IsOptional() @IsInt() @Min(0) daysPerYear?: number;
+  @IsOptional() @IsBoolean() paid?: boolean;
+  @IsOptional() @IsString() color?: string;
+}
+
+export class UpdateSalaryComponentDto {
+  @IsOptional() @IsString() @MinLength(1) name?: string;
+  @IsOptional() @IsString() @MinLength(1) code?: string;
+  @IsOptional() @IsIn(['EARNING', 'DEDUCTION']) type?: string;
+  @IsOptional() @IsIn(['FIXED', 'PCT_OF_BASIC']) calc?: string;
   @IsOptional() @IsInt() @Min(0) valueMinor?: number;
   @IsOptional() @IsInt() @Min(0) @Max(100) percent?: number;
 }

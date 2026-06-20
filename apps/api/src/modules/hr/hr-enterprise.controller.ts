@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -29,6 +30,8 @@ import {
   LogAttendanceDto,
   SetLeaveBalanceDto,
   UpdateGoalDto,
+  UpdateLeaveTypeDto,
+  UpdateSalaryComponentDto,
 } from './dto/hr.dto';
 
 const WRITE = [Role.HR_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -51,6 +54,19 @@ export class HrEnterpriseController {
   @HttpCode(HttpStatus.CREATED)
   createLeaveType(@Body() dto: CreateLeaveTypeDto) {
     return this.hr.createLeaveType(dto);
+  }
+
+  @Patch('leave-types/:id')
+  @Roles(...WRITE)
+  updateLeaveType(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLeaveTypeDto) {
+    return this.hr.updateLeaveType(id, dto);
+  }
+
+  @Delete('leave-types/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteLeaveType(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hr.deleteLeaveType(id);
   }
 
   @Post('leave-balances')
@@ -93,6 +109,19 @@ export class HrEnterpriseController {
   @HttpCode(HttpStatus.CREATED)
   createComponent(@Body() dto: CreateSalaryComponentDto) {
     return this.hr.createComponent(dto);
+  }
+
+  @Patch('salary-components/:id')
+  @Roles(...WRITE)
+  updateComponent(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSalaryComponentDto) {
+    return this.hr.updateComponent(id, dto);
+  }
+
+  @Delete('salary-components/:id')
+  @Roles(...WRITE)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteComponent(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hr.deleteComponent(id);
   }
 
   @Get('payroll/runs')
