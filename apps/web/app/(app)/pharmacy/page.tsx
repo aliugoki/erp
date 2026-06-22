@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CalendarClock, ClipboardList, FlaskConical, Layers, Pill, Receipt, Search, Settings2, ShieldAlert, Wallet,
+  AlertTriangle, CalendarClock, ClipboardList, FlaskConical, Layers, Pill, Receipt, Search, Settings2, ShieldAlert, SlidersHorizontal, Wallet,
 } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { formatMoney } from '@/lib/utils';
@@ -18,8 +18,9 @@ import { ReceiveBatchDialog } from '@/components/pharmacy/receive-batch-dialog';
 import { DispenseCounter } from '@/components/pharmacy/dispense-counter';
 import { DispenseDetail } from '@/components/pharmacy/dispense-detail';
 import { PharmacySettings } from '@/components/pharmacy/pharmacy-settings';
+import { AdjustmentsList, LotActions } from '@/components/pharmacy/adjustments';
 
-type Section = 'drugs' | 'dispense' | 'dispenses' | 'batches' | 'controlled' | 'reports' | 'settings';
+type Section = 'drugs' | 'dispense' | 'dispenses' | 'batches' | 'controlled' | 'adjustments' | 'reports' | 'settings';
 
 export default function PharmacyPage() {
   const [section, setSection] = useState<Section>('drugs');
@@ -53,6 +54,7 @@ export default function PharmacyPage() {
       <div className="my-1 border-t" />
       <RailItem icon={Layers} label="Batches & expiry" active={section === 'batches'} onClick={() => pick('batches')} tone="amber" />
       <RailItem icon={ShieldAlert} label="Controlled register" count={controlledCount} active={section === 'controlled'} onClick={() => pick('controlled')} tone="rose" />
+      <RailItem icon={SlidersHorizontal} label="Adjustments" active={section === 'adjustments'} onClick={() => pick('adjustments')} tone="amber" />
       <div className="my-1 border-t" />
       <RailItem icon={Wallet} label="Reports" active={section === 'reports'} onClick={() => pick('reports')} tone="violet" />
       <RailItem icon={Settings2} label="Settings" active={section === 'settings'} onClick={() => pick('settings')} />
@@ -131,6 +133,8 @@ export default function PharmacyPage() {
             )}
           </PaneBody>
         </>
+      ) : section === 'adjustments' ? (
+        <AdjustmentsList />
       ) : (
         <><PaneHeader><span className="flex-1 text-sm font-medium">{section === 'dispense' ? 'Dispensing counter' : section === 'reports' ? 'Analytics' : 'Configuration'}</span></PaneHeader>
           <PaneBody className="p-2">
@@ -156,6 +160,7 @@ export default function PharmacyPage() {
         : section === 'dispenses' ? (sel ? <DispenseDetail id={sel} onBack={clear} /> : <EmptyDetail icon={Receipt} title="Select a dispense" hint="View the priced lines, lots consumed, and post a return." />)
         : section === 'batches' ? (sel ? <LotDetail lot={(lots.data ?? []).find((l) => l.id === sel)} /> : <EmptyDetail icon={Layers} title="Batch & expiry" hint="Receive batches with lot numbers + expiry; dispensing consumes them first-expiry-first-out." />)
         : section === 'controlled' ? <EmptyDetail icon={ShieldAlert} title="Controlled register" hint="An immutable audit of every controlled/narcotic movement — dispense out, return in." />
+        : section === 'adjustments' ? <EmptyDetail icon={SlidersHorizontal} title="Stock adjustments" hint="Return-to-vendor, write-offs and corrections — each values through the ledger and posts to the GL. Open a batch under ‘Batches & expiry’ for per-lot actions." />
         : section === 'reports' ? <PharmacyReports nearExpiry={nearExpiry.data ?? []} /> : <PharmacySettings />}
     </Pane>
   );
@@ -193,6 +198,7 @@ function LotDetail({ lot }: { lot?: Lot }) {
           <Field label="Expiry" value={fmtDate(lot.expiryDate)} />
           <Field label="Receipt" value={lot.docNo ?? '—'} />
         </dl>
+        <div className="max-w-md"><LotActions lot={lot} /></div>
       </PaneBody>
     </>
   );

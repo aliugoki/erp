@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import type { ReceiveBatchDto } from './dto/pharmacy.dto';
@@ -37,17 +37,25 @@ export class PharmacyStockService {
     return this.tenantTx.run(async (m) => {
       const receiptNo = await this.nextDocNo(m, 'RCV');
       let total = 0;
+      let vendorId = dto.vendorId ?? null;
+      // Procurement tie-in: validate the PO and default the vendor from it.
+      if (dto.poId) {
+        const po = (await m.query(`SELECT vendor_id, status FROM inventory_purchase_order WHERE id=$1 AND deleted_at IS NULL`, [dto.poId])) as Row[];
+        if (!po[0]) throw new BadRequestException('Purchase order not found');
+        if (po[0].status === 'CANCELLED' || po[0].status === 'DRAFT') throw new UnprocessableEntityException('PO must be approved before receiving');
+        vendorId = vendorId ?? (po[0].vendor_id as string | null);
+      }
       let header: Row;
       try {
         const rows = (await m.query(
-          `INSERT INTO pharmacy_receipt (tenant_id, receipt_no, vendor_id, warehouse_id, grn_id, received_on, currency, total_minor, notes, status)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,COALESCE($5::date,current_date),$6,0,$7,'POSTED')
+          `INSERT INTO pharmacy_receipt (tenant_id, receipt_no, vendor_id, warehouse_id, grn_id, po_id, received_on, currency, total_minor, notes, status)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,COALESCE($6::date,current_date),$7,0,$8,'POSTED')
            RETURNING id, receipt_no`,
-          [receiptNo, dto.vendorId ?? null, dto.warehouseId ?? null, dto.grnId ?? null, dto.receivedOn ?? null, currency, dto.notes ?? null],
+          [receiptNo, vendorId, dto.warehouseId ?? null, dto.grnId ?? null, dto.poId ?? null, dto.receivedOn ?? null, currency, dto.notes ?? null],
         )) as Row[];
         header = rows[0]!;
       } catch (err) {
-        if (isForeignKey(err)) throw new BadRequestException('Unknown vendor / warehouse / GRN for this tenant');
+        if (isForeignKey(err)) throw new BadRequestException('Unknown vendor / warehouse / GRN / PO for this tenant');
         throw err;
       }
 
@@ -111,9 +119,30 @@ export class PharmacyStockService {
         total += item.qty * unitCost;
       }
 
+      // Procurement tie-in: roll the received quantities onto the PO + refresh its status.
+      if (dto.poId) {
+        const poItems = (await m.query(`SELECT id, product_id FROM inventory_po_item WHERE po_id=$1`, [dto.poId])) as Row[];
+        const byProduct = new Map(poItems.map((pi) => [pi.product_id as string, pi.id as string]));
+        for (const item of dto.items) {
+          const poItemId = byProduct.get(item.productId);
+          if (poItemId) await m.query(`UPDATE inventory_po_item SET received_qty = received_qty + $1, updated_at=now() WHERE id=$2`, [item.qty, poItemId]);
+        }
+        await this.refreshPoStatus(m, dto.poId);
+      }
+
       await m.query(`UPDATE pharmacy_receipt SET total_minor=$1, updated_at=now() WHERE id=$2`, [total, header.id]);
       return { id: header.id, receiptNo, lines: dto.items.length, total: money(total, currency) };
     });
+  }
+
+  private async refreshPoStatus(m: Mgr, poId: string) {
+    const agg = (await m.query(
+      `SELECT COALESCE(SUM(qty),0)::int AS ordered, COALESCE(SUM(received_qty),0)::int AS received FROM inventory_po_item WHERE po_id=$1`,
+      [poId],
+    )) as Array<{ ordered: number; received: number }>;
+    const { ordered, received } = agg[0]!;
+    const status = received <= 0 ? 'APPROVED' : received >= ordered ? 'RECEIVED' : 'PARTIAL';
+    await m.query(`UPDATE inventory_purchase_order SET status=$1, updated_at=now() WHERE id=$2 AND status NOT IN ('CANCELLED','CLOSED')`, [status, poId]);
   }
 
   /**
@@ -194,6 +223,47 @@ export class PharmacyStockService {
       unitCostMinor: p.unitCostMinor,
       narration: `${p.docType} ${p.docNo ?? ''}`.trim(),
     });
+  }
+
+  /**
+   * Decrement a SPECIFIC lot (used by return-to-vendor / write-off / negative adjustment, which target
+   * a chosen lot rather than FEFO). Locks the lot, guards on-hand, logs the movement, and moves the
+   * same quantity OUT of the valued ledger. Returns the WAVG value consumed + the lot number.
+   */
+  async decrementLotInTx(
+    m: Mgr,
+    p: { lotId: string; productId: string; qty: number; docType: string; docNo?: string | null },
+  ): Promise<{ valueMinor: number; unitCostMinor: number; lotNo: string }> {
+    const rows = (await m.query(
+      `SELECT lot_no, qty_on_hand FROM pharmacy_stock_lot WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+      [p.lotId],
+    )) as Row[];
+    if (!rows[0]) throw new NotFoundException('Stock lot not found');
+    const lotNo = rows[0].lot_no as string;
+    if (Number(rows[0].qty_on_hand) < p.qty) {
+      throw new UnprocessableEntityException(`Lot ${lotNo}: only ${rows[0].qty_on_hand} on hand, cannot remove ${p.qty}`);
+    }
+    await m.query(`UPDATE pharmacy_stock_lot SET qty_on_hand = qty_on_hand - $1, updated_at=now() WHERE id=$2`, [p.qty, p.lotId]);
+    const bal = (await m.query(`SELECT qty_on_hand FROM pharmacy_stock_lot WHERE id=$1`, [p.lotId])) as Row[];
+    await m.query(
+      `INSERT INTO pharmacy_lot_movement (tenant_id, lot_id, product_id, doc_type, doc_no, qty_out, balance_qty, narration)
+       VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7)`,
+      [p.lotId, p.productId, p.docType, p.docNo ?? null, p.qty, Number(bal[0]!.qty_on_hand), `${p.docType} ${p.docNo ?? ''}`.trim()],
+    );
+    const res = await this.inventoryDocs.applyStockMovement(m, {
+      productId: p.productId, docType: p.docType, docNo: p.docNo ?? null, qtyOut: p.qty,
+      narration: `${p.docType} ${p.docNo ?? ''}`.trim(),
+    });
+    return { valueMinor: res.unitCostMinor * p.qty, unitCostMinor: res.unitCostMinor, lotNo };
+  }
+
+  /** Expired lots (qty>0) as the write-off candidates — used to auto-build an expiry write-off. */
+  async expiredLotsInTx(m: Mgr) {
+    return (await m.query(
+      `SELECT id, product_id, lot_no, qty_on_hand, unit_cost_minor FROM pharmacy_stock_lot
+       WHERE deleted_at IS NULL AND status='ACTIVE' AND qty_on_hand > 0 AND expiry_date IS NOT NULL AND expiry_date < current_date
+       ORDER BY expiry_date ASC FOR UPDATE`,
+    )) as Row[];
   }
 
   // ── Lot queries / reports ─────────────────────────────────────────────────────

@@ -1,14 +1,20 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { EntityManager } from 'typeorm';
-import { type BaseEvent, EVENT_TYPES, type PharmacyDispenseCompletedV1 } from '@metaxperts/shared';
+import {
+  type BaseEvent,
+  EVENT_TYPES,
+  type PharmacyDispenseCompletedV1,
+  type PharmacyStockAdjustedV1,
+} from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { PharmacyService } from './pharmacy.service';
 import { PharmacyDispenseService } from './pharmacy-dispense.service';
-import { pharmacyDispenseVoucher, type PharmacyGlAccounts } from './pharmacy-gl.util';
+import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
+import { pharmacyAdjustmentVoucher, pharmacyDispenseVoucher, type PharmacyGlAccounts } from './pharmacy-gl.util';
 
 /**
  * Posts pharmacy dispenses to the general ledger. On `pharmacy.dispense_completed`, reads the
@@ -26,6 +32,7 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly pharmacy: PharmacyService,
     private readonly dispense: PharmacyDispenseService,
+    private readonly adjustments: PharmacyAdjustmentService,
     private readonly finance: FinanceService,
   ) {}
 
@@ -39,7 +46,12 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
       consumer: 'pharmacy-gl-dispense',
       handler: (event, m) => this.onDispenseCompleted(event, m),
     });
-    this.logger.log('Pharmacy GL consumer registered (pharmacy.dispense_completed → journal voucher)');
+    await this.consumer.register({
+      eventType: EVENT_TYPES.PHARMACY_STOCK_ADJUSTED,
+      consumer: 'pharmacy-gl-adjustment',
+      handler: (event, m) => this.onStockAdjusted(event, m),
+    });
+    this.logger.log('Pharmacy GL consumer registered (dispense + stock-adjustment → journal voucher)');
   }
 
   async onDispenseCompleted(event: BaseEvent, m: EntityManager): Promise<void> {
@@ -54,5 +66,19 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
     }
     await this.finance.postJournalInTx(m, voucher as CreateTransactionDto);
     this.logger.log(`posted pharmacy ${p.dispenseNo} (${dispense.status}) to GL`);
+  }
+
+  async onStockAdjusted(event: BaseEvent, m: EntityManager): Promise<void> {
+    const p = event.payload as PharmacyStockAdjustedV1;
+    const accounts = (await this.pharmacy.glConfigInTx(m)) as PharmacyGlAccounts;
+    const adj = await this.adjustments.adjustmentForGlInTx(m, p.adjustmentId);
+    if (!adj) return;
+    const voucher = pharmacyAdjustmentVoucher(accounts, adj);
+    if (!voucher) {
+      this.logger.debug(`skipping GL post for ${p.adjNo}: accounts not configured`);
+      return;
+    }
+    await this.finance.postJournalInTx(m, voucher as CreateTransactionDto);
+    this.logger.log(`posted pharmacy ${p.adjNo} (${adj.type}) to GL`);
   }
 }

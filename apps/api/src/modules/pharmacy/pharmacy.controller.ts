@@ -17,19 +17,24 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
+  AdjustStockDto,
   CreateDrugDto,
   DispenseDto,
   ExpiryQueryDto,
   ListDrugsQueryDto,
   ReceiveBatchDto,
   ReturnDispenseDto,
+  ReturnToVendorDto,
   SetPharmacyConfigDto,
   SetPharmacyGlConfigDto,
   UpdateDrugDto,
+  WriteOffDto,
+  WriteOffExpiredDto,
 } from './dto/pharmacy.dto';
 import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
 import { PharmacyDispenseService } from './pharmacy-dispense.service';
+import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
 
 /** Pharmacists/store keepers operate; tenant admins configure. */
 const OPERATE = [Role.INVENTORY_MANAGER, Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -43,6 +48,7 @@ export class PharmacyController {
     private readonly pharmacy: PharmacyService,
     private readonly stock: PharmacyStockService,
     private readonly dispensing: PharmacyDispenseService,
+    private readonly adjustments: PharmacyAdjustmentService,
   ) {}
 
   // ── Configuration ─────────────────────────────────────────────────────────────
@@ -156,5 +162,44 @@ export class PharmacyController {
   @Get('reports/controlled')
   controlledRegister(@Query('productId') productId?: string) {
     return this.dispensing.controlledRegister(productId);
+  }
+
+  // ── Stock adjustments (return-to-vendor / write-off / adjust) ───────────────────
+  @Post('rtv')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  returnToVendor(@Body() dto: ReturnToVendorDto) {
+    return this.adjustments.returnToVendor(dto);
+  }
+
+  @Post('write-off')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  writeOff(@Body() dto: WriteOffDto) {
+    return this.adjustments.writeOff(dto);
+  }
+
+  @Post('write-off-expired')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  writeOffExpired(@Body() dto: WriteOffExpiredDto) {
+    return this.adjustments.writeOffExpired(dto);
+  }
+
+  @Post('adjust')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  adjust(@Body() dto: AdjustStockDto) {
+    return this.adjustments.adjustStock(dto);
+  }
+
+  @Get('adjustments')
+  listAdjustments(@Query('type') type?: string) {
+    return this.adjustments.listAdjustments(type);
+  }
+
+  @Get('adjustments/:id')
+  getAdjustment(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adjustments.getAdjustment(id);
   }
 }

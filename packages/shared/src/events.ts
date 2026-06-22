@@ -94,6 +94,16 @@ export interface PharmacyDispenseCompletedV1 {
   lineCount: number;
 }
 
+export interface PharmacyStockAdjustedV1 {
+  adjustmentId: string;
+  adjNo: string;
+  /** RTV = return to vendor, WRITEOFF = expiry/damage, ADJUST = cycle-count correction. */
+  type: 'RTV' | 'WRITEOFF' | 'ADJUST';
+  /** Net inventory value moved in minor units (positive = inventory decreased). */
+  valueMinor: number;
+  currency: string;
+}
+
 export interface ProductionOrderCompletedV1 {
   orderId: string;
   orderNo: string;
@@ -233,6 +243,7 @@ export const EVENT_TYPES = {
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
   POS_SALE_COMPLETED: 'pos.sale_completed.v1',
   PHARMACY_DISPENSE_COMPLETED: 'pharmacy.dispense_completed.v1',
+  PHARMACY_STOCK_ADJUSTED: 'pharmacy.stock_adjusted.v1',
   PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
   ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
   ECOMMERCE_ORDER_PLACED: 'ecommerce.order_placed.v1',
@@ -259,6 +270,7 @@ export interface EventPayloads {
   'crm.lead_converted.v1': CrmLeadConvertedV1;
   'pos.sale_completed.v1': PosSaleCompletedV1;
   'pharmacy.dispense_completed.v1': PharmacyDispenseCompletedV1;
+  'pharmacy.stock_adjusted.v1': PharmacyStockAdjustedV1;
   'production.order_completed.v1': ProductionOrderCompletedV1;
   'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
   'ecommerce.order_placed.v1': EcommerceOrderPlacedV1;

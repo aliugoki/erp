@@ -5,6 +5,7 @@ import { PharmacyController } from './pharmacy.controller';
 import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
 import { PharmacyDispenseService } from './pharmacy-dispense.service';
+import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
 import { PharmacyGlConsumer } from './pharmacy-gl.consumer';
 
 /**
@@ -15,7 +16,7 @@ import { PharmacyGlConsumer } from './pharmacy-gl.consumer';
 @Module({
   imports: [InventoryModule, FinanceModule],
   controllers: [PharmacyController],
-  providers: [PharmacyService, PharmacyStockService, PharmacyDispenseService, PharmacyGlConsumer],
-  exports: [PharmacyService, PharmacyStockService, PharmacyDispenseService],
+  providers: [PharmacyService, PharmacyStockService, PharmacyDispenseService, PharmacyAdjustmentService, PharmacyGlConsumer],
+  exports: [PharmacyService, PharmacyStockService, PharmacyDispenseService, PharmacyAdjustmentService],
 })
 export class PharmacyModule {}

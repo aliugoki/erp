@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type DispenseForGl, type PharmacyGlAccounts, pharmacyDispenseVoucher } from './pharmacy-gl.util';
+import {
+  type AdjustmentForGl,
+  type DispenseForGl,
+  type PharmacyGlAccounts,
+  pharmacyAdjustmentVoucher,
+  pharmacyDispenseVoucher,
+} from './pharmacy-gl.util';
 
 const accounts: PharmacyGlAccounts = {
   clearingAccountId: 'clearing',
@@ -75,5 +81,37 @@ describe('pharmacyDispenseVoucher', () => {
     const { dr, cr } = sum(v.entries);
     expect(dr).toBe(cr);
     expect(dr).toBe(10500);
+  });
+});
+
+describe('pharmacyAdjustmentVoucher', () => {
+  const adj = (over: Partial<AdjustmentForGl>): AdjustmentForGl => ({
+    adjNo: 'WOF-000001', type: 'WRITEOFF', valueMinor: 5000, occurredOn: '2026-06-22', ...over,
+  });
+
+  it('write-off (inventory decreased): Dr write-off / Cr inventory, balanced', () => {
+    const v = pharmacyAdjustmentVoucher(accounts, adj({ type: 'WRITEOFF', valueMinor: 5000 }))!;
+    expect(v.entries.find((e) => e.accountId === 'wo')?.debitMinor).toBe(5000);
+    expect(v.entries.find((e) => e.accountId === 'inv')?.creditMinor).toBe(5000);
+    const { dr, cr } = sum(v.entries);
+    expect(dr).toBe(cr);
+  });
+
+  it('return-to-vendor debits clearing (not write-off)', () => {
+    const v = pharmacyAdjustmentVoucher(accounts, adj({ type: 'RTV', valueMinor: 3000 }))!;
+    expect(v.entries.find((e) => e.accountId === 'clearing')?.debitMinor).toBe(3000);
+    expect(v.entries.find((e) => e.accountId === 'inv')?.creditMinor).toBe(3000);
+  });
+
+  it('a write-up (negative value) reverses to Dr inventory / Cr write-off', () => {
+    const v = pharmacyAdjustmentVoucher(accounts, adj({ type: 'ADJUST', valueMinor: -2000 }))!;
+    expect(v.entries.find((e) => e.accountId === 'inv')?.debitMinor).toBe(2000);
+    expect(v.entries.find((e) => e.accountId === 'wo')?.creditMinor).toBe(2000);
+  });
+
+  it('returns null when inventory/counter accounts are missing or value is zero', () => {
+    expect(pharmacyAdjustmentVoucher({ ...accounts, inventoryAccountId: null }, adj({}))).toBeNull();
+    expect(pharmacyAdjustmentVoucher({ ...accounts, writeoffAccountId: null }, adj({ type: 'WRITEOFF' }))).toBeNull();
+    expect(pharmacyAdjustmentVoucher(accounts, adj({ valueMinor: 0 }))).toBeNull();
   });
 });

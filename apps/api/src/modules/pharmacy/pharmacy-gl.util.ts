@@ -82,3 +82,38 @@ export function pharmacyDispenseVoucher(a: PharmacyGlAccounts, d: DispenseForGl)
     entries,
   };
 }
+
+export interface AdjustmentForGl {
+  adjNo: string;
+  type: 'RTV' | 'WRITEOFF' | 'ADJUST';
+  /** Signed inventory value moved in minor units: positive = inventory decreased (RTV/WRITEOFF/ADJUST-out),
+   * negative = inventory increased (ADJUST-in). */
+  valueMinor: number;
+  occurredOn: string;
+}
+
+/**
+ * Build the GL voucher for a stock adjustment. WRITEOFF: Dr write-off / Cr inventory. RTV (return to
+ * vendor): Dr clearing / Cr inventory (settles against the supplier). ADJUST: a write-up debits
+ * inventory / credits write-off; a write-down does the reverse. `valueMinor` carries the sign
+ * (positive = inventory decreased). Returns null when the needed accounts aren't set or value is zero.
+ */
+export function pharmacyAdjustmentVoucher(a: PharmacyGlAccounts, adj: AdjustmentForGl): GlVoucher | null {
+  const magnitude = Math.abs(adj.valueMinor);
+  if (magnitude === 0 || !a.inventoryAccountId) return null;
+  const counter = adj.type === 'RTV' ? a.clearingAccountId : a.writeoffAccountId;
+  if (!counter) return null;
+
+  const decreased = adj.valueMinor > 0; // inventory went down
+  const entries: GlEntry[] = decreased
+    ? [{ accountId: counter, debitMinor: magnitude }, { accountId: a.inventoryAccountId, creditMinor: magnitude }]
+    : [{ accountId: a.inventoryAccountId, debitMinor: magnitude }, { accountId: counter, creditMinor: magnitude }];
+
+  return {
+    description: `Pharmacy ${adj.type} ${adj.adjNo}`,
+    voucherType: 'JV',
+    occurredOn: adj.occurredOn,
+    reference: adj.adjNo,
+    entries,
+  };
+}

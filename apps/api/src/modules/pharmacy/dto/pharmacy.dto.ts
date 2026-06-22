@@ -86,6 +86,8 @@ export class ReceiveBatchDto {
   @IsOptional() @IsUUID() vendorId?: string;
   @IsOptional() @IsUUID() warehouseId?: string;
   @IsOptional() @IsUUID() grnId?: string;
+  /** Receive against an inventory purchase order — updates its received quantities (batch-aware GRN). */
+  @IsOptional() @IsUUID() poId?: string;
   @IsOptional() @IsDateString() receivedOn?: string;
   @IsOptional() @IsString() currency?: string;
   @IsOptional() @IsString() notes?: string;
@@ -129,6 +131,47 @@ export class DispenseDto {
 
 export class ReturnDispenseDto {
   @IsOptional() @IsString() reason?: string;
+}
+
+// ── P3: stock adjustments (return-to-vendor / write-off / adjust) ────────────────
+export class LotMoveItemDto {
+  @IsUUID() lotId!: string;
+  @IsInt() @Min(1) qty!: number;
+}
+
+export class ReturnToVendorDto {
+  @IsOptional() @IsUUID() vendorId?: string;
+  @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsDateString() occurredOn?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LotMoveItemDto)
+  items!: LotMoveItemDto[];
+}
+
+export class WriteOffDto {
+  @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsDateString() occurredOn?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LotMoveItemDto)
+  items!: LotMoveItemDto[];
+}
+
+export class WriteOffExpiredDto {
+  @IsOptional() @IsString() reason?: string;
+}
+
+export class AdjustItemDto {
+  @IsUUID() lotId!: string;
+  @IsInt() @Min(1) qty!: number;
+  @IsIn(['IN', 'OUT']) direction!: 'IN' | 'OUT';
+}
+
+export class AdjustStockDto {
+  @IsOptional() @IsString() reason?: string;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsDateString() occurredOn?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => AdjustItemDto)
+  items!: AdjustItemDto[];
 }
 
 export class SetPharmacyGlConfigDto {
