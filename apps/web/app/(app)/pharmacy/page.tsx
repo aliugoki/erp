@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CalendarClock, ClipboardList, FlaskConical, Layers, Pill, Receipt, Search, Settings2, ShieldAlert, SlidersHorizontal, Wallet,
+  AlertTriangle, Building2, CalendarClock, ClipboardList, FlaskConical, Layers, Pill, Receipt, Search, Settings2, ShieldAlert, SlidersHorizontal, Truck, Wallet,
 } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { formatMoney } from '@/lib/utils';
@@ -19,8 +19,10 @@ import { DispenseCounter } from '@/components/pharmacy/dispense-counter';
 import { DispenseDetail } from '@/components/pharmacy/dispense-detail';
 import { PharmacySettings } from '@/components/pharmacy/pharmacy-settings';
 import { AdjustmentsList, LotActions } from '@/components/pharmacy/adjustments';
+import { WardRequisitions } from '@/components/pharmacy/ward';
+import { SalesOrders } from '@/components/pharmacy/sales-orders';
 
-type Section = 'drugs' | 'dispense' | 'dispenses' | 'batches' | 'controlled' | 'adjustments' | 'reports' | 'settings';
+type Section = 'drugs' | 'dispense' | 'dispenses' | 'batches' | 'controlled' | 'adjustments' | 'ward' | 'orders' | 'reports' | 'settings';
 
 export default function PharmacyPage() {
   const [section, setSection] = useState<Section>('drugs');
@@ -55,6 +57,9 @@ export default function PharmacyPage() {
       <RailItem icon={Layers} label="Batches & expiry" active={section === 'batches'} onClick={() => pick('batches')} tone="amber" />
       <RailItem icon={ShieldAlert} label="Controlled register" count={controlledCount} active={section === 'controlled'} onClick={() => pick('controlled')} tone="rose" />
       <RailItem icon={SlidersHorizontal} label="Adjustments" active={section === 'adjustments'} onClick={() => pick('adjustments')} tone="amber" />
+      <div className="my-1 border-t" />
+      <RailItem icon={Building2} label="Ward issues" active={section === 'ward'} onClick={() => pick('ward')} tone="sky" />
+      <RailItem icon={Truck} label="Sales orders" active={section === 'orders'} onClick={() => pick('orders')} tone="emerald" />
       <div className="my-1 border-t" />
       <RailItem icon={Wallet} label="Reports" active={section === 'reports'} onClick={() => pick('reports')} tone="violet" />
       <RailItem icon={Settings2} label="Settings" active={section === 'settings'} onClick={() => pick('settings')} />
@@ -135,6 +140,10 @@ export default function PharmacyPage() {
         </>
       ) : section === 'adjustments' ? (
         <AdjustmentsList />
+      ) : section === 'ward' ? (
+        <WardRequisitions />
+      ) : section === 'orders' ? (
+        <SalesOrders />
       ) : (
         <><PaneHeader><span className="flex-1 text-sm font-medium">{section === 'dispense' ? 'Dispensing counter' : section === 'reports' ? 'Analytics' : 'Configuration'}</span></PaneHeader>
           <PaneBody className="p-2">
@@ -161,6 +170,8 @@ export default function PharmacyPage() {
         : section === 'batches' ? (sel ? <LotDetail lot={(lots.data ?? []).find((l) => l.id === sel)} /> : <EmptyDetail icon={Layers} title="Batch & expiry" hint="Receive batches with lot numbers + expiry; dispensing consumes them first-expiry-first-out." />)
         : section === 'controlled' ? <EmptyDetail icon={ShieldAlert} title="Controlled register" hint="An immutable audit of every controlled/narcotic movement — dispense out, return in." />
         : section === 'adjustments' ? <EmptyDetail icon={SlidersHorizontal} title="Stock adjustments" hint="Return-to-vendor, write-offs and corrections — each values through the ledger and posts to the GL. Open a batch under ‘Batches & expiry’ for per-lot actions." />
+        : section === 'ward' ? <EmptyDetail icon={Building2} title="Hospital ward issues" hint="A ward raises a requisition; a pharmacist approves and issues it — issuing rings a HOSPITAL_ISSUE dispense (FEFO + GL) charged to the ward/patient." />
+        : section === 'orders' ? <EmptyDetail icon={Truck} title="Wholesale sales orders" hint="B2B orders: confirm then fulfil — fulfilment rings a WHOLESALE dispense, applying each drug's quantity-break price tier." />
         : section === 'reports' ? <PharmacyReports nearExpiry={nearExpiry.data ?? []} /> : <PharmacySettings />}
     </Pane>
   );

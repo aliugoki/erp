@@ -174,6 +174,58 @@ export class AdjustStockDto {
   items!: AdjustItemDto[];
 }
 
+// ── P4: hospital ward requisitions + wholesale sales orders + price tiers ─────────
+export const WARD_PRIORITIES = ['ROUTINE', 'URGENT', 'STAT'] as const;
+
+export class QtyItemDto {
+  @IsUUID() productId!: string;
+  @IsInt() @Min(1) qty!: number;
+}
+
+export class CreateWardRequisitionDto {
+  @IsString() @MinLength(1) ward!: string;
+  @IsOptional() @IsString() requestedBy?: string;
+  @IsOptional() @IsIn(WARD_PRIORITIES) priority?: (typeof WARD_PRIORITIES)[number];
+  @IsOptional() @IsString() patientRef?: string;
+  @IsOptional() @IsDateString() neededBy?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => QtyItemDto)
+  items!: QtyItemDto[];
+}
+
+export class IssueWardRequisitionDto {
+  @IsOptional() @IsString() notes?: string;
+}
+
+export class SalesOrderItemDto {
+  @IsUUID() productId!: string;
+  @IsInt() @Min(1) qty!: number;
+  @IsOptional() @IsInt() @Min(0) unitPriceMinor?: number;
+}
+
+export class CreateSalesOrderDto {
+  @IsOptional() @IsUUID() customerId?: string;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsDateString() expectedOn?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => SalesOrderItemDto)
+  items!: SalesOrderItemDto[];
+}
+
+export class FulfillSalesOrderDto {
+  @IsOptional() @IsString() notes?: string;
+}
+
+export class PriceTierDto {
+  @IsInt() @Min(1) minQty!: number;
+  @IsInt() @Min(0) unitPriceMinor!: number;
+}
+
+export class SetPriceTiersDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => PriceTierDto)
+  tiers!: PriceTierDto[];
+}
+
 export class SetPharmacyGlConfigDto {
   @IsOptional() @IsUUID() inventoryAccountId?: string;
   @IsOptional() @IsUUID() revenueAccountId?: string;

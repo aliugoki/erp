@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import type { CreateDrugDto, SetPharmacyConfigDto, UpdateDrugDto, ListDrugsQueryDto } from './dto/pharmacy.dto';
-import { type Row, money } from './pharmacy.util';
+import { type PriceTier, type Row, money } from './pharmacy.util';
 
 type Mgr = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
 
@@ -276,6 +276,37 @@ export class PharmacyService {
         );
       }
       return this.glConfigInTx(m);
+    });
+  }
+
+  // ── Quantity-break price tiers (per product) ──────────────────────────────────
+  async getPriceTiers(productId: string) {
+    return this.tenantTx.run(async (m) => this.priceTiersInTx(m, productId));
+  }
+
+  async priceTiersInTx(m: Mgr, productId: string): Promise<PriceTier[]> {
+    const rows = (await m.query(
+      `SELECT min_qty, unit_price_minor FROM pharmacy_price_tier WHERE product_id=$1 AND deleted_at IS NULL ORDER BY min_qty ASC`,
+      [productId],
+    )) as Row[];
+    return rows.map((r) => ({ minQty: Number(r.min_qty), unitPriceMinor: Number(r.unit_price_minor) }));
+  }
+
+  /** Replace the whole tier set for a product (idempotent). */
+  async setPriceTiers(productId: string, tiers: PriceTier[]) {
+    return this.tenantTx.run(async (m) => {
+      const prod = (await m.query(`SELECT id FROM inventory_product WHERE id=$1 AND deleted_at IS NULL`, [productId])) as Row[];
+      if (!prod[0]) throw new BadRequestException('Unknown product for this tenant');
+      await m.query(`DELETE FROM pharmacy_price_tier WHERE product_id=$1`, [productId]);
+      const sorted = [...tiers].filter((t) => t.minQty >= 1 && t.unitPriceMinor >= 0).sort((a, b) => a.minQty - b.minQty);
+      for (const t of sorted) {
+        await m.query(
+          `INSERT INTO pharmacy_price_tier (tenant_id, product_id, min_qty, unit_price_minor)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3)`,
+          [productId, t.minQty, t.unitPriceMinor],
+        );
+      }
+      return this.priceTiersInTx(m, productId);
     });
   }
 

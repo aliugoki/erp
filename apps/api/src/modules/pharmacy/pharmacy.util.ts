@@ -10,6 +10,8 @@ export const DOC_PREFIX = {
   RTV: 'RTV', // return to vendor
   WOF: 'WOF', // expiry write-off
   ADJ: 'PADJ', // stock adjustment
+  WREQ: 'WREQ', // ward requisition (hospital)
+  SO: 'PSO', // wholesale sales order
 } as const;
 
 export type Row = Record<string, unknown>;
@@ -108,6 +110,24 @@ export function computeDispenseLine(line: DispenseLineInput): ComputedDispenseLi
   const taxableMinor = grossMinor - discountMinor;
   const taxMinor = Math.floor((taxableMinor * (line.taxBp ?? 0)) / 10000);
   return { grossMinor, discountMinor, taxMinor, lineTotalMinor: taxableMinor + taxMinor };
+}
+
+export interface PriceTier {
+  minQty: number;
+  unitPriceMinor: number;
+}
+
+/**
+ * Resolve the unit price for `qty` against quantity-break tiers: pick the price of the highest `minQty`
+ * tier that `qty` reaches (a bulk order qualifies for the cheaper bulk rate). Falls back to the list
+ * price when no tier applies. Deterministic; integer minor units.
+ */
+export function resolveTierPrice(tiers: PriceTier[], qty: number, fallbackMinor: number): number {
+  let best: PriceTier | null = null;
+  for (const t of tiers) {
+    if (qty >= t.minQty && (best === null || t.minQty > best.minQty)) best = t;
+  }
+  return best ? best.unitPriceMinor : fallbackMinor;
 }
 
 export class InsufficientStockError extends Error {

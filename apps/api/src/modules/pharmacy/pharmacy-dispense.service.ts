@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import type { EntityManager } from 'typeorm';
 import { EVENT_TYPES } from '@metaxperts/shared';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { DispenseDto, ReturnDispenseDto } from './dto/pharmacy.dto';
+import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
-import { DOC_PREFIX, type Row, computeDispenseLine, formatDocNo, money } from './pharmacy.util';
+import { DOC_PREFIX, type Row, computeDispenseLine, formatDocNo, money, resolveTierPrice } from './pharmacy.util';
 import type { DispenseForGl } from './pharmacy-gl.util';
 
 type Mgr = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
@@ -23,6 +25,7 @@ export class PharmacyDispenseService {
   constructor(
     private readonly tenantTx: TenantTransactionService,
     private readonly stock: PharmacyStockService,
+    private readonly pharmacy: PharmacyService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -38,8 +41,14 @@ export class PharmacyDispenseService {
   }
 
   async createDispense(dto: DispenseDto) {
+    return this.tenantTx.run((m) => this.createDispenseInTx(m, dto));
+  }
+
+  /** Ring a dispense inside the caller's transaction — used by ward-issue / order-fulfilment so the
+   * dispense commits atomically with the requisition/order status update. */
+  async createDispenseInTx(m: EntityManager, dto: DispenseDto) {
     const type = dto.type ?? 'RETAIL_SALE';
-    return this.tenantTx.run(async (m) => {
+    {
       const cfgRows = (await m.query(
         `SELECT controlled_register_enabled, allow_dispense_without_stock, default_tax_bp, currency
          FROM pharmacy_config WHERE deleted_at IS NULL LIMIT 1`,
@@ -89,7 +98,12 @@ export class PharmacyDispenseService {
         if (!prodRows[0]) throw new BadRequestException('Unknown product for this tenant');
         const prod = prodRows[0];
 
-        const unitPrice = item.unitPriceMinor ?? Number(prod.sell_price_minor);
+        // Price: explicit override → else a qualifying quantity-break tier → else the list price.
+        let unitPrice = item.unitPriceMinor;
+        if (unitPrice === undefined) {
+          const tiers = await this.pharmacy.priceTiersInTx(m, item.productId);
+          unitPrice = resolveTierPrice(tiers, item.qty, Number(prod.sell_price_minor));
+        }
         const taxBp = item.taxBp ?? defaultTaxBp;
         const line = computeDispenseLine({ qty: item.qty, unitPriceMinor: unitPrice, discountMinor: item.discountMinor, taxBp });
 
@@ -160,7 +174,7 @@ export class PharmacyDispenseService {
         subtotal: money(subtotal, currency), discount: money(discount, currency), tax: money(tax, currency),
         total: money(total, currency), cogs: money(cogs, currency), lines: dto.items.length,
       };
-    });
+    }
   }
 
   async returnDispense(id: string, dto: ReturnDispenseDto) {

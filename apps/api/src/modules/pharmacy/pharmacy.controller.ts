@@ -19,14 +19,19 @@ import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AdjustStockDto,
   CreateDrugDto,
+  CreateSalesOrderDto,
+  CreateWardRequisitionDto,
   DispenseDto,
   ExpiryQueryDto,
+  FulfillSalesOrderDto,
+  IssueWardRequisitionDto,
   ListDrugsQueryDto,
   ReceiveBatchDto,
   ReturnDispenseDto,
   ReturnToVendorDto,
   SetPharmacyConfigDto,
   SetPharmacyGlConfigDto,
+  SetPriceTiersDto,
   UpdateDrugDto,
   WriteOffDto,
   WriteOffExpiredDto,
@@ -35,6 +40,8 @@ import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
 import { PharmacyDispenseService } from './pharmacy-dispense.service';
 import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
+import { PharmacyWardService } from './pharmacy-ward.service';
+import { PharmacySalesOrderService } from './pharmacy-sales-order.service';
 
 /** Pharmacists/store keepers operate; tenant admins configure. */
 const OPERATE = [Role.INVENTORY_MANAGER, Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -49,6 +56,8 @@ export class PharmacyController {
     private readonly stock: PharmacyStockService,
     private readonly dispensing: PharmacyDispenseService,
     private readonly adjustments: PharmacyAdjustmentService,
+    private readonly ward: PharmacyWardService,
+    private readonly salesOrders: PharmacySalesOrderService,
   ) {}
 
   // ── Configuration ─────────────────────────────────────────────────────────────
@@ -201,5 +210,95 @@ export class PharmacyController {
   @Get('adjustments/:id')
   getAdjustment(@Param('id', ParseUUIDPipe) id: string) {
     return this.adjustments.getAdjustment(id);
+  }
+
+  // ── Quantity-break price tiers (per product) ────────────────────────────────────
+  @Get('products/:productId/price-tiers')
+  getPriceTiers(@Param('productId', ParseUUIDPipe) productId: string) {
+    return this.pharmacy.getPriceTiers(productId);
+  }
+
+  @Put('products/:productId/price-tiers')
+  @Roles(...OPERATE)
+  setPriceTiers(@Param('productId', ParseUUIDPipe) productId: string, @Body() dto: SetPriceTiersDto) {
+    return this.pharmacy.setPriceTiers(productId, dto.tiers);
+  }
+
+  // ── Hospital: ward requisitions ─────────────────────────────────────────────────
+  @Post('ward-requisitions')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  createWardRequisition(@Body() dto: CreateWardRequisitionDto) {
+    return this.ward.create(dto);
+  }
+
+  @Get('ward-requisitions')
+  listWardRequisitions(@Query('status') status?: string) {
+    return this.ward.list(status);
+  }
+
+  @Get('ward-requisitions/:id')
+  getWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ward.get(id);
+  }
+
+  @Post('ward-requisitions/:id/submit')
+  @Roles(...OPERATE)
+  submitWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ward.setStatus(id, 'SUBMITTED');
+  }
+
+  @Post('ward-requisitions/:id/approve')
+  @Roles(...OPERATE)
+  approveWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ward.setStatus(id, 'APPROVED');
+  }
+
+  @Post('ward-requisitions/:id/cancel')
+  @Roles(...OPERATE)
+  cancelWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ward.setStatus(id, 'CANCELLED');
+  }
+
+  @Post('ward-requisitions/:id/issue')
+  @Roles(...OPERATE)
+  issueWardRequisition(@Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueWardRequisitionDto) {
+    return this.ward.issue(id, dto);
+  }
+
+  // ── Wholesale: B2B sales orders ─────────────────────────────────────────────────
+  @Post('sales-orders')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  createSalesOrder(@Body() dto: CreateSalesOrderDto) {
+    return this.salesOrders.create(dto);
+  }
+
+  @Get('sales-orders')
+  listSalesOrders(@Query('status') status?: string) {
+    return this.salesOrders.list(status);
+  }
+
+  @Get('sales-orders/:id')
+  getSalesOrder(@Param('id', ParseUUIDPipe) id: string) {
+    return this.salesOrders.get(id);
+  }
+
+  @Post('sales-orders/:id/confirm')
+  @Roles(...OPERATE)
+  confirmSalesOrder(@Param('id', ParseUUIDPipe) id: string) {
+    return this.salesOrders.setStatus(id, 'CONFIRMED');
+  }
+
+  @Post('sales-orders/:id/cancel')
+  @Roles(...OPERATE)
+  cancelSalesOrder(@Param('id', ParseUUIDPipe) id: string) {
+    return this.salesOrders.setStatus(id, 'CANCELLED');
+  }
+
+  @Post('sales-orders/:id/fulfill')
+  @Roles(...OPERATE)
+  fulfillSalesOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: FulfillSalesOrderDto) {
+    return this.salesOrders.fulfill(id, dto);
   }
 }

@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { PriceTiersCard } from '@/components/pharmacy/price-tiers';
 import {
   DRUG_FORMS,
   DRUG_SCHEDULES,
@@ -192,6 +193,8 @@ export function DrugDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
             </div>
           )}
         </section>
+
+        <PriceTiersCard productId={drug.productId} currency={drug.currency} />
       </PaneBody>
     </>
   );

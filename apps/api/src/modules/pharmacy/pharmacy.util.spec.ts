@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allocateFefo, InsufficientStockError, type LotLike } from './pharmacy.util';
+import { allocateFefo, InsufficientStockError, type LotLike, resolveTierPrice } from './pharmacy.util';
 
 const lot = (id: string, expiry: string | null, qty: number, cost = 100, received?: string): LotLike => ({
   id,
@@ -54,5 +54,27 @@ describe('allocateFefo', () => {
     expect(allocateFefo([lot('a', '2026-06-30', 0), lot('b', '2026-07-31', 4)], 4).allocations[0]!.lotId).toBe('b');
     expect(() => allocateFefo([lot('a', null, 5)], 0)).toThrow();
     expect(() => allocateFefo([lot('a', null, 5)], -2)).toThrow();
+  });
+});
+
+describe('resolveTierPrice', () => {
+  const tiers = [
+    { minQty: 10, unitPriceMinor: 900 },
+    { minQty: 50, unitPriceMinor: 800 },
+    { minQty: 100, unitPriceMinor: 700 },
+  ];
+
+  it('uses the list price below the first tier', () => {
+    expect(resolveTierPrice(tiers, 5, 1000)).toBe(1000);
+  });
+
+  it('picks the highest qualifying tier (bulk gets the bulk rate)', () => {
+    expect(resolveTierPrice(tiers, 10, 1000)).toBe(900);
+    expect(resolveTierPrice(tiers, 60, 1000)).toBe(800);
+    expect(resolveTierPrice(tiers, 250, 1000)).toBe(700);
+  });
+
+  it('falls back to the list price when there are no tiers', () => {
+    expect(resolveTierPrice([], 1000, 1000)).toBe(1000);
   });
 });
