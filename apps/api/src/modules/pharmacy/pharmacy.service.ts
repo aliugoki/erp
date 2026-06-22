@@ -116,7 +116,7 @@ export class PharmacyService {
             dto.therapeuticCategory ?? null, dto.barcode ?? null, dto.reorderLevel ?? null, dto.maxLevel ?? null, dto.storage ?? null,
           ],
         )) as Row[];
-        return this.getDrug(rows[0]!.id as string);
+        return this.getDrugInTx(m, rows[0]!.id as string);
       } catch (err) {
         if (isUnique(err)) throw new BadRequestException('This product is already a registered drug');
         if (isForeignKey(err)) throw new BadRequestException('Unknown product for this tenant');
@@ -148,31 +148,35 @@ export class PharmacyService {
   }
 
   async getDrug(id: string) {
-    return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(
-        `SELECT d.id, d.product_id, p.sku, p.name, d.generic_name, d.brand, d.manufacturer, d.strength, d.form,
-                d.pack_size, d.schedule, d.rx_required, d.controlled, d.therapeutic_category, d.barcode,
-                d.reorder_level, d.max_level, d.storage, d.status,
-                p.on_hand, p.sell_price_minor, p.cost_price_minor, p.stock_value_minor, p.currency
-         FROM pharmacy_drug d JOIN inventory_product p ON p.id = d.product_id
-         WHERE d.id=$1 AND d.deleted_at IS NULL`,
-        [id],
-      )) as Row[];
-      if (!rows[0]) throw new NotFoundException('Drug not found');
-      const r = rows[0];
-      const cur = r.currency as string;
-      return {
-        id: r.id, productId: r.product_id, sku: r.sku, name: r.name,
-        genericName: r.generic_name ?? null, brand: r.brand ?? null, manufacturer: r.manufacturer ?? null,
-        strength: r.strength ?? null, form: r.form, packSize: Number(r.pack_size), schedule: r.schedule,
-        rxRequired: Boolean(r.rx_required), controlled: Boolean(r.controlled),
-        therapeuticCategory: r.therapeutic_category ?? null, barcode: r.barcode ?? null,
-        reorderLevel: Number(r.reorder_level), maxLevel: r.max_level == null ? null : Number(r.max_level),
-        storage: r.storage, status: r.status,
-        onHand: Number(r.on_hand), sellPrice: money(r.sell_price_minor, cur), costPrice: money(r.cost_price_minor, cur),
-        stockValue: money(r.stock_value_minor, cur), currency: cur,
-      };
-    });
+    return this.tenantTx.run((m) => this.getDrugInTx(m, id));
+  }
+
+  /** Read a drug WITHIN an existing transaction — so create/update can return the row they just wrote
+   * (a fresh tenantTx.run would be a new transaction that cannot see the uncommitted write). */
+  private async getDrugInTx(m: Mgr, id: string) {
+    const rows = (await m.query(
+      `SELECT d.id, d.product_id, p.sku, p.name, d.generic_name, d.brand, d.manufacturer, d.strength, d.form,
+              d.pack_size, d.schedule, d.rx_required, d.controlled, d.therapeutic_category, d.barcode,
+              d.reorder_level, d.max_level, d.storage, d.status,
+              p.on_hand, p.sell_price_minor, p.cost_price_minor, p.stock_value_minor, p.currency
+       FROM pharmacy_drug d JOIN inventory_product p ON p.id = d.product_id
+       WHERE d.id=$1 AND d.deleted_at IS NULL`,
+      [id],
+    )) as Row[];
+    if (!rows[0]) throw new NotFoundException('Drug not found');
+    const r = rows[0];
+    const cur = r.currency as string;
+    return {
+      id: r.id, productId: r.product_id, sku: r.sku, name: r.name,
+      genericName: r.generic_name ?? null, brand: r.brand ?? null, manufacturer: r.manufacturer ?? null,
+      strength: r.strength ?? null, form: r.form, packSize: Number(r.pack_size), schedule: r.schedule,
+      rxRequired: Boolean(r.rx_required), controlled: Boolean(r.controlled),
+      therapeuticCategory: r.therapeutic_category ?? null, barcode: r.barcode ?? null,
+      reorderLevel: Number(r.reorder_level), maxLevel: r.max_level == null ? null : Number(r.max_level),
+      storage: r.storage, status: r.status,
+      onHand: Number(r.on_hand), sellPrice: money(r.sell_price_minor, cur), costPrice: money(r.cost_price_minor, cur),
+      stockValue: money(r.stock_value_minor, cur), currency: cur,
+    };
   }
 
   async updateDrug(id: string, dto: UpdateDrugDto) {
@@ -197,13 +201,13 @@ export class PharmacyService {
       set('max_level', dto.maxLevel);
       set('storage', dto.storage);
       set('status', dto.status);
-      if (!sets.length) return this.getDrug(id);
+      if (!sets.length) return this.getDrugInTx(m, id);
       const res = (await m.query(
         `UPDATE pharmacy_drug SET ${sets.join(', ')}, updated_at=now() WHERE id=$${params.push(id)} AND deleted_at IS NULL RETURNING id`,
         params,
       )) as Row[];
       if (!res[0]) throw new NotFoundException('Drug not found');
-      return this.getDrug(id);
+      return this.getDrugInTx(m, id);
     });
   }
 
