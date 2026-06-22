@@ -130,6 +130,32 @@ export function resolveTierPrice(tiers: PriceTier[], qty: number, fallbackMinor:
   return best ? best.unitPriceMinor : fallbackMinor;
 }
 
+export interface AbcInput {
+  productId: string;
+  valueMinor: number;
+}
+export interface AbcRow extends AbcInput {
+  cumulativePct: number;
+  abcClass: 'A' | 'B' | 'C';
+}
+
+/**
+ * ABC (Pareto) classification by consumption value: sort items by value descending, then label each
+ * by where it sits on the cumulative-value curve — A = the vital few up to `aPct`% of total value, B
+ * up to `bPct`%, C the trivial many. Deterministic; empty/zero-total input yields all 'C'.
+ */
+export function classifyAbc(items: AbcInput[], aPct = 80, bPct = 95): AbcRow[] {
+  const sorted = [...items].sort((a, b) => b.valueMinor - a.valueMinor);
+  const total = sorted.reduce((s, i) => s + i.valueMinor, 0);
+  let cum = 0;
+  return sorted.map((i) => {
+    cum += i.valueMinor;
+    const cumulativePct = total > 0 ? (cum / total) * 100 : 100;
+    const abcClass: 'A' | 'B' | 'C' = cumulativePct <= aPct ? 'A' : cumulativePct <= bPct ? 'B' : 'C';
+    return { ...i, cumulativePct, abcClass };
+  });
+}
+
 export class InsufficientStockError extends Error {
   constructor(
     public readonly requested: number,

@@ -21,6 +21,7 @@ import { PharmacySettings } from '@/components/pharmacy/pharmacy-settings';
 import { AdjustmentsList, LotActions } from '@/components/pharmacy/adjustments';
 import { WardRequisitions } from '@/components/pharmacy/ward';
 import { SalesOrders } from '@/components/pharmacy/sales-orders';
+import { ReportsDashboard } from '@/components/pharmacy/reports-dashboard';
 
 type Section = 'drugs' | 'dispense' | 'dispenses' | 'batches' | 'controlled' | 'adjustments' | 'ward' | 'orders' | 'reports' | 'settings';
 
@@ -172,7 +173,7 @@ export default function PharmacyPage() {
         : section === 'adjustments' ? <EmptyDetail icon={SlidersHorizontal} title="Stock adjustments" hint="Return-to-vendor, write-offs and corrections — each values through the ledger and posts to the GL. Open a batch under ‘Batches & expiry’ for per-lot actions." />
         : section === 'ward' ? <EmptyDetail icon={Building2} title="Hospital ward issues" hint="A ward raises a requisition; a pharmacist approves and issues it — issuing rings a HOSPITAL_ISSUE dispense (FEFO + GL) charged to the ward/patient." />
         : section === 'orders' ? <EmptyDetail icon={Truck} title="Wholesale sales orders" hint="B2B orders: confirm then fulfil — fulfilment rings a WHOLESALE dispense, applying each drug's quantity-break price tier." />
-        : section === 'reports' ? <PharmacyReports nearExpiry={nearExpiry.data ?? []} /> : <PharmacySettings />}
+        : section === 'reports' ? <ReportsDashboard /> : <PharmacySettings />}
     </Pane>
   );
 
@@ -210,30 +211,6 @@ function LotDetail({ lot }: { lot?: Lot }) {
           <Field label="Receipt" value={lot.docNo ?? '—'} />
         </dl>
         <div className="max-w-md"><LotActions lot={lot} /></div>
-      </PaneBody>
-    </>
-  );
-}
-
-function PharmacyReports({ nearExpiry }: { nearExpiry: Lot[] }) {
-  const value = nearExpiry.reduce((s, l) => s + l.value.amountMinor, 0);
-  return (
-    <>
-      <PaneHeader><span className="flex-1 font-semibold">Stock & expiry analytics</span></PaneHeader>
-      <PaneBody className="p-5">
-        <div className="mb-5 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border p-4"><p className="text-sm text-muted-foreground">Lots expiring ≤90d</p><p className="mt-1 text-2xl font-bold tabular-nums">{nearExpiry.length}</p></div>
-          <div className="rounded-xl border p-4"><p className="text-sm text-muted-foreground">Value at risk</p><p className="mt-1 text-2xl font-bold tabular-nums">{formatMoney(value)}</p></div>
-        </div>
-        <h3 className="mb-2 text-sm font-semibold">Soonest to expire</h3>
-        {nearExpiry.length === 0 ? <Hint>Nothing expiring in the next 90 days.</Hint> : (
-          <ul className="divide-y rounded-xl border">{nearExpiry.slice(0, 30).map((l) => (
-            <li key={l.id} className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
-              <div className="min-w-0"><div className="truncate font-medium">{l.name}</div><div className="truncate text-xs text-muted-foreground">Lot {l.lotNo} · {l.qtyOnHand} units</div></div>
-              <ExpiryBadge expiryDate={l.expiryDate} />
-            </li>
-          ))}</ul>
-        )}
       </PaneBody>
     </>
   );

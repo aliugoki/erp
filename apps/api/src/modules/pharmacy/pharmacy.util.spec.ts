@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allocateFefo, InsufficientStockError, type LotLike, resolveTierPrice } from './pharmacy.util';
+import { allocateFefo, classifyAbc, InsufficientStockError, type LotLike, resolveTierPrice } from './pharmacy.util';
 
 const lot = (id: string, expiry: string | null, qty: number, cost = 100, received?: string): LotLike => ({
   id,
@@ -76,5 +76,26 @@ describe('resolveTierPrice', () => {
 
   it('falls back to the list price when there are no tiers', () => {
     expect(resolveTierPrice([], 1000, 1000)).toBe(1000);
+  });
+});
+
+describe('classifyAbc', () => {
+  it('labels the vital few A and the trivial many C, in value order', () => {
+    const rows = classifyAbc([
+      { productId: 'p1', valueMinor: 8000 },
+      { productId: 'p2', valueMinor: 1500 },
+      { productId: 'p3', valueMinor: 400 },
+      { productId: 'p4', valueMinor: 100 },
+    ]);
+    expect(rows[0]!.productId).toBe('p1'); // sorted by value desc
+    expect(rows[0]!.abcClass).toBe('A'); // 80% cumulative
+    expect(rows[1]!.abcClass).toBe('B'); // 95% cumulative
+    expect(rows.at(-1)!.abcClass).toBe('C');
+    expect(Math.round(rows.at(-1)!.cumulativePct)).toBe(100);
+  });
+
+  it('handles empty / zero-total input as all C', () => {
+    expect(classifyAbc([])).toEqual([]);
+    expect(classifyAbc([{ productId: 'x', valueMinor: 0 }])[0]!.abcClass).toBe('C');
   });
 });

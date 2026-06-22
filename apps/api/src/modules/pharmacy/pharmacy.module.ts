@@ -8,6 +8,7 @@ import { PharmacyDispenseService } from './pharmacy-dispense.service';
 import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
 import { PharmacyWardService } from './pharmacy-ward.service';
 import { PharmacySalesOrderService } from './pharmacy-sales-order.service';
+import { PharmacyReportsService } from './pharmacy-reports.service';
 import { PharmacyGlConsumer } from './pharmacy-gl.consumer';
 
 /**
@@ -25,6 +26,7 @@ import { PharmacyGlConsumer } from './pharmacy-gl.consumer';
     PharmacyAdjustmentService,
     PharmacyWardService,
     PharmacySalesOrderService,
+    PharmacyReportsService,
     PharmacyGlConsumer,
   ],
   exports: [PharmacyService, PharmacyStockService, PharmacyDispenseService, PharmacyAdjustmentService, PharmacyWardService, PharmacySalesOrderService],

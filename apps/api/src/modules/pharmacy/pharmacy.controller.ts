@@ -42,6 +42,7 @@ import { PharmacyDispenseService } from './pharmacy-dispense.service';
 import { PharmacyAdjustmentService } from './pharmacy-adjustment.service';
 import { PharmacyWardService } from './pharmacy-ward.service';
 import { PharmacySalesOrderService } from './pharmacy-sales-order.service';
+import { PharmacyReportsService } from './pharmacy-reports.service';
 
 /** Pharmacists/store keepers operate; tenant admins configure. */
 const OPERATE = [Role.INVENTORY_MANAGER, Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -58,6 +59,7 @@ export class PharmacyController {
     private readonly adjustments: PharmacyAdjustmentService,
     private readonly ward: PharmacyWardService,
     private readonly salesOrders: PharmacySalesOrderService,
+    private readonly reports: PharmacyReportsService,
   ) {}
 
   // ── Configuration ─────────────────────────────────────────────────────────────
@@ -300,5 +302,41 @@ export class PharmacyController {
   @Roles(...OPERATE)
   fulfillSalesOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: FulfillSalesOrderDto) {
     return this.salesOrders.fulfill(id, dto);
+  }
+
+  // ── Reports & analytics ─────────────────────────────────────────────────────────
+  @Get('reports/dashboard')
+  reportDashboard() {
+    return this.reports.dashboard();
+  }
+
+  @Get('reports/sales')
+  reportSales(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.reports.sales(from, to);
+  }
+
+  @Get('reports/consumption')
+  reportConsumption(@Query('from') from?: string, @Query('to') to?: string, @Query('limit') limit?: string) {
+    return this.reports.consumption(from, to, limit ? Number(limit) : 20);
+  }
+
+  @Get('reports/margin')
+  reportMargin() {
+    return this.reports.margin();
+  }
+
+  @Get('reports/abc')
+  reportAbc() {
+    return this.reports.abc();
+  }
+
+  @Get('reports/valuation')
+  reportValuation() {
+    return this.reports.valuation();
+  }
+
+  @Get('reports/expiry-summary')
+  reportExpirySummary() {
+    return this.reports.expirySummary();
   }
 }
