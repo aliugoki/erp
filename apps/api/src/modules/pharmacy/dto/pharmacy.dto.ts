@@ -96,3 +96,48 @@ export class ReceiveBatchDto {
 export class ExpiryQueryDto {
   @IsOptional() @IsInt() @Min(0) @Type(() => Number) days?: number;
 }
+
+export const DISPENSE_TYPES = ['RETAIL_SALE', 'RX', 'HOSPITAL_ISSUE', 'WHOLESALE'] as const;
+export const PAYMENT_METHODS = ['CASH', 'CARD', 'CREDIT', 'INSURANCE'] as const;
+
+export class DispenseItemDto {
+  @IsUUID() productId!: string;
+  @IsInt() @Min(1) qty!: number;
+  /** Override the drug's list price (minor units). Defaults to the product sell price. */
+  @IsOptional() @IsInt() @Min(0) unitPriceMinor?: number;
+  @IsOptional() @IsInt() @Min(0) discountMinor?: number;
+  /** Per-line tax in basis points (e.g. 500 = 5%). Defaults to the pharmacy config tax. */
+  @IsOptional() @IsInt() @Min(0) taxBp?: number;
+}
+
+export class DispenseDto {
+  @IsOptional() @IsIn(DISPENSE_TYPES) type?: (typeof DISPENSE_TYPES)[number];
+  @IsOptional() @IsUUID() customerId?: string;
+  @IsOptional() @IsString() patientRef?: string;
+  @IsOptional() @IsString() prescriber?: string;
+  @IsOptional() @IsString() prescriptionRef?: string;
+  @IsOptional() @IsString() ward?: string;
+  @IsOptional() @IsString() currency?: string;
+  @IsOptional() @IsIn(PAYMENT_METHODS) paymentMethod?: (typeof PAYMENT_METHODS)[number];
+  @IsOptional() @IsString() insurer?: string;
+  @IsOptional() @IsInt() @Min(0) insuranceCoverMinor?: number;
+  @IsOptional() @IsDateString() occurredOn?: string;
+  @IsOptional() @IsString() notes?: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => DispenseItemDto)
+  items!: DispenseItemDto[];
+}
+
+export class ReturnDispenseDto {
+  @IsOptional() @IsString() reason?: string;
+}
+
+export class SetPharmacyGlConfigDto {
+  @IsOptional() @IsUUID() inventoryAccountId?: string;
+  @IsOptional() @IsUUID() revenueAccountId?: string;
+  @IsOptional() @IsUUID() cogsAccountId?: string;
+  @IsOptional() @IsUUID() taxAccountId?: string;
+  @IsOptional() @IsUUID() discountAccountId?: string;
+  @IsOptional() @IsUUID() receivableAccountId?: string;
+  @IsOptional() @IsUUID() clearingAccountId?: string;
+  @IsOptional() @IsUUID() writeoffAccountId?: string;
+}

@@ -18,14 +18,18 @@ import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   CreateDrugDto,
+  DispenseDto,
   ExpiryQueryDto,
   ListDrugsQueryDto,
   ReceiveBatchDto,
+  ReturnDispenseDto,
   SetPharmacyConfigDto,
+  SetPharmacyGlConfigDto,
   UpdateDrugDto,
 } from './dto/pharmacy.dto';
 import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
+import { PharmacyDispenseService } from './pharmacy-dispense.service';
 
 /** Pharmacists/store keepers operate; tenant admins configure. */
 const OPERATE = [Role.INVENTORY_MANAGER, Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
@@ -38,6 +42,7 @@ export class PharmacyController {
   constructor(
     private readonly pharmacy: PharmacyService,
     private readonly stock: PharmacyStockService,
+    private readonly dispensing: PharmacyDispenseService,
   ) {}
 
   // ── Configuration ─────────────────────────────────────────────────────────────
@@ -109,5 +114,47 @@ export class PharmacyController {
   @Get('reports/expired')
   expiredStock() {
     return this.stock.expiredStock();
+  }
+
+  // ── Dispensing & sales ────────────────────────────────────────────────────────
+  @Post('dispense')
+  @Roles(...OPERATE)
+  @HttpCode(HttpStatus.CREATED)
+  dispense(@Body() dto: DispenseDto) {
+    return this.dispensing.createDispense(dto);
+  }
+
+  @Get('dispenses')
+  listDispenses(@Query('type') type?: string, @Query('status') status?: string) {
+    return this.dispensing.listDispenses({ type, status });
+  }
+
+  @Get('dispenses/:id')
+  getDispense(@Param('id', ParseUUIDPipe) id: string) {
+    return this.dispensing.getDispense(id);
+  }
+
+  @Post('dispenses/:id/return')
+  @Roles(...OPERATE)
+  returnDispense(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReturnDispenseDto) {
+    return this.dispensing.returnDispense(id, dto);
+  }
+
+  // ── GL account map ────────────────────────────────────────────────────────────
+  @Get('gl-config')
+  getGlConfig() {
+    return this.pharmacy.getGlConfig();
+  }
+
+  @Put('gl-config')
+  @Roles(...ADMIN)
+  setGlConfig(@Body() dto: SetPharmacyGlConfigDto) {
+    return this.pharmacy.setGlConfig(dto as Record<string, string | undefined>);
+  }
+
+  // ── Controlled-substance register ──────────────────────────────────────────────
+  @Get('reports/controlled')
+  controlledRegister(@Query('productId') productId?: string) {
+    return this.dispensing.controlledRegister(productId);
   }
 }

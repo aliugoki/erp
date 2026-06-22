@@ -83,6 +83,33 @@ export function allocateFefo(
   return { allocations, costMinor, shortBy: Math.max(0, remaining) };
 }
 
+// ── Dispense pricing (integer minor units) ──────────────────────────────────────
+export interface DispenseLineInput {
+  qty: number;
+  unitPriceMinor: number;
+  discountMinor?: number;
+  taxBp?: number; // basis points (e.g. 500 = 5%)
+}
+
+export interface ComputedDispenseLine {
+  grossMinor: number;
+  discountMinor: number;
+  taxMinor: number;
+  lineTotalMinor: number;
+}
+
+/**
+ * Price one dispense line: gross = qty × unit price; discount clamped to [0, gross]; tax = floor(taxable
+ * × bp / 10000) on the post-discount amount; line total = taxable + tax. All integer minor units.
+ */
+export function computeDispenseLine(line: DispenseLineInput): ComputedDispenseLine {
+  const grossMinor = line.qty * line.unitPriceMinor;
+  const discountMinor = Math.min(Math.max(line.discountMinor ?? 0, 0), grossMinor);
+  const taxableMinor = grossMinor - discountMinor;
+  const taxMinor = Math.floor((taxableMinor * (line.taxBp ?? 0)) / 10000);
+  return { grossMinor, discountMinor, taxMinor, lineTotalMinor: taxableMinor + taxMinor };
+}
+
 export class InsufficientStockError extends Error {
   constructor(
     public readonly requested: number,

@@ -81,6 +81,19 @@ export interface PosSaleCompletedV1 {
   lineCount: number;
 }
 
+export interface PharmacyDispenseCompletedV1 {
+  dispenseId: string;
+  dispenseNo: string;
+  /** Dispense channel — drives revenue recognition (retail counter, prescription, ward issue, B2B). */
+  type: 'RETAIL_SALE' | 'RX' | 'HOSPITAL_ISSUE' | 'WHOLESALE';
+  /** Net total in minor units. */
+  totalMinor: number;
+  /** Cost of goods dispensed (weighted-average), for margin reporting + the GL cost side. */
+  cogsMinor: number;
+  currency: string;
+  lineCount: number;
+}
+
 export interface ProductionOrderCompletedV1 {
   orderId: string;
   orderNo: string;
@@ -219,6 +232,7 @@ export const EVENT_TYPES = {
   CRM_DEAL_CLOSED: 'crm.deal_closed.v1',
   CRM_LEAD_CONVERTED: 'crm.lead_converted.v1',
   POS_SALE_COMPLETED: 'pos.sale_completed.v1',
+  PHARMACY_DISPENSE_COMPLETED: 'pharmacy.dispense_completed.v1',
   PRODUCTION_ORDER_COMPLETED: 'production.order_completed.v1',
   ASSET_DEPRECIATION_POSTED: 'asset.depreciation_posted.v1',
   ECOMMERCE_ORDER_PLACED: 'ecommerce.order_placed.v1',
@@ -244,6 +258,7 @@ export interface EventPayloads {
   'crm.deal_closed.v1': CrmDealClosedV1;
   'crm.lead_converted.v1': CrmLeadConvertedV1;
   'pos.sale_completed.v1': PosSaleCompletedV1;
+  'pharmacy.dispense_completed.v1': PharmacyDispenseCompletedV1;
   'production.order_completed.v1': ProductionOrderCompletedV1;
   'asset.depreciation_posted.v1': AssetDepreciationPostedV1;
   'ecommerce.order_placed.v1': EcommerceOrderPlacedV1;

@@ -218,6 +218,63 @@ export class PharmacyService {
     });
   }
 
+  // ── GL account map ────────────────────────────────────────────────────────────
+  async getGlConfig() {
+    return this.tenantTx.run((m) => this.glConfigInTx(m));
+  }
+
+  async glConfigInTx(m: Mgr) {
+    const rows = (await m.query(
+      `SELECT inventory_account_id, revenue_account_id, cogs_account_id, tax_account_id, discount_account_id,
+              receivable_account_id, clearing_account_id, writeoff_account_id
+       FROM pharmacy_gl_config WHERE deleted_at IS NULL LIMIT 1`,
+    )) as Row[];
+    const r = rows[0];
+    return {
+      inventoryAccountId: (r?.inventory_account_id as string) ?? null,
+      revenueAccountId: (r?.revenue_account_id as string) ?? null,
+      cogsAccountId: (r?.cogs_account_id as string) ?? null,
+      taxAccountId: (r?.tax_account_id as string) ?? null,
+      discountAccountId: (r?.discount_account_id as string) ?? null,
+      receivableAccountId: (r?.receivable_account_id as string) ?? null,
+      clearingAccountId: (r?.clearing_account_id as string) ?? null,
+      writeoffAccountId: (r?.writeoff_account_id as string) ?? null,
+    };
+  }
+
+  async setGlConfig(dto: Record<string, string | undefined>) {
+    return this.tenantTx.run(async (m) => {
+      const map: Array<[string, string | undefined]> = [
+        ['inventory_account_id', dto.inventoryAccountId],
+        ['revenue_account_id', dto.revenueAccountId],
+        ['cogs_account_id', dto.cogsAccountId],
+        ['tax_account_id', dto.taxAccountId],
+        ['discount_account_id', dto.discountAccountId],
+        ['receivable_account_id', dto.receivableAccountId],
+        ['clearing_account_id', dto.clearingAccountId],
+        ['writeoff_account_id', dto.writeoffAccountId],
+      ];
+      const exists = (await m.query(`SELECT id FROM pharmacy_gl_config WHERE deleted_at IS NULL LIMIT 1`)) as Row[];
+      if (exists[0]) {
+        const sets: string[] = [];
+        const params: unknown[] = [];
+        for (const [col, val] of map) if (val !== undefined) sets.push(`${col}=$${params.push(val)}`);
+        if (sets.length) {
+          await m.query(`UPDATE pharmacy_gl_config SET ${sets.join(', ')}, updated_at=now() WHERE id=$${params.push(exists[0].id)}`, params);
+        }
+      } else {
+        const cols = map.map(([c]) => c);
+        const params = map.map(([, v]) => v ?? null);
+        await m.query(
+          `INSERT INTO pharmacy_gl_config (tenant_id, ${cols.join(', ')})
+           VALUES (current_setting('app.tenant_id')::uuid, ${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
+          params,
+        );
+      }
+      return this.glConfigInTx(m);
+    });
+  }
+
   private mapDrugList(r: Row) {
     const cur = r.currency as string;
     return {

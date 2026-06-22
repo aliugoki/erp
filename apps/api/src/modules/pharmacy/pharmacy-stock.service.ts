@@ -168,6 +168,34 @@ export class PharmacyStockService {
     return { cogsMinor, allocations: allocations.map((a) => ({ lotId: a.lotId, lotNo: a.lotNo, expiryDate: a.expiryDate, qty: a.qty })) };
   }
 
+  /**
+   * Restock seam (used by returns/void): put `qty` back — into the original lot when `lotId` is known
+   * (revives a depleted lot), and into the valued ledger at `unitCostMinor`. Runs in the caller's tx.
+   */
+  async restockInTx(
+    m: Mgr,
+    p: { productId: string; lotId?: string | null; qty: number; unitCostMinor: number; docType: string; docNo?: string | null },
+  ): Promise<void> {
+    if (p.qty <= 0) return;
+    if (p.lotId) {
+      await m.query(`UPDATE pharmacy_stock_lot SET qty_on_hand = qty_on_hand + $1, updated_at=now() WHERE id=$2`, [p.qty, p.lotId]);
+      const bal = (await m.query(`SELECT qty_on_hand FROM pharmacy_stock_lot WHERE id=$1`, [p.lotId])) as Row[];
+      await m.query(
+        `INSERT INTO pharmacy_lot_movement (tenant_id, lot_id, product_id, doc_type, doc_no, qty_in, balance_qty, narration)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7)`,
+        [p.lotId, p.productId, p.docType, p.docNo ?? null, p.qty, Number(bal[0]!.qty_on_hand), `${p.docType} ${p.docNo ?? ''}`.trim()],
+      );
+    }
+    await this.inventoryDocs.applyStockMovement(m, {
+      productId: p.productId,
+      docType: p.docType,
+      docNo: p.docNo ?? null,
+      qtyIn: p.qty,
+      unitCostMinor: p.unitCostMinor,
+      narration: `${p.docType} ${p.docNo ?? ''}`.trim(),
+    });
+  }
+
   // ── Lot queries / reports ─────────────────────────────────────────────────────
   async listLots(productId?: string) {
     return this.tenantTx.run(async (m) => {
