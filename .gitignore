@@ -41,6 +41,7 @@ venv/
 # Claude Code runtime state (keep settings.json + agents/, ignore transient state)
 .claude/scheduled_tasks.lock
 .claude/*.lock
+.claude/settings.local.json
 
 # User docs / office lock files (left untracked by the build loop)
 .~lock.*#
