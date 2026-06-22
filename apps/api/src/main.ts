@@ -32,9 +32,12 @@ async function bootstrap(): Promise<void> {
   app.use(json({ limit: maxBody }));
   app.use(urlencoded({ extended: true, limit: maxBody }));
 
-  // CORS locked to the configured origins (Phase 8.3); empty list reflects the origin (dev only).
+  // CORS: locked to the configured allowlist (CORS_ORIGINS). When unset, reflect the origin in
+  // development only; in production deny cross-origin outright (the web is same-origin via /api, so it
+  // never needs CORS — a permissive reflect-any-with-credentials default would be a footgun).
   const origins = config.get('CORS_ORIGINS', { infer: true }).split(',').map((o) => o.trim()).filter(Boolean);
-  app.enableCors({ origin: origins.length ? origins : true, credentials: true });
+  const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
+  app.enableCors({ origin: origins.length ? origins : !isProd, credentials: true });
 
   // Reject unknown fields; coerce/validate DTOs.
   app.useGlobalPipes(
