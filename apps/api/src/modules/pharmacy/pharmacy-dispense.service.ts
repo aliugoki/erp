@@ -224,6 +224,35 @@ export class PharmacyDispenseService {
     });
   }
 
+  /**
+   * Re-emit the dispense's GL event so the consumer (re)posts its journal voucher — used to back-post
+   * dispenses rung BEFORE the GL accounts were mapped (the original event was processed but skipped
+   * posting). A fresh event id is not in `processed_event`, so the consumer handles it. Admin-only;
+   * calling it again would post another voucher, so use it deliberately.
+   */
+  async repostGl(id: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT dispense_no, type, total_minor, cogs_minor, currency, status,
+                (SELECT count(*) FROM pharmacy_dispense_item WHERE dispense_id=$1)::int AS line_count
+         FROM pharmacy_dispense WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Row[];
+      if (!rows[0]) throw new NotFoundException('Dispense not found');
+      const r = rows[0];
+      await this.outbox.write(m, EVENT_TYPES.PHARMACY_DISPENSE_COMPLETED, {
+        dispenseId: id,
+        dispenseNo: r.dispense_no,
+        type: r.type,
+        totalMinor: Number(r.total_minor),
+        cogsMinor: Number(r.cogs_minor),
+        currency: r.currency,
+        lineCount: Number(r.line_count),
+      });
+      return { id, dispenseNo: r.dispense_no, status: r.status, reposted: true };
+    });
+  }
+
   // ── Reads ──────────────────────────────────────────────────────────────────────
   async listDispenses(query: { type?: string; status?: string }) {
     return this.tenantTx.run((m) => {

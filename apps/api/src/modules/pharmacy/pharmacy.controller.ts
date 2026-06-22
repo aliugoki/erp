@@ -157,6 +157,13 @@ export class PharmacyController {
     return this.dispensing.returnDispense(id, dto);
   }
 
+  /** Re-emit a dispense's GL event (admin) — back-post vouchers for dispenses rung before GL setup. */
+  @Post('dispenses/:id/repost-gl')
+  @Roles(...ADMIN)
+  repostGl(@Param('id', ParseUUIDPipe) id: string) {
+    return this.dispensing.repostGl(id);
+  }
+
   // ── GL account map ────────────────────────────────────────────────────────────
   @Get('gl-config')
   getGlConfig() {
