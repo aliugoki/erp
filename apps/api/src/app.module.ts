@@ -21,6 +21,7 @@ import { CrmModule } from './modules/crm/crm.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProductionModule } from './modules/production/production.module';
+import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
@@ -72,6 +73,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     StorageModule,
     PosModule,
     ProductionModule,
+    PharmacyModule,
     AssetsModule,
     ProjectsModule,
     EcommerceModule,
