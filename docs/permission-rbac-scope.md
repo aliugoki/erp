@@ -72,13 +72,17 @@ gap). Default-deny is preserved throughout.
 - For each module, add `@ShadowPermissions(...)` next to the existing `@Roles(...)` (log-only; cannot
   open access), grow the catalog in lockstep, and add an **authorization matrix test** asserting the
   permission maps to the same principals the role check allows. One PR per module group.
-- ✅ **Finance** — all 26 role-gated write endpoints tagged; finance permission group grown to 14
-  (`account`/`voucher` write+post / `invoice` / `bill` / `payment` / `vendor` / `customer` / `period` /
-  `reconciliation` / `costcenter` / `budget` / `currency`); `test/finance-authz-matrix.spec.ts` asserts
-  every finance write perm maps to FINANCE_MANAGER + admins only. Live: a real FINANCE_MANAGER exercises
-  the tagged writes with **0 divergences**.
-- ☐ Remaining modules: HR, Inventory, CRM, Sales, POS, Helpdesk, Projects, Assets, Production, Pharmacy,
-  Ecommerce, Subscriptions, Reporting, AI (one PR each; HR/Inventory/CRM already have a pilot tag).
+- ✅ **Finance** — all 26 role-gated write endpoints tagged; finance permission group grown to 14;
+  `test/finance-authz-matrix.spec.ts`. Live-proven with a real FINANCE_MANAGER (0 divergences).
+- ✅ **HR** — all 43 write endpoints across 4 controllers (`hr`, `hr-enterprise`, `hr-policy`,
+  `hr-profile`) tagged; hr permission group grown to 12 (`employee`/`department`/`org`/`attendance`/
+  `leave`/`payroll`/`performance`/`lifecycle`/`document`/`policy`/`profile`). Live: HR_MANAGER, 0 divergences.
+- ✅ **Inventory** — all 13 write endpoints tagged; group grown to 5 (`product`/`stock`/`category`/
+  `warehouse`). Live: INVENTORY_MANAGER, 0 divergences.
+- 🔁 Shared `test/module-authz-matrix.spec.ts` parametrises the matrix per module (hr, inventory; finance
+  has its own dedicated spec).
+- ☐ Remaining modules: CRM, Sales, POS, Helpdesk, Projects, Assets, Production, Pharmacy, Ecommerce,
+  Subscriptions, Reporting, AI (one PR each; CRM already has a pilot tag).
 
 **Phase C — Flip to permissions.**
 - Once all modules are tagged and matrix-green, remove the redundant `@Roles(...)` from business
