@@ -12,7 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { HrEnterpriseService } from './hr-enterprise.service';
@@ -52,7 +52,7 @@ export class HrEnterpriseController {
 
   @Post('leave-types')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   @HttpCode(HttpStatus.CREATED)
   createLeaveType(@Body() dto: CreateLeaveTypeDto) {
     return this.hr.createLeaveType(dto);
@@ -60,14 +60,14 @@ export class HrEnterpriseController {
 
   @Patch('leave-types/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   updateLeaveType(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLeaveTypeDto) {
     return this.hr.updateLeaveType(id, dto);
   }
 
   @Delete('leave-types/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteLeaveType(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteLeaveType(id);
@@ -75,7 +75,7 @@ export class HrEnterpriseController {
 
   @Post('leave-balances')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   setLeaveBalance(@Body() dto: SetLeaveBalanceDto) {
     return this.hr.setLeaveBalance(dto);
   }
@@ -92,7 +92,7 @@ export class HrEnterpriseController {
 
   @Post('leave-requests')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   @HttpCode(HttpStatus.CREATED)
   createLeaveRequest(@Body() dto: CreateLeaveRequestDto) {
     return this.hr.createLeaveRequest(dto);
@@ -100,7 +100,7 @@ export class HrEnterpriseController {
 
   @Patch('leave-requests/:id/decide')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:leave:write')
+  @Permissions('hr:leave:write')
   decideLeave(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DecideLeaveDto) {
     return this.hr.decideLeave(id, dto);
   }
@@ -113,7 +113,7 @@ export class HrEnterpriseController {
 
   @Post('salary-components')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   @HttpCode(HttpStatus.CREATED)
   createComponent(@Body() dto: CreateSalaryComponentDto) {
     return this.hr.createComponent(dto);
@@ -121,14 +121,14 @@ export class HrEnterpriseController {
 
   @Patch('salary-components/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   updateComponent(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSalaryComponentDto) {
     return this.hr.updateComponent(id, dto);
   }
 
   @Delete('salary-components/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteComponent(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteComponent(id);
@@ -141,7 +141,7 @@ export class HrEnterpriseController {
 
   @Post('payroll/runs')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   @HttpCode(HttpStatus.CREATED)
   createRun(@Body() dto: CreatePayrollRunDto) {
     return this.hr.createPayrollRun(dto);
@@ -149,14 +149,14 @@ export class HrEnterpriseController {
 
   @Patch('payroll/runs/:id/approve')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   approveRun(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.updateRunStatus(id, 'APPROVED');
   }
 
   @Patch('payroll/runs/:id/pay')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:payroll:write')
+  @Permissions('hr:payroll:write')
   payRun(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.updateRunStatus(id, 'PAID');
   }
@@ -179,7 +179,7 @@ export class HrEnterpriseController {
 
   @Post('reviews')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:performance:write')
+  @Permissions('hr:performance:write')
   @HttpCode(HttpStatus.CREATED)
   createReview(@Body() dto: CreateReviewDto) {
     return this.hr.createReview(dto);
@@ -187,7 +187,7 @@ export class HrEnterpriseController {
 
   @Patch('reviews/:id/submit')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:performance:write')
+  @Permissions('hr:performance:write')
   submitReview(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.submitReview(id);
   }
@@ -199,7 +199,7 @@ export class HrEnterpriseController {
 
   @Post('goals')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:performance:write')
+  @Permissions('hr:performance:write')
   @HttpCode(HttpStatus.CREATED)
   createGoal(@Body() dto: CreateGoalDto) {
     return this.hr.createGoal(dto);
@@ -207,7 +207,7 @@ export class HrEnterpriseController {
 
   @Patch('goals/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:performance:write')
+  @Permissions('hr:performance:write')
   updateGoal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateGoalDto) {
     return this.hr.updateGoal(id, dto);
   }
@@ -215,7 +215,7 @@ export class HrEnterpriseController {
   // ── Lifecycle ───────────────────────────────────────────────────────────────────
   @Post('employees/:id/lifecycle')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:lifecycle:write')
+  @Permissions('hr:lifecycle:write')
   @HttpCode(HttpStatus.CREATED)
   lifecycle(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LifecycleEventDto) {
     return this.hr.recordLifecycleEvent(id, dto);
@@ -228,7 +228,7 @@ export class HrEnterpriseController {
 
   @Post('documents')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:document:write')
+  @Permissions('hr:document:write')
   @HttpCode(HttpStatus.CREATED)
   addDocument(@Body() dto: CreateDocumentDto) {
     return this.hr.addDocument(dto);
@@ -243,7 +243,7 @@ export class HrEnterpriseController {
   // Hyphenated paths so they don't collide with the core `attendance/:employeeId` route.
   @Post('attendance-log')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:attendance:write')
+  @Permissions('hr:attendance:write')
   @HttpCode(HttpStatus.CREATED)
   logAttendance(@Body() dto: LogAttendanceDto) {
     return this.hr.logAttendance(dto);
@@ -251,7 +251,7 @@ export class HrEnterpriseController {
 
   @Post('attendance-bulk')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:attendance:write')
+  @Permissions('hr:attendance:write')
   bulkAttendance(@Body() dto: BulkAttendanceDto) {
     return this.hr.bulkLogAttendance(dto);
   }

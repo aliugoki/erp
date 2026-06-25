@@ -1,4 +1,4 @@
-import { ArrayNotEmpty, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CustomRoleDto {
   @IsString()
@@ -11,9 +11,17 @@ export class CustomRoleDto {
   @MaxLength(280)
   description?: string;
 
-  /** Built-in capability roles this custom role bundles. */
+  /** Built-in capability roles this custom role bundles (optional if `permissions` are given). */
+  @IsOptional()
   @IsArray()
-  @ArrayNotEmpty()
   @IsString({ each: true })
-  memberRoles!: string[];
+  memberRoles?: string[];
+
+  /** Fine-grained catalog permissions this custom role grants directly (Path 2). */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  permissions?: string[];
+
+  // Validated server-side: a role must grant at least one capability or permission.
 }

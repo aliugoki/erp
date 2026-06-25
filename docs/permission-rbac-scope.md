@@ -98,15 +98,28 @@ gap). Default-deny is preserved throughout.
 - 🔁 Matrices: shared `module-authz-matrix` (hr/inventory/crm/sales) + dedicated finance / helpdesk /
   phase-b-batch specs.
 
-**Phase C — Flip to permissions.**
-- Once all modules are tagged and matrix-green, remove the redundant `@Roles(...)` from business
-  endpoints (keep `@Roles(SUPER_ADMIN)` on platform routes). `PermissionsGuard` is now authoritative.
-- `tenant_role.permissions` migration; role-builder UI switches to a grouped **permission checkbox**
-  picker (keeping the capability-bundle shortcut as presets).
-- Stop expanding custom roles to built-ins in the token; resolve permissions instead.
+**Phase C — Flip to permissions. ✅ SHIPPED.**
+- ✅ `@ShadowPermissions` renamed to the real enforcing **`@Permissions`** across all controllers
+  (shadow decorator deleted). `PermissionsGuard` is now **authoritative**, enforcing against the
+  principal's effective permissions; `@Permissions` used on every business endpoint.
+- ✅ **`RolesGuard` defers** to `PermissionsGuard` when a route carries `@Permissions` — so a custom
+  permission-only role reaches the endpoint without holding a specific built-in role. The redundant
+  `@Roles(...)` lines were **kept in place** (RolesGuard ignores them when a permission tag is present)
+  — a smaller, reversible diff than deleting ~250 decorators; Phase D may remove them.
+- ✅ The access token gains a **`perms` claim** = effective permissions resolved at issue from built-in
+  roles' `ROLE_PERMISSIONS` + each custom role's member-role permissions and its own direct
+  permissions (`RbacService.effectivePermissionsForUser`, Redis-cached). The `roles` claim
+  (built-in-expanded) is retained for platform/admin `@Roles(SUPER_ADMIN/TENANT_ADMIN)` routes.
+- ✅ `tenant_role.permissions` migration (`1726400000000`); custom-role CRUD accepts `permissions`
+  (validated against the catalog); role-builder UI gains a grouped **permission picker** alongside the
+  capability presets. A role may now be capabilities-only, permissions-only, or both.
+- Live-proven: built-in roles unchanged (no-op flip); a permission-only "Invoice Clerk"
+  (`roles=[]`, `perms=[finance:invoice:write]`) can POST `finance/invoices` but is denied
+  `finance/accounts`/`hr`; refresh preserves `perms`; live permission edits propagate on re-login.
 
-**Phase D — Cleanup.**
-- Remove dead role-permission shims; write ADR-010; update `CLAUDE.md` and this doc's status.
+**Phase D — Cleanup (optional, not yet done).**
+- Remove the now-redundant `@Roles(...)` from permission-tagged business endpoints; write ADR-010;
+  update `CLAUDE.md`. Deferred — the system is fully permission-enforced and correct as-is.
 
 ## 5. Risks & mitigations
 

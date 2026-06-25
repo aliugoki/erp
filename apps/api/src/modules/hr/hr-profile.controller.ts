@@ -11,7 +11,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { HrProfileService } from './hr-profile.service';
@@ -33,14 +33,14 @@ export class HrProfileController {
 
   @Patch('employees/:id/profile')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:profile:write')
+  @Permissions('hr:profile:write')
   updateProfile(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEmployeeProfileDto) {
     return this.profile.updateProfile(id, dto);
   }
 
   @Post('employees/:id/education')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:profile:write')
+  @Permissions('hr:profile:write')
   @HttpCode(HttpStatus.CREATED)
   addEducation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateEducationDto) {
     return this.profile.addEducation(id, dto);
@@ -48,7 +48,7 @@ export class HrProfileController {
 
   @Delete('education/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:profile:write')
+  @Permissions('hr:profile:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteEducation(@Param('id', ParseUUIDPipe) id: string) {
     return this.profile.deleteEducation(id);
@@ -56,7 +56,7 @@ export class HrProfileController {
 
   @Post('employees/:id/experience')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:profile:write')
+  @Permissions('hr:profile:write')
   @HttpCode(HttpStatus.CREATED)
   addExperience(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateExperienceDto) {
     return this.profile.addExperience(id, dto);
@@ -64,7 +64,7 @@ export class HrProfileController {
 
   @Delete('experience/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('hr:profile:write')
+  @Permissions('hr:profile:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteExperience(@Param('id', ParseUUIDPipe) id: string) {
     return this.profile.deleteExperience(id);
