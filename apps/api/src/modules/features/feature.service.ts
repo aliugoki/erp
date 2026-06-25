@@ -49,6 +49,18 @@ export class FeatureService {
     return (await this.enabledKeys(tenantId)).has(featureKey);
   }
 
+  /** The full catalog with everything enabled — the SUPER_ADMIN (platform operator) view, so a
+   * platform account can reach every module regardless of any tenant's entitlements. */
+  catalogAllEnabled() {
+    return FEATURE_MODULES.map((mod) => ({
+      key: mod.key,
+      name: mod.name,
+      description: mod.description,
+      enabled: true,
+      features: mod.features.map((f) => ({ ...f, enabled: true })),
+    }));
+  }
+
   /** Catalog annotated with this tenant's enabled flags — drives the web nav. */
   async catalogForTenant(tenantId: string) {
     const enabled = await this.enabledKeys(tenantId);

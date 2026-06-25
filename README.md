@@ -310,9 +310,24 @@ This is the easy, point-and-click way.
    one click and give them to the customer. They log in at the same URL and should change the
    password on first sign-in.
 
-**Suspending / reactivating.** Each company row has a **Suspend** (or **Activate**) button. Suspending
-a company **immediately blocks all of its users from logging in** — this is enforced by the backend,
-not merely hidden in the UI. Reactivating restores access. The super-admin is never affected.
+**Managing a company.** Click any company row to open its **management panel**, where you can:
+
+- **Rename** the company (its public store slug stays the same so existing links keep working).
+- **Suspend / reactivate** it — suspending **immediately blocks all of its users from logging in**
+  (enforced by the backend, not just hidden in the UI). The super-admin is never affected.
+- **Apply a plan** (Starter / Business / Enterprise) to re-provision which modules it has.
+- **Manage its users**: see everyone in the company, **add a user** (with a role such as
+  TENANT_ADMIN, FINANCE_MANAGER, …), **reset a user's password** (the new login secret is shown once
+  to hand over, and all of that user's sessions are signed out), and **activate / deactivate** a user.
+
+The dashboard also shows a KPI strip — total companies, active, and suspended.
+
+**Changing your own password.** Anyone (including the super-admin) can change their own password from
+the **account menu** (top-right) → **Change password**. For safety this signs you out of all devices,
+so you log back in with the new password.
+
+> **Security tip.** The default super-admin password is a well-known seed value — sign in and change
+> it immediately via the account menu before any real use.
 
 ### Option B — the API (for automation / scripting)
 
@@ -336,9 +351,17 @@ Other super-admin endpoints (all require the bearer token above):
 | Action | Request |
 |---|---|
 | List all companies | `GET /tenants` |
+| Company KPIs (total/active/suspended) | `GET /tenants/stats` |
 | Look up one company | `GET /tenants/<id>` |
+| Rename a company | `PATCH /tenants/<id>` with `{"name":"New Name"}` |
 | Suspend a company | `PATCH /tenants/<id>/status` with `{"status":"suspended"}` |
 | Reactivate a company | `PATCH /tenants/<id>/status` with `{"status":"active"}` |
+| Change a company's plan | `PATCH /tenants/<id>/plan` with `{"plan":"enterprise"}` |
+| List a company's users | `GET /tenants/<id>/users` |
+| Add a user to a company | `POST /tenants/<id>/users` with `{"email":"…","password":"…","roles":["TENANT_ADMIN"]}` |
+| Reset a user's password | `PATCH /tenants/<id>/users/<userId>/password` with `{"newPassword":"…"}` |
+| Activate/deactivate a user | `PATCH /tenants/<id>/users/<userId>/status` with `{"isActive":false}` |
+| Change your own password | `PATCH /me/password` with `{"currentPassword":"…","newPassword":"…"}` |
 
 > **How credentials work.** You don't create the user separately and email them a password. The
 > single "create company" call takes the admin's email and an initial password and creates everything

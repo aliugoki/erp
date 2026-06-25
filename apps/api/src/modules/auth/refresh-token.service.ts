@@ -41,6 +41,9 @@ export class RefreshTokenService {
   private familyKey(familyId: string): string {
     return `fam:${familyId}`;
   }
+  private userKey(userId: string): string {
+    return `usr:${userId}`;
+  }
 
   /** Issue a brand-new token + family (login). */
   async issue(userId: string, tenantId: string): Promise<IssuedRefresh> {
@@ -84,6 +87,14 @@ export class RefreshTokenService {
     await this.redis.del(this.familyKey(familyId));
   }
 
+  /** Revoke EVERY session of a user across all devices — used after a password change/reset so old
+   * sessions can't outlive the credential. Best-effort: a missing user index is simply a no-op. */
+  async revokeAllForUser(userId: string): Promise<void> {
+    const families = await this.redis.smembers(this.userKey(userId));
+    for (const familyId of families) await this.revokeFamily(familyId);
+    await this.redis.del(this.userKey(userId));
+  }
+
   private async get(token: string): Promise<RefreshRecord | null> {
     const raw = await this.redis.get(this.tokenKey(token));
     return raw ? (JSON.parse(raw) as RefreshRecord) : null;
@@ -97,6 +108,9 @@ export class RefreshTokenService {
       .set(this.tokenKey(token), JSON.stringify(record), 'EX', this.ttlSeconds)
       .sadd(this.familyKey(familyId), token)
       .expire(this.familyKey(familyId), this.ttlSeconds)
+      // Index families by user so a password change can revoke every session at once.
+      .sadd(this.userKey(userId), familyId)
+      .expire(this.userKey(userId), this.ttlSeconds)
       .exec();
     return token;
   }

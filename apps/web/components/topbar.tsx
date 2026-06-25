@@ -1,5 +1,6 @@
 'use client';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { useState } from 'react';
+import { KeyRound, LogOut, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,9 +13,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { NotificationBell } from '@/components/notification-bell';
+import { ChangePasswordDialog } from '@/components/change-password-dialog';
 
 export function Topbar({ title }: { title: string }) {
   const { user, logout } = useAuth();
+  const [pwOpen, setPwOpen] = useState(false);
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/60 glass px-6">
       <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
@@ -43,12 +46,17 @@ export function Topbar({ title }: { title: string }) {
               </p>
             </div>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setTimeout(() => setPwOpen(true), 0)}>
+              <KeyRound className="size-4" />
+              Change password
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void logout()}>
               <LogOut className="size-4" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
       </div>
     </header>
   );
