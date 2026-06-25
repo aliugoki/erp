@@ -55,13 +55,18 @@ checks** without opening or breaking access.
 Each phase is independently shippable and leaves the system **green and enforcing** (no half-migrated
 gap). Default-deny is preserved throughout.
 
-**Phase A — Catalog + resolution (no enforcement change).**
-- Author the permission catalog (registry + metadata, grouped by module).
-- Expand `ROLE_PERMISSIONS` so every built-in role's permission set covers the endpoints it can already
-  reach today (derive from the current `@Roles` usage — this is the mapping table).
-- Add `RbacService.permissionsForUser` (cached) + `GET /tenant/roles/permissions`.
-- **Dual-run:** compute effective permissions but keep enforcing by role. Add telemetry that logs when
-  the role decision and the (shadow) permission decision disagree. Ship; watch for divergence.
+**Phase A — Catalog + resolution (no enforcement change). ✅ SHIPPED.**
+- ✅ Permission catalog registry (`auth/rbac/permission-catalog.ts`), grouped by module.
+- ✅ `ROLE_PERMISSIONS` formalised against the catalog; a unit test (`test/rbac-permissions.spec.ts`)
+  asserts mutual consistency (every catalog perm granted by some role and vice-versa).
+- ✅ `RbacService.effectivePermissions(roles)` (synchronous — the JWT carries built-in-expanded roles,
+  so no DB lookup) + `GET /tenant/roles/permissions` (catalog + caller's effective perms).
+- ✅ **Dual-run harness:** `@ShadowPermissions(...)` decorator + `PermissionsGuard` shadow path —
+  **log-only**, never blocks; logs a `RbacShadow` divergence when a role-allowed principal would be
+  denied by the permission model. Piloted on `POST hr/employees`, `POST inventory/products`,
+  `POST finance/invoices` (consistent today → 0 divergences, the healthy signal).
+- ▶ **Next (still Phase A → B boundary):** widen `@ShadowPermissions` tagging module-by-module and
+  watch the `RbacShadow` logs to find real role/permission gaps before Phase C flips enforcement.
 
 **Phase B — Tag endpoints (module by module).**
 - For each module, add `@Permissions(...)` next to the existing `@Roles(...)` so **both** must pass

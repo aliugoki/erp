@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import type { UploadedFileLike } from '../storage/storage.service';
@@ -106,6 +107,7 @@ export class InventoryController {
 
   @Post('products')
   @Roles(...WRITE)
+  @ShadowPermissions('inventory:product:write')
   @HttpCode(HttpStatus.CREATED)
   createProduct(@Body() dto: CreateProductDto) {
     return this.inventory.createProduct(dto);

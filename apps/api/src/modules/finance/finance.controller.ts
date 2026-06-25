@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
@@ -363,6 +364,7 @@ export class FinanceController {
 
   @Post('invoices')
   @Roles(...WRITE)
+  @ShadowPermissions('finance:invoice:write')
   @HttpCode(HttpStatus.CREATED)
   createInvoice(@Body() dto: CreateInvoiceDto) {
     return this.finance.createInvoice(dto);
