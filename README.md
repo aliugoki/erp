@@ -273,8 +273,11 @@ Once logged in:
 2. **Go to Settings** to turn modules on/off, invite users, and assign roles.
 3. **Pick a module** (try *Finance* or *Inventory*) to start working.
 
-To create a **brand-new company** (instead of using the demo), log in as the super-admin and use the
-tenant provisioning screen, or adapt the seed script logic to your own details.
+To create a **brand-new company** (instead of using the demo), log in as the super-admin and open
+**Platform → Companies** in the sidebar. From there you can list every company, **create one** (which
+provisions the company, its first admin user, and its feature plan in a single step and shows you the
+credentials to hand over), and **suspend or reactivate** a company. Suspending a company immediately
+blocks all of its users from logging in — it's enforced by the API, not just hidden in the UI.
 
 ---
 
