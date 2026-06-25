@@ -9,6 +9,8 @@ import { Topbar } from '@/components/topbar';
 function titleFor(pathname: string): string {
   if (pathname === '/') return 'Dashboard';
   if (pathname.startsWith('/platform/companies')) return 'Platform · Companies';
+  if (pathname.startsWith('/settings/users')) return 'Settings · Users';
+  if (pathname.startsWith('/settings/roles')) return 'Settings · Roles';
   if (pathname.startsWith('/settings')) return 'Settings · Features';
   if (pathname.startsWith('/crm')) return 'CRM';
   if (pathname.startsWith('/hr')) return 'Human Resources';
