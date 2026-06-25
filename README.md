@@ -22,12 +22,13 @@ exactly as shown.
 4. [Before you start (prerequisites)](#4-before-you-start-prerequisites)
 5. [Quick start — run everything with Docker](#5-quick-start--run-everything-with-docker)
 6. [Logging in and your first steps](#6-logging-in-and-your-first-steps)
-7. [A typical day — how you actually use it](#7-a-typical-day--how-you-actually-use-it)
-8. [Running for real (production deployment)](#8-running-for-real-production-deployment)
-9. [Developer setup (optional — for people changing the code)](#9-developer-setup-optional--for-people-changing-the-code)
-10. [Backups, updates, and day-to-day operations](#10-backups-updates-and-day-to-day-operations)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Project layout & further reading](#12-project-layout--further-reading)
+7. [Creating and managing companies (super-admin)](#7-creating-and-managing-companies-super-admin)
+8. [A typical day — how you actually use it](#8-a-typical-day--how-you-actually-use-it)
+9. [Running for real (production deployment)](#9-running-for-real-production-deployment)
+10. [Developer setup (optional — for people changing the code)](#10-developer-setup-optional--for-people-changing-the-code)
+11. [Backups, updates, and day-to-day operations](#11-backups-updates-and-day-to-day-operations)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Project layout & further reading](#13-project-layout--further-reading)
 
 ---
 
@@ -160,7 +161,7 @@ You only need **two** things installed on the machine that will run the system:
    ```
 
 > For *developing* the code (not just running it) you'll additionally want **Node.js 22+** and
-> **pnpm** — see [section 9](#9-developer-setup-optional--for-people-changing-the-code). For just
+> **pnpm** — see [section 10](#10-developer-setup-optional--for-people-changing-the-code). For just
 > running the system, Docker is enough.
 
 A machine with **4 CPU cores and 8 GB of RAM** is comfortable for a demo or a small company.
@@ -281,7 +282,72 @@ blocks all of its users from logging in — it's enforced by the API, not just h
 
 ---
 
-## 7. A typical day — how you actually use it
+## 7. Creating and managing companies (super-admin)
+
+Every business that uses the platform is a **company** (internally called a *tenant*). Companies are
+created and managed by the **platform super-admin** — a special account that sits above all companies.
+This is different from a *company admin*, who only manages their own company.
+
+> **Where the super-admin account comes from.** The first super-admin is bootstrapped once by the
+> seed script (`infra/scripts/seed-demo.sh`) — its email is `superadmin@metaxperts.local`, and the
+> script prints the exact login details when it runs (and they're documented at the top of the
+> script). For security there is **no API to create the first super-admin** — that would be a way in.
+
+### Option A — the dashboard (recommended)
+
+This is the easy, point-and-click way.
+
+1. Sign in at **<http://localhost:3001>** as the super-admin.
+2. In the left sidebar, open **Platform → Companies** (this section only appears for super-admins).
+3. You'll see a table of every company — its name, slug, status, and creation date.
+4. Click **New company** and fill in:
+   - **Company name** (e.g. *Northwind Traders*)
+   - **Admin email** — the login for that company's first administrator
+   - **Admin login secret** — the initial password (click the refresh icon to generate a strong one)
+   - **Plan** — *Starter*, *Business*, or *Enterprise* (this decides which modules are switched on;
+     you can change modules per company later)
+5. Click **Create company**. The dialog then shows the **credentials to hand over** — copy them with
+   one click and give them to the customer. They log in at the same URL and should change the
+   password on first sign-in.
+
+**Suspending / reactivating.** Each company row has a **Suspend** (or **Activate**) button. Suspending
+a company **immediately blocks all of its users from logging in** — this is enforced by the backend,
+not merely hidden in the UI. Reactivating restores access. The super-admin is never affected.
+
+### Option B — the API (for automation / scripting)
+
+Creating a company is a two-step API flow, both calls authenticated as the super-admin:
+
+```bash
+API=http://localhost:3300
+
+# 1. Log in as the super-admin to get a token
+SA=$(curl -s -X POST $API/auth/login -H 'content-type: application/json' \
+  -d '{"email":"superadmin@metaxperts.local","password":"<super-admin-password>"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["accessToken"])')
+
+# 2. Provision the company AND its first admin in one call
+curl -s -X POST $API/tenants -H "authorization: Bearer $SA" -H 'content-type: application/json' \
+  -d '{"name":"Northwind Traders","adminEmail":"admin@northwind.test","adminPassword":"<pick-a-strong-password>","plan":"business"}'
+```
+
+Other super-admin endpoints (all require the bearer token above):
+
+| Action | Request |
+|---|---|
+| List all companies | `GET /tenants` |
+| Look up one company | `GET /tenants/<id>` |
+| Suspend a company | `PATCH /tenants/<id>/status` with `{"status":"suspended"}` |
+| Reactivate a company | `PATCH /tenants/<id>/status` with `{"status":"active"}` |
+
+> **How credentials work.** You don't create the user separately and email them a password. The
+> single "create company" call takes the admin's email and an initial password and creates everything
+> atomically — you then hand those credentials to the customer. There's no plaintext password stored
+> anywhere; it's hashed (argon2id) on the way in.
+
+---
+
+## 8. A typical day — how you actually use it
 
 Every module follows the **same simple pattern**, so once you learn one you know them all:
 
@@ -310,7 +376,7 @@ closed, a ticket breached SLA, stock ran low, and so on.
 
 ---
 
-## 8. Running for real (production deployment)
+## 9. Running for real (production deployment)
 
 The quick start above already uses the production stack. For a real deployment, additionally:
 
@@ -340,7 +406,7 @@ drain, graceful degradation, and scaling — is in **[`docs/runbook.md`](docs/ru
 
 ---
 
-## 9. Developer setup (optional — for people changing the code)
+## 10. Developer setup (optional — for people changing the code)
 
 This is for engineers who want to modify the system. If you only want to *use* it, skip this.
 
@@ -389,7 +455,7 @@ The authoritative design decisions are the Architecture Decision Records in
 
 ---
 
-## 10. Backups, updates, and day-to-day operations
+## 11. Backups, updates, and day-to-day operations
 
 **Back up the database** (custom-format dump, optional upload to S3/MinIO):
 
@@ -417,7 +483,7 @@ against the infrastructure, plus security scans (dependency audit, Trivy, pip-au
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | What to check |
 |---|---|
@@ -437,7 +503,7 @@ docker compose -f infra/docker-compose.prod.yml logs -f <service>   # e.g. api, 
 
 ---
 
-## 12. Project layout & further reading
+## 13. Project layout & further reading
 
 ```
 erp/
