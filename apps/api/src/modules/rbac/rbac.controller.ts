@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
 import { Role } from '../auth/rbac/role.enum';
 import { CustomRoleDto } from './dto/custom-role.dto';
 import { RbacService } from './rbac.service';
@@ -17,6 +19,12 @@ export class RbacController {
   @Get('capabilities')
   capabilities() {
     return this.rbac.capabilities();
+  }
+
+  /** Path 2: the fine-grained permission catalog (grouped) + the caller's effective permissions. */
+  @Get('permissions')
+  permissions(@CurrentUser() user: AuthenticatedUser | undefined) {
+    return { catalog: this.rbac.permissionCatalog(), mine: this.rbac.effectivePermissions(user?.roles ?? []) };
   }
 
   @Get()

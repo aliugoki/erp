@@ -4,12 +4,14 @@ import { REDIS_CLIENT } from '../../common/redis/redis.module';
 import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { AuditService } from '../audit/audit.service';
-import { ALL_ROLES } from '../auth/rbac/role.enum';
+import { ALL_ROLES, toRoles } from '../auth/rbac/role.enum';
 import {
   CAPABILITY_ROLES,
   TENANT_ASSIGNABLE_BUILTIN_ROLES,
   capabilityCatalog,
 } from '../auth/rbac/role-metadata';
+import { PERMISSION_CATALOG } from '../auth/rbac/permission-catalog';
+import { WILDCARD, permissionsForRoles } from '../auth/rbac/permissions';
 
 const CACHE_TTL_SECONDS = 60;
 const BUILTIN = new Set<string>(ALL_ROLES);
@@ -54,6 +56,18 @@ export class RbacService {
   /** The capability building blocks a company admin can combine (name/description/permissions). */
   capabilities() {
     return capabilityCatalog();
+  }
+
+  /** The fine-grained permission catalog (Path 2) — grouped by module for the role-builder UI. */
+  permissionCatalog() {
+    return PERMISSION_CATALOG;
+  }
+
+  /** A principal's effective permissions, resolved from their (already built-in-expanded) roles.
+   * Returns `['*']` for admins. Synchronous: the JWT carries expanded built-in roles, so no lookup. */
+  effectivePermissions(roles: readonly string[]): string[] {
+    const perms = permissionsForRoles(toRoles(roles));
+    return perms.has(WILDCARD) ? [WILDCARD] : [...perms].sort();
   }
 
   /** Map of custom-role key → member built-in roles for a tenant (cached). */
