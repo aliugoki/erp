@@ -5,6 +5,7 @@ import * as argon2 from 'argon2';
 import { DataSource } from 'typeorm';
 import type { AppConfig } from '@metaxperts/config';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { RbacService } from '../rbac/rbac.service';
 import { RefreshError, RefreshTokenService } from './refresh-token.service';
 
 export interface TokenPair {
@@ -30,6 +31,7 @@ export class AuthService {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly refreshTokens: RefreshTokenService,
     private readonly tenantTx: TenantTransactionService,
+    private readonly rbac: RbacService,
   ) {}
 
   /** Authenticate by email/password and issue an access JWT + rotating refresh token. */
@@ -55,7 +57,9 @@ export class AuthService {
       manager.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]),
     );
 
-    return this.issueTokens(user.id, user.tenant_id, user.roles ?? []);
+    // Expand assigned roles (built-in + custom composite) to the union of built-ins for enforcement.
+    const roles = await this.rbac.effectiveBuiltinRoles(user.tenant_id, user.roles ?? []);
+    return this.issueTokens(user.id, user.tenant_id, roles);
   }
 
   /** Rotate a refresh token (with reuse detection) and mint a fresh access token. Roles are reloaded
@@ -87,8 +91,10 @@ export class AuthService {
       throw err;
     }
 
+    const roles = await this.rbac.effectiveBuiltinRoles(record.tenantId, current.roles ?? []);
+    const signed = this.signAccess(record.userId, record.tenantId, roles);
     return {
-      accessToken: this.signAccess(record.userId, record.tenantId, current.roles ?? []),
+      accessToken: signed,
       refreshToken: nextToken,
       tokenType: 'Bearer',
       expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),

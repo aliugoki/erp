@@ -368,6 +368,26 @@ Other super-admin endpoints (all require the bearer token above):
 > atomically — you then hand those credentials to the customer. There's no plaintext password stored
 > anywhere; it's hashed (argon2id) on the way in.
 
+### Inside a company: the company admin manages their own users & roles
+
+Day-to-day user administration belongs to the **company admin** (the `TENANT_ADMIN`), not the platform
+operator. A company admin opens **Settings** and gets three tabs:
+
+- **Features** — turn the company's modules on/off (as before).
+- **Users** — list the company's people, **add a user** (pick their roles), **edit roles**, **reset a
+  password** (new login shown once to hand over), and **activate/deactivate**. Everything here is
+  automatically scoped to their own company — a company admin can never see or touch another company.
+- **Roles** — build **custom roles**. A custom role is a friendly name (e.g. *"Branch Manager"*) that
+  **bundles capabilities** (Inventory, Finance, Sales, HR, Support, Viewer). Assign it under *Users*
+  and the person gets the combined access. Custom roles can't grant platform-admin powers.
+
+This is the right separation of duties: the platform super-admin provisions the company and its first
+admin (and keeps break-glass powers); the company then runs its own access control.
+
+> **How custom roles are enforced.** A user's assigned roles (built-in and custom) are expanded to the
+> underlying capabilities when they sign in, so access is enforced by the backend on every request —
+> not just hidden in the UI.
+
 ---
 
 ## 8. A typical day — how you actually use it
