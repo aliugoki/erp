@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/rbac/role.enum';
+import { ToggleFeatureDto } from '../features/dto/toggle-feature.dto';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { CreateTenantUserDto } from './dto/create-tenant-user.dto';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
@@ -61,6 +62,21 @@ export class TenantsController {
   @Patch(':id/plan')
   setPlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTenantPlanDto) {
     return this.tenants.applyPlanToTenant(id, dto.plan);
+  }
+
+  /** The company's module/feature entitlements (managed by the platform, not the company). */
+  @Get(':id/features')
+  listFeatures(@Param('id', ParseUUIDPipe) id: string) {
+    return this.tenants.listFeatures(id);
+  }
+
+  @Patch(':id/features/:key')
+  setFeature(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('key') key: string,
+    @Body() dto: ToggleFeatureDto,
+  ) {
+    return this.tenants.setFeature(id, key, dto.enabled);
   }
 
   @Get(':id/users')

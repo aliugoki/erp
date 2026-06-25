@@ -1,30 +1,26 @@
 'use client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPatch } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { Lock } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import type { FeatureModule } from '@/lib/nav';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 
+/** Read-only view of the company's enabled modules. Entitlements are managed by the platform
+ * operator (super-admin) per company — a company can no longer toggle its own modules. */
 export default function FeaturesPage() {
-  const qc = useQueryClient();
   const { data: modules, isLoading } = useQuery({
     queryKey: ['features'],
     queryFn: () => apiGet<FeatureModule[]>('/tenant/features'),
   });
 
-  const toggle = useMutation({
-    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
-      apiPatch(`/tenant/features/${key}`, { enabled }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['features'] }),
-  });
-
   return (
-    <div className="mx-auto max-w-3xl space-y-6 animate-fade-in">
+    <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Features</h2>
         <p className="text-muted-foreground">
-          Turn modules and capabilities on or off for your company. Changes apply instantly and are
-          enforced by the API (not just hidden here).
+          The modules enabled for your company. These are managed by your provider — contact them to
+          add or remove modules.
         </p>
       </div>
 
@@ -32,28 +28,22 @@ export default function FeaturesPage() {
 
       <div className="space-y-4">
         {(modules ?? []).map((m) => (
-          <Card key={m.key}>
+          <Card key={m.key} className={m.enabled ? '' : 'opacity-60'}>
             <CardHeader className="flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-base">{m.name}</CardTitle>
                 <CardDescription>{m.description}</CardDescription>
               </div>
-              <Switch
-                checked={m.enabled}
-                disabled={toggle.isPending}
-                onCheckedChange={(enabled) => toggle.mutate({ key: m.key, enabled })}
-              />
+              <Badge variant={m.enabled ? 'success' : 'secondary'}>
+                {m.enabled ? 'Enabled' : <span className="flex items-center gap-1"><Lock className="size-3" /> Off</span>}
+              </Badge>
             </CardHeader>
-            {m.features.length ? (
+            {m.enabled && m.features.length ? (
               <CardContent className="space-y-2 border-t pt-4">
                 {m.features.map((f) => (
                   <div key={f.key} className="flex items-center justify-between">
-                    <span className={m.enabled ? 'text-sm' : 'text-sm text-muted-foreground'}>{f.name}</span>
-                    <Switch
-                      checked={f.enabled}
-                      disabled={toggle.isPending || !m.enabled}
-                      onCheckedChange={(enabled) => toggle.mutate({ key: f.key, enabled })}
-                    />
+                    <span className="text-sm">{f.name}</span>
+                    <Badge variant={f.enabled ? 'success' : 'secondary'}>{f.enabled ? 'On' : 'Off'}</Badge>
                   </div>
                 ))}
               </CardContent>

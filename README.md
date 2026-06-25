@@ -316,6 +316,8 @@ This is the easy, point-and-click way.
 - **Suspend / reactivate** it — suspending **immediately blocks all of its users from logging in**
   (enforced by the backend, not just hidden in the UI). The super-admin is never affected.
 - **Apply a plan** (Starter / Business / Enterprise) to re-provision which modules it has.
+- **Enable / disable individual modules** for the company (the **Modules** toggles). Module
+  entitlements are controlled here by the platform operator — a company cannot change its own modules.
 - **Manage its users**: see everyone in the company, **add a user** (with a role such as
   TENANT_ADMIN, FINANCE_MANAGER, …), **reset a user's password** (the new login secret is shown once
   to hand over, and all of that user's sessions are signed out), and **activate / deactivate** a user.
@@ -373,7 +375,8 @@ Other super-admin endpoints (all require the bearer token above):
 Day-to-day user administration belongs to the **company admin** (the `TENANT_ADMIN`), not the platform
 operator. A company admin opens **Settings** and gets three tabs:
 
-- **Features** — turn the company's modules on/off (as before).
+- **Features** — a **read-only** view of which modules the company has. Modules are controlled by the
+  platform operator (super-admin) per company, so this tab is informational only.
 - **Users** — list the company's people, **add a user** (pick their roles), **edit roles**, **reset a
   password** (new login shown once to hand over), and **activate/deactivate**. Everything here is
   automatically scoped to their own company — a company admin can never see or touch another company.

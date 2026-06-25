@@ -22,9 +22,11 @@ export class FeaturesController {
     return this.features.catalogForTenant(TenantContext.require());
   }
 
-  /** Enable/disable a feature for the current tenant (TENANT_ADMIN). Records its own audit. */
+  /** Enable/disable a feature for the current tenant — SUPER_ADMIN only. Companies no longer manage
+   * their own modules; the platform operator does it per company via `/tenants/:id/features/:key`
+   * (this context-scoped route is retained for platform/tooling use). Records its own audit. */
   @Patch(':key')
-  @Roles(Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   @SkipAudit()
   @HttpCode(HttpStatus.OK)
   async toggle(@Param('key') key: string, @Body() dto: ToggleFeatureDto) {

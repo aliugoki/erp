@@ -144,6 +144,20 @@ export class TenantsService {
     return { id, plan };
   }
 
+  /** The module/feature catalog for a specific company (SUPER_ADMIN view). */
+  async listFeatures(id: string) {
+    await this.findById(id);
+    return this.features.catalogForTenant(id);
+  }
+
+  /** Enable/disable a single feature for a specific company (SUPER_ADMIN only). Module entitlements
+   * are managed by the platform operator per company, not by the company itself. */
+  async setFeature(id: string, key: string, enabled: boolean): Promise<{ key: string; enabled: boolean }> {
+    await this.findById(id);
+    await this.features.setEnabled(id, key, enabled);
+    return { key, enabled };
+  }
+
   /** List a company's users (SUPER_ADMIN drills into a tenant). RLS-scoped to that tenant. */
   async listUsers(id: string): Promise<TenantUser[]> {
     await this.findById(id);

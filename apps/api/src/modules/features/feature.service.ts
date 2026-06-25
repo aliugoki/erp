@@ -85,12 +85,12 @@ export class FeatureService {
         const modKey = moduleKeyOf(featureKey);
         if (modKey !== featureKey) await this.upsert(manager, tenantId, modKey, true);
       }
-      await this.audit.recordWith(manager, {
-        action: 'FEATURE_TOGGLE',
-        resource: 'tenant_feature_entitlement',
-        resourceId: featureKey,
-        newValue: { enabled },
-      });
+      await this.audit.recordWith(
+        manager,
+        { action: 'FEATURE_TOGGLE', resource: 'tenant_feature_entitlement', resourceId: featureKey, newValue: { enabled } },
+        // Scope the audit row to the tenant being changed (this may be a SUPER_ADMIN cross-tenant edit).
+        tenantId,
+      );
     });
     await this.redis.del(this.cacheKey(tenantId)).catch(() => undefined);
   }
