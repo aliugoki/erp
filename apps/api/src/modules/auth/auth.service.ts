@@ -57,9 +57,13 @@ export class AuthService {
       manager.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]),
     );
 
-    // Expand assigned roles (built-in + custom composite) to the union of built-ins for enforcement.
-    const roles = await this.rbac.effectiveBuiltinRoles(user.tenant_id, user.roles ?? []);
-    return this.issueTokens(user.id, user.tenant_id, roles);
+    // Expand assigned roles (built-in + custom composite) to the union of built-ins, and resolve the
+    // effective fine-grained permissions (built-in + custom-role permissions) for the access token.
+    const [roles, perms] = await Promise.all([
+      this.rbac.effectiveBuiltinRoles(user.tenant_id, user.roles ?? []),
+      this.rbac.effectivePermissionsForUser(user.tenant_id, user.roles ?? []),
+    ]);
+    return this.issueTokens(user.id, user.tenant_id, roles, perms);
   }
 
   /** Rotate a refresh token (with reuse detection) and mint a fresh access token. Roles are reloaded
@@ -91,8 +95,11 @@ export class AuthService {
       throw err;
     }
 
-    const roles = await this.rbac.effectiveBuiltinRoles(record.tenantId, current.roles ?? []);
-    const signed = this.signAccess(record.userId, record.tenantId, roles);
+    const [roles, perms] = await Promise.all([
+      this.rbac.effectiveBuiltinRoles(record.tenantId, current.roles ?? []),
+      this.rbac.effectivePermissionsForUser(record.tenantId, current.roles ?? []),
+    ]);
+    const signed = this.signAccess(record.userId, record.tenantId, roles, perms);
     return {
       accessToken: signed,
       refreshToken: nextToken,
@@ -145,19 +152,25 @@ export class AuthService {
     }
   }
 
-  private async issueTokens(userId: string, tenantId: string, roles: string[]): Promise<TokenPair> {
+  private async issueTokens(
+    userId: string,
+    tenantId: string,
+    roles: string[],
+    perms: string[],
+  ): Promise<TokenPair> {
     const { token } = await this.refreshTokens.issue(userId, tenantId);
+    const signed = this.signAccess(userId, tenantId, roles, perms);
     return {
-      accessToken: this.signAccess(userId, tenantId, roles),
+      accessToken: signed,
       refreshToken: token,
       tokenType: 'Bearer',
       expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),
     };
   }
 
-  private signAccess(userId: string, tenantId: string, roles: string[]): string {
+  private signAccess(userId: string, tenantId: string, roles: string[], perms: string[]): string {
     return this.jwt.sign(
-      { sub: userId, tenantId, roles },
+      { sub: userId, tenantId, roles, perms },
       {
         secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
         expiresIn: this.config.get('JWT_ACCESS_TTL', { infer: true }),

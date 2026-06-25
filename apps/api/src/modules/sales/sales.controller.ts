@@ -10,7 +10,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { CreateOrderDto, CreateQuotationDto, UpdateQuotationStatusDto } from './dto/sales.dto';
@@ -31,7 +31,7 @@ export class SalesController {
 
   @Post('quotations')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:quotation:write')
+  @Permissions('sales:quotation:write')
   @HttpCode(HttpStatus.CREATED)
   createQuotation(@Body() dto: CreateQuotationDto) {
     return this.sales.createQuotation(dto);
@@ -44,14 +44,14 @@ export class SalesController {
 
   @Patch('quotations/:id/status')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:quotation:write')
+  @Permissions('sales:quotation:write')
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateQuotationStatusDto) {
     return this.sales.setQuotationStatus(id, dto.status);
   }
 
   @Post('quotations/:id/convert')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:quotation:write')
+  @Permissions('sales:quotation:write')
   convert(@Param('id', ParseUUIDPipe) id: string) {
     return this.sales.convertToOrder(id);
   }
@@ -63,7 +63,7 @@ export class SalesController {
 
   @Post('orders')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:order:write')
+  @Permissions('sales:order:write')
   @HttpCode(HttpStatus.CREATED)
   createOrder(@Body() dto: CreateOrderDto) {
     return this.sales.createOrder(dto);
@@ -76,14 +76,14 @@ export class SalesController {
 
   @Patch('orders/:id/fulfill')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:order:write')
+  @Permissions('sales:order:write')
   fulfill(@Param('id', ParseUUIDPipe) id: string) {
     return this.sales.fulfillOrder(id);
   }
 
   @Patch('orders/:id/cancel')
   @Roles(...WRITE)
-  @ShadowPermissions('sales:order:write')
+  @Permissions('sales:order:write')
   cancel(@Param('id', ParseUUIDPipe) id: string) {
     return this.sales.cancelOrder(id);
   }

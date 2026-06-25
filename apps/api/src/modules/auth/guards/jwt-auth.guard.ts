@@ -17,6 +17,7 @@ interface AccessTokenPayload {
   sub: string;
   tenantId: string;
   roles?: string[];
+  perms?: string[];
 }
 
 /**
@@ -64,6 +65,7 @@ export class JwtAuthGuard implements CanActivate {
       userId: payload.sub,
       tenantId: payload.tenantId,
       roles: toRoles(payload.roles),
+      perms: payload.perms ?? [],
     };
     req.user = user;
     // Seed RequestContext so services' TenantTransactionService runs queries with this tenant's

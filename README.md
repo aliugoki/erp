@@ -381,8 +381,10 @@ operator. A company admin opens **Settings** and gets three tabs:
   password** (new login shown once to hand over), and **activate/deactivate**. Everything here is
   automatically scoped to their own company — a company admin can never see or touch another company.
 - **Roles** — build **custom roles**. A custom role is a friendly name (e.g. *"Branch Manager"*) that
-  **bundles capabilities** (Inventory, Finance, Sales, HR, Support, Viewer). Assign it under *Users*
-  and the person gets the combined access. Custom roles can't grant platform-admin powers.
+  grants access two ways, mixable: **capability presets** (Inventory, Finance, Sales, HR, Support,
+  Viewer) and/or **individual fine-grained permissions** picked from a catalog (e.g. *"can create
+  invoices but nothing else in Finance"*). Assign it under *Users*. Access is enforced per-permission
+  by the backend on every request; custom roles can't grant platform-admin powers.
 
 This is the right separation of duties: the platform super-admin provisions the company and its first
 admin (and keeps break-glass powers); the company then runs its own access control.

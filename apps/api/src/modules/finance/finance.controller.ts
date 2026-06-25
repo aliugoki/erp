@@ -12,7 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
@@ -65,7 +65,7 @@ export class FinanceController {
 
   @Post('accounts')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:account:write')
+  @Permissions('finance:account:write')
   @HttpCode(HttpStatus.CREATED)
   createAccount(@Body() dto: CreateAccountDto) {
     return this.finance.createAccount(dto);
@@ -73,7 +73,7 @@ export class FinanceController {
 
   @Patch('accounts/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:account:write')
+  @Permissions('finance:account:write')
   updateAccount(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
     return this.finance.updateAccount(id, dto);
   }
@@ -86,7 +86,7 @@ export class FinanceController {
 
   @Post('periods')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:period:write')
+  @Permissions('finance:period:write')
   @HttpCode(HttpStatus.CREATED)
   createPeriod(@Body() dto: CreatePeriodDto) {
     return this.finance.createPeriod(dto);
@@ -94,14 +94,14 @@ export class FinanceController {
 
   @Patch('periods/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:period:write')
+  @Permissions('finance:period:write')
   updatePeriod(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePeriodDto) {
     return this.finance.updatePeriod(id, dto);
   }
 
   @Post('year-end-close')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:period:write')
+  @Permissions('finance:period:write')
   @HttpCode(HttpStatus.CREATED)
   yearEndClose(@Body() dto: YearEndCloseDto) {
     return this.finance.yearEndClose(dto);
@@ -115,7 +115,7 @@ export class FinanceController {
 
   @Post('recurring')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:write')
+  @Permissions('finance:voucher:write')
   @HttpCode(HttpStatus.CREATED)
   createRecurring(@Body() dto: CreateRecurringDto) {
     return this.finance.createRecurring(dto);
@@ -123,7 +123,7 @@ export class FinanceController {
 
   @Post('recurring/:id/run')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:post')
+  @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   runRecurring(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.runRecurring(id);
@@ -131,7 +131,7 @@ export class FinanceController {
 
   @Post('recurring/run-due')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:post')
+  @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   runDue() {
     return this.finance.runDue();
@@ -157,7 +157,7 @@ export class FinanceController {
 
   @Post('vendors')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:vendor:write')
+  @Permissions('finance:vendor:write')
   @HttpCode(HttpStatus.CREATED)
   createVendor(@Body() dto: CreateVendorDto) {
     return this.finance.createVendor(dto);
@@ -170,7 +170,7 @@ export class FinanceController {
 
   @Post('customers')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:customer:write')
+  @Permissions('finance:customer:write')
   @HttpCode(HttpStatus.CREATED)
   createCustomer(@Body() dto: CreateCustomerDto) {
     return this.finance.createCustomer(dto);
@@ -183,7 +183,7 @@ export class FinanceController {
 
   @Post('bills')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:bill:write')
+  @Permissions('finance:bill:write')
   @HttpCode(HttpStatus.CREATED)
   createBill(@Body() dto: CreateBillDto) {
     return this.finance.createBill(dto);
@@ -196,7 +196,7 @@ export class FinanceController {
 
   @Post('bills/:id/payments')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:payment:write')
+  @Permissions('finance:payment:write')
   @HttpCode(HttpStatus.CREATED)
   payBill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateBillPaymentDto) {
     return this.finance.payBill(id, dto);
@@ -215,7 +215,7 @@ export class FinanceController {
 
   @Post('reconciliation')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:reconciliation:write')
+  @Permissions('finance:reconciliation:write')
   setReconciled(@Body() dto: ReconcileDto) {
     return this.finance.setReconciled(dto);
   }
@@ -227,7 +227,7 @@ export class FinanceController {
 
   @Post('bank-statements/import')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:reconciliation:write')
+  @Permissions('finance:reconciliation:write')
   @HttpCode(HttpStatus.CREATED)
   importStatement(@Body() dto: ImportStatementDto) {
     return this.finance.importStatement(dto);
@@ -235,7 +235,7 @@ export class FinanceController {
 
   @Post('bank-statements/auto-match')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:reconciliation:write')
+  @Permissions('finance:reconciliation:write')
   autoMatch(@Body() dto: AutoMatchDto) {
     return this.finance.autoMatch(dto);
   }
@@ -248,7 +248,7 @@ export class FinanceController {
 
   @Post('transactions')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:write')
+  @Permissions('finance:voucher:write')
   @HttpCode(HttpStatus.CREATED)
   createTransaction(@Body() dto: CreateTransactionDto) {
     return this.finance.createTransaction(dto);
@@ -261,7 +261,7 @@ export class FinanceController {
 
   @Post('transactions/:id/reverse')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:post')
+  @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   reverseTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.reverseTransaction(id);
@@ -269,14 +269,14 @@ export class FinanceController {
 
   @Post('transactions/:id/post')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:post')
+  @Permissions('finance:voucher:post')
   postTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.postTransaction(id);
   }
 
   @Delete('transactions/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:voucher:write')
+  @Permissions('finance:voucher:write')
   deleteDraft(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.deleteDraft(id);
   }
@@ -315,7 +315,7 @@ export class FinanceController {
 
   @Post('cost-centers')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:costcenter:write')
+  @Permissions('finance:costcenter:write')
   @HttpCode(HttpStatus.CREATED)
   createCostCenter(@Body() dto: CreateCostCenterDto) {
     return this.finance.createCostCenter(dto);
@@ -329,7 +329,7 @@ export class FinanceController {
   // Budgets
   @Post('budgets')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:budget:write')
+  @Permissions('finance:budget:write')
   @HttpCode(HttpStatus.CREATED)
   setBudget(@Body() dto: SetBudgetDto) {
     return this.finance.setBudget(dto);
@@ -348,7 +348,7 @@ export class FinanceController {
 
   @Post('currencies')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:currency:write')
+  @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   createCurrency(@Body() dto: CreateCurrencyDto) {
     return this.finance.createCurrency(dto);
@@ -361,7 +361,7 @@ export class FinanceController {
 
   @Post('exchange-rates')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:currency:write')
+  @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   setRate(@Body() dto: SetRateDto) {
     return this.finance.setRate(dto);
@@ -374,7 +374,7 @@ export class FinanceController {
 
   @Post('revalue')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:currency:write')
+  @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   revalueForeign(@Body() dto: RevalueFxDto) {
     return this.finance.revalueForeign(dto);
@@ -388,7 +388,7 @@ export class FinanceController {
 
   @Post('invoices')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:invoice:write')
+  @Permissions('finance:invoice:write')
   @HttpCode(HttpStatus.CREATED)
   createInvoice(@Body() dto: CreateInvoiceDto) {
     return this.finance.createInvoice(dto);
@@ -401,7 +401,7 @@ export class FinanceController {
 
   @Patch('invoices/:id/pay')
   @Roles(...WRITE)
-  @ShadowPermissions('finance:payment:write')
+  @Permissions('finance:payment:write')
   payInvoice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PayInvoiceDto) {
     return this.finance.payInvoice(id, dto);
   }

@@ -24,7 +24,7 @@ export class RbacController {
   /** Path 2: the fine-grained permission catalog (grouped) + the caller's effective permissions. */
   @Get('permissions')
   permissions(@CurrentUser() user: AuthenticatedUser | undefined) {
-    return { catalog: this.rbac.permissionCatalog(), mine: this.rbac.effectivePermissions(user?.roles ?? []) };
+    return { catalog: this.rbac.permissionCatalog(), mine: user?.perms ?? [] };
   }
 
   @Get()
@@ -35,12 +35,22 @@ export class RbacController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CustomRoleDto) {
-    return this.rbac.createCustom({ name: dto.name, description: dto.description, memberRoles: dto.memberRoles });
+    return this.rbac.createCustom({
+      name: dto.name,
+      description: dto.description,
+      memberRoles: dto.memberRoles ?? [],
+      permissions: dto.permissions ?? [],
+    });
   }
 
   @Patch(':id')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CustomRoleDto) {
-    return this.rbac.updateCustom(id, { name: dto.name, description: dto.description, memberRoles: dto.memberRoles });
+    return this.rbac.updateCustom(id, {
+      name: dto.name,
+      description: dto.description,
+      memberRoles: dto.memberRoles ?? [],
+      permissions: dto.permissions ?? [],
+    });
   }
 
   @Delete(':id')

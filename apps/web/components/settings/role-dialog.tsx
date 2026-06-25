@@ -1,7 +1,7 @@
 'use client';
 import { type FormEvent, useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ApiError, apiPatch, apiPost } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,9 +28,15 @@ export interface CustomRole {
   name: string;
   description: string | null;
   memberRoles: string[];
+  permissions: string[];
+}
+interface PermissionGroup {
+  domain: string;
+  label: string;
+  permissions: { key: string; label: string }[];
 }
 
-/** Create or edit a composite custom role (a named bundle of capability roles). */
+/** Create or edit a custom role: bundle capability presets and/or pick fine-grained permissions. */
 export function RoleDialog({
   open,
   onOpenChange,
@@ -46,18 +52,28 @@ export function RoleDialog({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [members, setMembers] = useState<Set<string>>(new Set());
+  const [perms, setPerms] = useState<Set<string>>(new Set());
+
+  const { data: catalog } = useQuery({
+    queryKey: ['permission-catalog'],
+    queryFn: () => apiGet<{ catalog: PermissionGroup[]; mine: string[] }>('/tenant/roles/permissions').then((r) => r.catalog),
+    enabled: open,
+  });
 
   useEffect(() => {
     if (open) {
       setName(existing?.name ?? '');
       setDescription(existing?.description ?? '');
       setMembers(new Set(existing?.memberRoles ?? []));
+      setPerms(new Set(existing?.permissions ?? []));
     }
   }, [open, existing]);
 
+  const valid = name.trim().length >= 2 && (members.size > 0 || perms.size > 0);
+
   const save = useMutation({
     mutationFn: () => {
-      const body = { name, description, memberRoles: [...members] };
+      const body = { name, description, memberRoles: [...members], permissions: [...perms] };
       return existing ? apiPatch(`/tenant/roles/${existing.id}`, body) : apiPost('/tenant/roles', body);
     },
     onSuccess: () => {
@@ -70,26 +86,25 @@ export function RoleDialog({
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (name.trim().length < 2 || members.size === 0) return;
+    if (!valid) return;
     save.mutate();
   }
-
-  function toggle(v: string) {
-    setMembers((s) => {
+  const toggler = (set: typeof setMembers) => (v: string) =>
+    set((s) => {
       const next = new Set(s);
       if (next.has(v)) next.delete(v);
       else next.add(v);
       return next;
     });
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{existing ? 'Edit role' : 'New role'}</DialogTitle>
           <DialogDescription>
-            A custom role bundles the capabilities below. Anyone assigned it gets the combined access.
+            Combine capability presets and/or pick individual permissions. Anyone assigned the role gets
+            the combined access.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -102,17 +117,30 @@ export function RoleDialog({
             <Input id="role-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Runs a branch: inventory + sales" />
           </div>
           <div className="space-y-2">
-            <Label>Capabilities</Label>
+            <Label>Capability presets</Label>
             <ToggleChips
               options={capabilities.map((c) => ({ value: c.key, label: c.name, hint: c.description }))}
               selected={members}
-              onToggle={toggle}
+              onToggle={toggler(setMembers)}
             />
-            {members.size === 0 ? <p className="text-xs text-muted-foreground">Pick at least one capability.</p> : null}
           </div>
+          <div className="space-y-3 rounded-lg border p-3">
+            <Label>Fine-grained permissions</Label>
+            {(catalog ?? []).map((g) => (
+              <div key={g.domain} className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">{g.label}</p>
+                <ToggleChips
+                  options={g.permissions.map((p) => ({ value: p.key, label: p.label }))}
+                  selected={perms}
+                  onToggle={toggler(setPerms)}
+                />
+              </div>
+            ))}
+          </div>
+          {!valid ? <p className="text-xs text-muted-foreground">Give the role a name and at least one capability or permission.</p> : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending || name.trim().length < 2 || members.size === 0}>
+            <Button type="submit" disabled={save.isPending || !valid}>
               {save.isPending ? 'Saving…' : existing ? 'Save changes' : 'Create role'}
             </Button>
           </DialogFooter>

@@ -12,7 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { CrmEnterpriseService } from './crm-enterprise.service';
@@ -44,7 +44,7 @@ export class CrmEnterpriseController {
 
   @Post('leads')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:lead:write')
+  @Permissions('crm:lead:write')
   @HttpCode(HttpStatus.CREATED)
   createLead(@Body() dto: CreateLeadDto) {
     return this.crm.createLead(dto);
@@ -57,28 +57,28 @@ export class CrmEnterpriseController {
 
   @Patch('leads/:id/status')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:lead:write')
+  @Permissions('crm:lead:write')
   updateLeadStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLeadStatusDto) {
     return this.crm.updateLeadStatus(id, dto.status);
   }
 
   @Post('leads/:id/convert')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:lead:write')
+  @Permissions('crm:lead:write')
   convertLead(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ConvertLeadDto) {
     return this.crm.convertLead(id, dto);
   }
 
   @Patch('leads/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:lead:write')
+  @Permissions('crm:lead:write')
   updateLead(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLeadDto) {
     return this.crm.updateLead(id, dto);
   }
 
   @Delete('leads/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:lead:write')
+  @Permissions('crm:lead:write')
   @HttpCode(HttpStatus.OK)
   deleteLead(@Param('id', ParseUUIDPipe) id: string) {
     return this.crm.deleteLead(id);
@@ -98,7 +98,7 @@ export class CrmEnterpriseController {
 
   @Post('activities')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:activity:write')
+  @Permissions('crm:activity:write')
   @HttpCode(HttpStatus.CREATED)
   createActivity(@Body() dto: CreateActivityDto) {
     return this.crm.createActivity(dto);
@@ -106,21 +106,21 @@ export class CrmEnterpriseController {
 
   @Patch('activities/:id/complete')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:activity:write')
+  @Permissions('crm:activity:write')
   completeActivity(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CompleteActivityDto) {
     return this.crm.completeActivity(id, dto.outcome ?? null);
   }
 
   @Patch('activities/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:activity:write')
+  @Permissions('crm:activity:write')
   updateActivity(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateActivityDto) {
     return this.crm.updateActivity(id, dto);
   }
 
   @Delete('activities/:id')
   @Roles(...WRITE)
-  @ShadowPermissions('crm:activity:write')
+  @Permissions('crm:activity:write')
   @HttpCode(HttpStatus.OK)
   deleteActivity(@Param('id', ParseUUIDPipe) id: string) {
     return this.crm.deleteActivity(id);
