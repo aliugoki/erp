@@ -10,7 +10,20 @@ export const WILDCARD = '*';
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   [Role.SUPER_ADMIN]: [WILDCARD],
   [Role.TENANT_ADMIN]: [WILDCARD],
-  [Role.HR_MANAGER]: ['hr:employee:read', 'hr:employee:write', 'hr:department:write'],
+  [Role.HR_MANAGER]: [
+    'hr:employee:read',
+    'hr:employee:write',
+    'hr:department:write',
+    'hr:org:write',
+    'hr:attendance:write',
+    'hr:leave:write',
+    'hr:payroll:write',
+    'hr:performance:write',
+    'hr:lifecycle:write',
+    'hr:document:write',
+    'hr:policy:write',
+    'hr:profile:write',
+  ],
   [Role.FINANCE_MANAGER]: [
     'finance:invoice:read',
     'finance:invoice:write',
@@ -27,7 +40,13 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'finance:budget:write',
     'finance:currency:write',
   ],
-  [Role.INVENTORY_MANAGER]: ['inventory:product:read', 'inventory:product:write', 'inventory:stock:write'],
+  [Role.INVENTORY_MANAGER]: [
+    'inventory:product:read',
+    'inventory:product:write',
+    'inventory:stock:write',
+    'inventory:category:write',
+    'inventory:warehouse:write',
+  ],
   [Role.SALES_REP]: ['crm:deal:read', 'crm:deal:write', 'crm:contact:write'],
   [Role.SUPPORT_AGENT]: ['helpdesk:ticket:read', 'helpdesk:ticket:write'],
   [Role.VIEWER]: [

@@ -66,12 +66,14 @@ export class HrController {
 
   @Patch('employees/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:employee:write')
   updateEmployee(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEmployeeDto) {
     return this.hr.updateEmployee(id, dto);
   }
 
   @Delete('employees/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:employee:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteEmployee(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteEmployee(id);
@@ -80,6 +82,7 @@ export class HrController {
   /** Upload (or replace) an employee photo — multipart `file` field (image, ≤8 MiB). */
   @Post('employees/:id/photo')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:employee:write')
   @UseInterceptors(FileInterceptor('file'))
   uploadPhoto(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
     if (!file) throw new UnsupportedMediaTypeException('A multipart "file" field is required');
@@ -103,6 +106,7 @@ export class HrController {
 
   @Post('departments')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:department:write')
   @HttpCode(HttpStatus.CREATED)
   createDepartment(@Body() dto: CreateDepartmentDto) {
     return this.hr.createDepartment(dto);
@@ -110,12 +114,14 @@ export class HrController {
 
   @Patch('departments/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:department:write')
   updateDepartment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDepartmentDto) {
     return this.hr.updateDepartment(id, dto);
   }
 
   @Delete('departments/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:department:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDepartment(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteDepartment(id);
@@ -129,6 +135,7 @@ export class HrController {
 
   @Post('positions')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   @HttpCode(HttpStatus.CREATED)
   createPosition(@Body() dto: CreatePositionDto) {
     return this.hr.createPosition(dto);
@@ -136,12 +143,14 @@ export class HrController {
 
   @Patch('positions/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   updatePosition(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePositionDto) {
     return this.hr.updatePosition(id, dto);
   }
 
   @Delete('positions/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deletePosition(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deletePosition(id);
@@ -155,6 +164,7 @@ export class HrController {
 
   @Post('designations')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   @HttpCode(HttpStatus.CREATED)
   createDesignation(@Body() dto: CreateDesignationDto) {
     return this.hr.createDesignation(dto);
@@ -162,12 +172,14 @@ export class HrController {
 
   @Patch('designations/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   updateDesignation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDesignationDto) {
     return this.hr.updateDesignation(id, dto);
   }
 
   @Delete('designations/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:org:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDesignation(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.deleteDesignation(id);
@@ -176,6 +188,7 @@ export class HrController {
   // Attendance
   @Post('attendance')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:attendance:write')
   @HttpCode(HttpStatus.CREATED)
   createAttendance(@Body() dto: CreateAttendanceDto) {
     return this.hr.createAttendance(dto);

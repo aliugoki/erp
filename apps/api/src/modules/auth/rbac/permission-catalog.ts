@@ -27,6 +27,15 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'hr:employee:read', label: 'View employees' },
       { key: 'hr:employee:write', label: 'Create / edit employees' },
       { key: 'hr:department:write', label: 'Manage departments' },
+      { key: 'hr:org:write', label: 'Manage positions & designations' },
+      { key: 'hr:attendance:write', label: 'Record attendance' },
+      { key: 'hr:leave:write', label: 'Manage leave (types, balances, requests)' },
+      { key: 'hr:payroll:write', label: 'Run payroll & salary components' },
+      { key: 'hr:performance:write', label: 'Manage reviews & goals' },
+      { key: 'hr:lifecycle:write', label: 'Employee lifecycle events' },
+      { key: 'hr:document:write', label: 'Manage HR documents' },
+      { key: 'hr:policy:write', label: 'Manage HR policies & custom fields' },
+      { key: 'hr:profile:write', label: 'Edit employee profiles (education, experience)' },
     ],
   },
   {
@@ -54,8 +63,10 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
     label: 'Inventory',
     permissions: [
       { key: 'inventory:product:read', label: 'View products' },
-      { key: 'inventory:product:write', label: 'Create / edit products' },
-      { key: 'inventory:stock:write', label: 'Adjust stock' },
+      { key: 'inventory:product:write', label: 'Create / edit products & images' },
+      { key: 'inventory:stock:write', label: 'Record stock movements' },
+      { key: 'inventory:category:write', label: 'Manage categories' },
+      { key: 'inventory:warehouse:write', label: 'Manage warehouses' },
     ],
   },
   {

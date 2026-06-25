@@ -11,6 +11,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { HrPolicyService } from './hr-policy.service';
@@ -33,6 +34,7 @@ export class HrPolicyController {
 
   @Post('custom-fields')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:policy:write')
   @HttpCode(HttpStatus.CREATED)
   createField(@Body() dto: CreateCustomFieldDto) {
     return this.policy.createCustomField(dto, 'POLICY');
@@ -40,6 +42,7 @@ export class HrPolicyController {
 
   @Delete('custom-fields/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:policy:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteField(@Param('id', ParseUUIDPipe) id: string) {
     return this.policy.deleteCustomField(id);
@@ -53,6 +56,7 @@ export class HrPolicyController {
 
   @Post('policies')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:policy:write')
   @HttpCode(HttpStatus.CREATED)
   createPolicy(@Body() dto: CreatePolicyDto) {
     return this.policy.createPolicy(dto);
@@ -65,6 +69,7 @@ export class HrPolicyController {
 
   @Patch('policies/:id/status')
   @Roles(...WRITE)
+  @ShadowPermissions('hr:policy:write')
   updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePolicyStatusDto) {
     return this.policy.updatePolicyStatus(id, dto.status);
   }
