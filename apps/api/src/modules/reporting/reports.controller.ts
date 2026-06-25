@@ -11,6 +11,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { CreateReportDto, ProfitLossQueryDto, RunReportDto } from './dto/reports.dto';
@@ -65,6 +66,7 @@ export class ReportsController {
   @Post('builder/custom')
   @RequiresFeature('reporting')
   @Roles(...WRITE)
+  @ShadowPermissions('report:write')
   @HttpCode(HttpStatus.CREATED)
   createReport(@Body() dto: CreateReportDto) {
     return this.builder.createReport(dto);
@@ -79,6 +81,7 @@ export class ReportsController {
   @Delete('builder/custom/:id')
   @RequiresFeature('reporting')
   @Roles(...WRITE)
+  @ShadowPermissions('report:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteReport(@Param('id', ParseUUIDPipe) id: string) {
     return this.builder.deleteReport(id);
@@ -107,6 +110,7 @@ export class ReportsController {
   /** Recompute this tenant's read models now (the schedule does this automatically in production). */
   @Post('refresh')
   @Roles(Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  @ShadowPermissions('report:write')
   @HttpCode(HttpStatus.OK)
   refresh() {
     return this.reporting.refreshCurrent();

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
@@ -30,6 +31,7 @@ export class SubscriptionsController {
 
   @Post('plans')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.CREATED)
   createPlan(@Body() dto: UpsertPlanDto) {
     return this.subs.createPlan(dto);
@@ -37,12 +39,14 @@ export class SubscriptionsController {
 
   @Patch('plans/:id')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   updatePlan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertPlanDto) {
     return this.subs.updatePlan(id, dto);
   }
 
   @Delete('plans/:id')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   archivePlan(@Param('id', ParseUUIDPipe) id: string) {
     return this.subs.archivePlan(id);
@@ -61,6 +65,7 @@ export class SubscriptionsController {
 
   @Post()
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateSubscriptionDto) {
     return this.subs.createSubscription(dto);
@@ -68,12 +73,14 @@ export class SubscriptionsController {
 
   @Patch(':id')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   change(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangeSubscriptionDto) {
     return this.subs.changeSubscription(id, dto);
   }
 
   @Post(':id/pause')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   pause(@Param('id', ParseUUIDPipe) id: string) {
     return this.subs.pauseSubscription(id);
@@ -81,6 +88,7 @@ export class SubscriptionsController {
 
   @Post(':id/resume')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   resume(@Param('id', ParseUUIDPipe) id: string) {
     return this.subs.resumeSubscription(id);
@@ -88,6 +96,7 @@ export class SubscriptionsController {
 
   @Post(':id/cancel')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   cancel(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CancelSubscriptionDto) {
     return this.subs.cancelSubscription(id, dto);
@@ -101,6 +110,7 @@ export class SubscriptionsController {
 
   @Post('invoices/:id/pay')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   payInvoice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MarkInvoicePaidDto) {
     return this.subs.markInvoicePaid(id, dto);
@@ -108,6 +118,7 @@ export class SubscriptionsController {
 
   @Post('invoices/:id/void')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   voidInvoice(@Param('id', ParseUUIDPipe) id: string) {
     return this.subs.voidInvoice(id);
@@ -116,6 +127,7 @@ export class SubscriptionsController {
   // ── Billing engine (manual trigger) ────────────────────────────────────────────────
   @Post('run-billing')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   runBilling() {
     return this.subs.runBilling();
@@ -124,12 +136,14 @@ export class SubscriptionsController {
   // ── GL config ──────────────────────────────────────────────────────────────────────
   @Get('gl-config')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   getGlConfig() {
     return this.subs.getGlConfig();
   }
 
   @Put('gl-config')
   @Roles(...MANAGER)
+  @ShadowPermissions('subscription:write')
   @HttpCode(HttpStatus.OK)
   setGlConfig(@Body() dto: SetSubGlConfigDto) {
     return this.subs.setGlConfig(dto);

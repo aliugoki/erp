@@ -86,9 +86,17 @@ gap). Default-deny is preserved throughout.
   `helpdesk:ticket:write` (SUPPORT_AGENT), admin endpoints (teams/SLA) → `helpdesk:config:write`
   (admin-only — SUPPORT_AGENT deliberately does NOT hold it). Dedicated `test/helpdesk-authz-matrix.spec.ts`.
   Live: SUPPORT_AGENT works tickets (201) but is denied team config (403); 0 divergences.
-- 🔁 Shared `test/module-authz-matrix.spec.ts` covers hr/inventory/crm/sales; finance & helpdesk have
-  dedicated specs.
-- ☐ Remaining modules: POS, Projects, Assets, Production, Pharmacy, Ecommerce, Subscriptions, Reporting, AI.
+- ✅ **POS / Projects / Assets / Production / Pharmacy / Ecommerce / Subscriptions / Reporting** — all
+  role-gated endpoints tagged (incl. inline `@Roles`, analytics reads and GL-config). New perms incl.
+  `pos:sale/report/glconfig/config`, `project:write`, `asset:write`, `production:write`+`glconfig`,
+  `pharmacy:operate`/`config`, `ecommerce:manage`/`finance`, `subscription:write`, `report:write`.
+  Admin-only tiers (`pos:config`, `pharmacy:config`, `ecommerce:manage`, `report:write`) are held only
+  via the wildcard. Expectation-driven `test/phase-b-batch-matrix.spec.ts`.
+- **AI** has no role-gated endpoints (feature-gated only) → nothing to tag.
+- ✅ **Phase B COMPLETE** — every `@Roles`-guarded endpoint across the app now carries a
+  `@ShadowPermissions` tag, with 0 live divergences. Ready for Phase C (flip to enforcement).
+- 🔁 Matrices: shared `module-authz-matrix` (hr/inventory/crm/sales) + dedicated finance / helpdesk /
+  phase-b-batch specs.
 
 **Phase C — Flip to permissions.**
 - Once all modules are tagged and matrix-green, remove the redundant `@Roles(...)` from business

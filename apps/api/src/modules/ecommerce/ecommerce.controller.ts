@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import type { UploadedFileLike } from '../storage/storage.service';
@@ -56,12 +57,14 @@ export class EcommerceController {
   // ── Payment provider config ─────────────────────────────────────────────────────
   @Get('payment-config')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   getPaymentConfig() {
     return this.payments.getConfig();
   }
 
   @Put('payment-config')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   setPaymentConfig(@Body() dto: SetPaymentConfigDto) {
     return this.payments.setConfig(dto);
@@ -75,6 +78,7 @@ export class EcommerceController {
 
   @Put('store')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   upsertStore(@Body() dto: UpsertStoreDto) {
     return this.ec.upsertStore(dto);
@@ -82,6 +86,7 @@ export class EcommerceController {
 
   @Post('store/logo')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', IMG))
   uploadLogo(@UploadedFile() file?: UploadedFileLike) {
@@ -91,6 +96,7 @@ export class EcommerceController {
 
   @Post('store/hero')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', IMG))
   uploadHero(@UploadedFile() file?: UploadedFileLike) {
@@ -122,6 +128,7 @@ export class EcommerceController {
 
   @Post('collections')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   createCollection(@Body() dto: UpsertCollectionDto) {
     return this.ec.createCollection(dto);
@@ -129,12 +136,14 @@ export class EcommerceController {
 
   @Patch('collections/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   updateCollection(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertCollectionDto) {
     return this.ec.updateCollection(id, dto);
   }
 
   @Delete('collections/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteCollection(@Param('id', ParseUUIDPipe) id: string) {
     return this.ec.deleteCollection(id);
@@ -153,6 +162,7 @@ export class EcommerceController {
 
   @Post('products')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   createProduct(@Body() dto: CreateProductDto) {
     return this.ec.createProduct(dto);
@@ -160,12 +170,14 @@ export class EcommerceController {
 
   @Patch('products/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   updateProduct(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
     return this.ec.updateProduct(id, dto);
   }
 
   @Delete('products/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteProduct(@Param('id', ParseUUIDPipe) id: string) {
     return this.ec.deleteProduct(id);
@@ -174,6 +186,7 @@ export class EcommerceController {
   // ── Product images ────────────────────────────────────────────────────────────
   @Post('products/:id/images')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(FileInterceptor('file', IMG))
   addImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
@@ -196,6 +209,7 @@ export class EcommerceController {
 
   @Post('products/:id/images/:imageId/primary')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   setPrimary(@Param('id', ParseUUIDPipe) id: string, @Param('imageId', ParseUUIDPipe) imageId: string) {
     return this.ec.setPrimaryImage(id, imageId);
@@ -203,6 +217,7 @@ export class EcommerceController {
 
   @Delete('product-images/:imageId')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeImage(@Param('imageId', ParseUUIDPipe) imageId: string) {
     return this.ec.removeProductImage(imageId);
@@ -216,6 +231,7 @@ export class EcommerceController {
 
   @Post('products/:id/variants')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   addVariant(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateVariantDto) {
     return this.ec.addVariant(id, dto);
@@ -223,12 +239,14 @@ export class EcommerceController {
 
   @Patch('variants/:variantId')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   updateVariant(@Param('variantId', ParseUUIDPipe) variantId: string, @Body() dto: UpdateVariantDto) {
     return this.ec.updateVariant(variantId, dto);
   }
 
   @Delete('variants/:variantId')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeVariant(@Param('variantId', ParseUUIDPipe) variantId: string) {
     return this.ec.removeVariant(variantId);
@@ -242,12 +260,14 @@ export class EcommerceController {
 
   @Patch('reviews/:id/status')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   setReviewStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetReviewStatusDto) {
     return this.ec.setReviewStatus(id, dto);
   }
 
   @Delete('reviews/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteReview(@Param('id', ParseUUIDPipe) id: string) {
     return this.ec.deleteReview(id);
@@ -261,6 +281,7 @@ export class EcommerceController {
 
   @Post('shipping-zones')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   createShippingZone(@Body() dto: UpsertShippingZoneDto) {
     return this.ec.createShippingZone(dto);
@@ -268,12 +289,14 @@ export class EcommerceController {
 
   @Patch('shipping-zones/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   updateShippingZone(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertShippingZoneDto) {
     return this.ec.updateShippingZone(id, dto);
   }
 
   @Delete('shipping-zones/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeShippingZone(@Param('id', ParseUUIDPipe) id: string) {
     return this.ec.removeShippingZone(id);
@@ -287,6 +310,7 @@ export class EcommerceController {
 
   @Post('discounts')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.CREATED)
   createDiscount(@Body() dto: UpsertDiscountDto) {
     return this.ec.createDiscount(dto);
@@ -294,6 +318,7 @@ export class EcommerceController {
 
   @Delete('discounts/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDiscount(@Param('id', ParseUUIDPipe) id: string) {
     return this.ec.deleteDiscount(id);
@@ -312,6 +337,7 @@ export class EcommerceController {
 
   @Patch('orders/:id/status')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   updateOrderStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateOrderStatusDto) {
     return this.ec.updateOrderStatus(id, dto);
   }
@@ -319,6 +345,7 @@ export class EcommerceController {
   /** Cancel + restock card orders whose payment session lapsed unpaid (also runs automatically). */
   @Post('orders/release-expired')
   @Roles(...WRITE)
+  @ShadowPermissions('ecommerce:manage')
   @HttpCode(HttpStatus.OK)
   releaseExpired() {
     return this.ec.releaseExpired();
@@ -327,12 +354,14 @@ export class EcommerceController {
   // ── GL posting config ───────────────────────────────────────────────────────
   @Get('gl-config')
   @Roles(...FINANCE)
+  @ShadowPermissions('ecommerce:finance:write')
   getGlConfig() {
     return this.ec.getGlConfig();
   }
 
   @Put('gl-config')
   @Roles(...FINANCE)
+  @ShadowPermissions('ecommerce:finance:write')
   @HttpCode(HttpStatus.OK)
   setGlConfig(@Body() dto: SetEcGlConfigDto) {
     return this.ec.setGlConfig(dto);

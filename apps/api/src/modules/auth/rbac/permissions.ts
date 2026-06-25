@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'hr:document:write',
     'hr:policy:write',
     'hr:profile:write',
+    'project:write',
   ],
   [Role.FINANCE_MANAGER]: [
     'finance:invoice:read',
@@ -39,6 +40,13 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'finance:costcenter:write',
     'finance:budget:write',
     'finance:currency:write',
+    'asset:write',
+    'subscription:write',
+    'ecommerce:finance:write',
+    'pos:report:read',
+    'pos:glconfig:write',
+    'production:glconfig:read',
+    'production:glconfig:write',
   ],
   [Role.INVENTORY_MANAGER]: [
     'inventory:product:read',
@@ -46,6 +54,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'inventory:stock:write',
     'inventory:category:write',
     'inventory:warehouse:write',
+    'production:write',
+    'production:glconfig:read',
+    'pharmacy:operate',
   ],
   [Role.SALES_REP]: [
     'crm:deal:read',
@@ -56,6 +67,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'crm:activity:write',
     'sales:quotation:write',
     'sales:order:write',
+    'pos:sale:write',
+    'pos:report:read',
+    'pharmacy:operate',
   ],
   // SUPPORT_AGENT works tickets but does NOT configure teams/SLA (helpdesk:config:write is admin-only).
   [Role.SUPPORT_AGENT]: ['helpdesk:ticket:read', 'helpdesk:ticket:write'],
