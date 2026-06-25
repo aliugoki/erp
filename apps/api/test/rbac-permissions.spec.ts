@@ -37,7 +37,7 @@ describe('rbac permissions (Path 2, Phase A)', () => {
   it('a capability role grants exactly its module permissions, not others', () => {
     expect(rolesHavePermission([Role.INVENTORY_MANAGER], 'inventory:product:write')).toBe(true);
     expect(rolesHavePermission([Role.INVENTORY_MANAGER], 'finance:invoice:write')).toBe(false);
-    expect(rolesHavePermission([Role.FINANCE_MANAGER], 'finance:transaction:write')).toBe(true);
+    expect(rolesHavePermission([Role.FINANCE_MANAGER], 'finance:voucher:post')).toBe(true);
     expect(rolesHavePermission([Role.FINANCE_MANAGER], 'hr:employee:write')).toBe(false);
   });
 

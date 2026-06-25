@@ -68,11 +68,17 @@ gap). Default-deny is preserved throughout.
 - ▶ **Next (still Phase A → B boundary):** widen `@ShadowPermissions` tagging module-by-module and
   watch the `RbacShadow` logs to find real role/permission gaps before Phase C flips enforcement.
 
-**Phase B — Tag endpoints (module by module).**
-- For each module, add `@Permissions(...)` next to the existing `@Roles(...)` so **both** must pass
-  (strictly tighter — cannot open access). One PR per module group.
-- For each tagged module, add an **authorization matrix test**: for every endpoint × representative
-  principal (each built-in role, a custom role, unauthenticated), assert the expected allow/deny.
+**Phase B — Tag endpoints (module by module).** ▶ IN PROGRESS.
+- For each module, add `@ShadowPermissions(...)` next to the existing `@Roles(...)` (log-only; cannot
+  open access), grow the catalog in lockstep, and add an **authorization matrix test** asserting the
+  permission maps to the same principals the role check allows. One PR per module group.
+- ✅ **Finance** — all 26 role-gated write endpoints tagged; finance permission group grown to 14
+  (`account`/`voucher` write+post / `invoice` / `bill` / `payment` / `vendor` / `customer` / `period` /
+  `reconciliation` / `costcenter` / `budget` / `currency`); `test/finance-authz-matrix.spec.ts` asserts
+  every finance write perm maps to FINANCE_MANAGER + admins only. Live: a real FINANCE_MANAGER exercises
+  the tagged writes with **0 divergences**.
+- ☐ Remaining modules: HR, Inventory, CRM, Sales, POS, Helpdesk, Projects, Assets, Production, Pharmacy,
+  Ecommerce, Subscriptions, Reporting, AI (one PR each; HR/Inventory/CRM already have a pilot tag).
 
 **Phase C — Flip to permissions.**
 - Once all modules are tagged and matrix-green, remove the redundant `@Roles(...)` from business
