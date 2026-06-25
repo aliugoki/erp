@@ -98,6 +98,61 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'helpdesk:config:write', label: 'Configure teams & SLA policies (admin)' },
     ],
   },
+  {
+    domain: 'pos',
+    label: 'Point of Sale',
+    permissions: [
+      { key: 'pos:sale:write', label: 'Operate POS (registers, shifts, sales, returns)' },
+      { key: 'pos:report:read', label: 'View POS analytics' },
+      { key: 'pos:glconfig:write', label: 'Configure POS GL mapping' },
+      { key: 'pos:config:write', label: 'POS administration (admin)' },
+    ],
+  },
+  {
+    domain: 'projects',
+    label: 'Projects',
+    permissions: [{ key: 'project:write', label: 'Manage projects, tasks, timesheets & expenses' }],
+  },
+  {
+    domain: 'assets',
+    label: 'Fixed Assets',
+    permissions: [{ key: 'asset:write', label: 'Manage assets, depreciation, disposal & maintenance' }],
+  },
+  {
+    domain: 'production',
+    label: 'Manufacturing',
+    permissions: [
+      { key: 'production:write', label: 'Manage BOMs & work orders' },
+      { key: 'production:glconfig:read', label: 'View production GL mapping' },
+      { key: 'production:glconfig:write', label: 'Configure production GL mapping' },
+    ],
+  },
+  {
+    domain: 'pharmacy',
+    label: 'Pharmacy',
+    permissions: [
+      { key: 'pharmacy:operate', label: 'Operate pharmacy (dispense, receive, adjust)' },
+      { key: 'pharmacy:config', label: 'Pharmacy administration & GL config (admin)' },
+    ],
+  },
+  {
+    domain: 'ecommerce',
+    label: 'Online Store',
+    permissions: [
+      { key: 'ecommerce:manage', label: 'Manage store, products & orders (admin)' },
+      { key: 'ecommerce:finance:write', label: 'Store financial actions (refunds, payments)' },
+    ],
+  },
+  {
+    domain: 'subscriptions',
+    label: 'Subscriptions',
+    permissions: [{ key: 'subscription:write', label: 'Manage plans, billing & dunning' }],
+  },
+  {
+    domain: 'reporting',
+    label: 'Reporting',
+    permissions: [{ key: 'report:write', label: 'Refresh report read-models (admin)' }],
+  },
 ];
 
 /** Flat list of every catalog permission key. */

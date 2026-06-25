@@ -13,6 +13,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { AssetsService } from './assets.service';
@@ -44,6 +45,7 @@ export class AssetsController {
 
   @Post('categories')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.CREATED)
   createCategory(@Body() dto: CreateCategoryDto) {
     return this.assets.createCategory(dto);
@@ -51,12 +53,14 @@ export class AssetsController {
 
   @Patch('categories/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   updateCategory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto) {
     return this.assets.updateCategory(id, dto);
   }
 
   @Delete('categories/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.assets.deleteCategory(id);
@@ -65,6 +69,7 @@ export class AssetsController {
   // ── Depreciation ────────────────────────────────────────────────────────────
   @Post('depreciation/run')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.CREATED)
   runDepreciation(@Body() dto: RunDepreciationDto) {
     return this.assets.runDepreciation(dto);
@@ -88,6 +93,7 @@ export class AssetsController {
 
   @Post('maintenance')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.CREATED)
   createMaintenance(@Body() dto: CreateMaintenanceDto) {
     return this.assets.createMaintenance(dto);
@@ -101,6 +107,7 @@ export class AssetsController {
 
   @Put('gl-config')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.OK)
   setGlConfig(@Body() dto: SetGlConfigDto) {
     return this.assets.setGlConfig(dto);
@@ -120,6 +127,7 @@ export class AssetsController {
 
   @Post()
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.CREATED)
   createAsset(@Body() dto: CreateAssetDto) {
     return this.assets.createAsset(dto);
@@ -137,12 +145,14 @@ export class AssetsController {
 
   @Patch(':id')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   updateAsset(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAssetDto) {
     return this.assets.updateAsset(id, dto);
   }
 
   @Post(':id/activate')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.OK)
   activate(@Param('id', ParseUUIDPipe) id: string) {
     return this.assets.activateAsset(id);
@@ -150,6 +160,7 @@ export class AssetsController {
 
   @Post(':id/dispose')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.OK)
   dispose(@Param('id', ParseUUIDPipe) id: string, @Body() dto: DisposeAssetDto) {
     return this.assets.disposeAsset(id, dto);
@@ -157,6 +168,7 @@ export class AssetsController {
 
   @Post(':id/write-off')
   @Roles(...WRITE)
+  @ShadowPermissions('asset:write')
   @HttpCode(HttpStatus.OK)
   writeOff(@Param('id', ParseUUIDPipe) id: string) {
     return this.assets.writeOffAsset(id);

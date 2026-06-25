@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { ProjectsService } from './projects.service';
@@ -55,6 +56,7 @@ export class ProjectsController {
 
   @Post()
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateProjectDto) {
     return this.projects.createProject(dto);
@@ -67,18 +69,21 @@ export class ProjectsController {
 
   @Patch(':id')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProjectDto) {
     return this.projects.updateProject(id, dto);
   }
 
   @Patch(':id/status')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ProjectStatusDto) {
     return this.projects.setStatus(id, dto.status);
   }
 
   @Delete(':id')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.projects.deleteProject(id);
@@ -92,12 +97,14 @@ export class ProjectsController {
 
   @Post(':id/members')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto) {
     return this.projects.addMember(id, dto);
   }
 
   @Delete(':id/members/:memberId')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Param('id', ParseUUIDPipe) id: string, @Param('memberId', ParseUUIDPipe) memberId: string) {
     return this.projects.removeMember(id, memberId);
@@ -111,6 +118,7 @@ export class ProjectsController {
 
   @Post(':id/tasks')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   createTask(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateTaskDto) {
     return this.projects.createTask(id, dto);
@@ -118,12 +126,14 @@ export class ProjectsController {
 
   @Patch(':id/tasks/:taskId')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   updateTask(@Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string, @Body() dto: UpdateTaskDto) {
     return this.projects.updateTask(id, taskId, dto);
   }
 
   @Delete(':id/tasks/:taskId')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTask(@Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string) {
     return this.projects.deleteTask(id, taskId);
@@ -137,6 +147,7 @@ export class ProjectsController {
 
   @Post(':id/time')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   logTime(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LogTimeDto) {
     return this.projects.logTime(id, dto);
@@ -144,12 +155,14 @@ export class ProjectsController {
 
   @Patch(':id/time/:entryId/status')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   setTimeStatus(@Param('id', ParseUUIDPipe) id: string, @Param('entryId', ParseUUIDPipe) entryId: string, @Body() dto: TimeStatusDto) {
     return this.projects.setTimeStatus(id, entryId, dto.status);
   }
 
   @Delete(':id/time/:entryId')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTime(@Param('id', ParseUUIDPipe) id: string, @Param('entryId', ParseUUIDPipe) entryId: string) {
     return this.projects.deleteTime(id, entryId);
@@ -163,6 +176,7 @@ export class ProjectsController {
 
   @Post(':id/expenses')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   addExpense(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateExpenseDto) {
     return this.projects.addExpense(id, dto);
@@ -170,6 +184,7 @@ export class ProjectsController {
 
   @Delete(':id/expenses/:expenseId')
   @Roles(...WRITE)
+  @ShadowPermissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteExpense(@Param('id', ParseUUIDPipe) id: string, @Param('expenseId', ParseUUIDPipe) expenseId: string) {
     return this.projects.deleteExpense(id, expenseId);
