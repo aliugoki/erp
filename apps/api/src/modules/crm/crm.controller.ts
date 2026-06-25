@@ -10,9 +10,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   CreateClientDto, CreateContactDto, CreateDealDto,
@@ -20,7 +18,6 @@ import {
 } from './dto/crm.dto';
 import { CrmService } from './crm.service';
 
-const WRITE = [Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** CRM module — gated by the `crm` feature; writes require a sales rep (or admin). */
 @Controller('crm')
@@ -35,7 +32,6 @@ export class CrmController {
   }
 
   @Post('clients')
-  @Roles(...WRITE)
   @Permissions('crm:account:write')
   @HttpCode(HttpStatus.CREATED)
   createClient(@Body() dto: CreateClientDto) {
@@ -53,14 +49,12 @@ export class CrmController {
   }
 
   @Patch('clients/:id')
-  @Roles(...WRITE)
   @Permissions('crm:account:write')
   updateClient(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClientDto) {
     return this.crm.updateClient(id, dto);
   }
 
   @Delete('clients/:id')
-  @Roles(...WRITE)
   @Permissions('crm:account:write')
   @HttpCode(HttpStatus.OK)
   deleteClient(@Param('id', ParseUUIDPipe) id: string) {
@@ -69,7 +63,6 @@ export class CrmController {
 
   // Contacts
   @Post('contacts')
-  @Roles(...WRITE)
   @Permissions('crm:contact:write')
   @HttpCode(HttpStatus.CREATED)
   createContact(@Body() dto: CreateContactDto) {
@@ -77,14 +70,12 @@ export class CrmController {
   }
 
   @Patch('contacts/:id')
-  @Roles(...WRITE)
   @Permissions('crm:contact:write')
   updateContact(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContactDto) {
     return this.crm.updateContact(id, dto);
   }
 
   @Delete('contacts/:id')
-  @Roles(...WRITE)
   @Permissions('crm:contact:write')
   @HttpCode(HttpStatus.OK)
   deleteContact(@Param('id', ParseUUIDPipe) id: string) {
@@ -103,7 +94,6 @@ export class CrmController {
   }
 
   @Post('deals')
-  @Roles(...WRITE)
   @Permissions('crm:deal:write')
   @HttpCode(HttpStatus.CREATED)
   createDeal(@Body() dto: CreateDealDto) {
@@ -116,21 +106,18 @@ export class CrmController {
   }
 
   @Patch('deals/:id/stage')
-  @Roles(...WRITE)
   @Permissions('crm:deal:write')
   updateStage(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealStageDto) {
     return this.crm.updateStage(id, dto.stage, dto.lostReason ?? null);
   }
 
   @Patch('deals/:id')
-  @Roles(...WRITE)
   @Permissions('crm:deal:write')
   updateDeal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealDto) {
     return this.crm.updateDeal(id, dto);
   }
 
   @Delete('deals/:id')
-  @Roles(...WRITE)
   @Permissions('crm:deal:write')
   @HttpCode(HttpStatus.OK)
   deleteDeal(@Param('id', ParseUUIDPipe) id: string) {

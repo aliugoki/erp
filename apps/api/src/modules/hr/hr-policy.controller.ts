@@ -10,14 +10,11 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { HrPolicyService } from './hr-policy.service';
 import { CreateCustomFieldDto, CreatePolicyDto, UpdatePolicyStatusDto } from './dto/hr.dto';
 
-const WRITE = [Role.HR_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Configurable HR policy module — company-defined custom fields + policies that carry their values.
  * Gated by the `hr` feature; writes require an HR manager (or admin). */
@@ -33,7 +30,6 @@ export class HrPolicyController {
   }
 
   @Post('custom-fields')
-  @Roles(...WRITE)
   @Permissions('hr:policy:write')
   @HttpCode(HttpStatus.CREATED)
   createField(@Body() dto: CreateCustomFieldDto) {
@@ -41,7 +37,6 @@ export class HrPolicyController {
   }
 
   @Delete('custom-fields/:id')
-  @Roles(...WRITE)
   @Permissions('hr:policy:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteField(@Param('id', ParseUUIDPipe) id: string) {
@@ -55,7 +50,6 @@ export class HrPolicyController {
   }
 
   @Post('policies')
-  @Roles(...WRITE)
   @Permissions('hr:policy:write')
   @HttpCode(HttpStatus.CREATED)
   createPolicy(@Body() dto: CreatePolicyDto) {
@@ -68,7 +62,6 @@ export class HrPolicyController {
   }
 
   @Patch('policies/:id/status')
-  @Roles(...WRITE)
   @Permissions('hr:policy:write')
   updateStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePolicyStatusDto) {
     return this.policy.updatePolicyStatus(id, dto.status);

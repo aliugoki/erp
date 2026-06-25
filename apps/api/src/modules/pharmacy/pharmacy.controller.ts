@@ -13,9 +13,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AdjustStockDto,
@@ -46,8 +44,6 @@ import { PharmacySalesOrderService } from './pharmacy-sales-order.service';
 import { PharmacyReportsService } from './pharmacy-reports.service';
 
 /** Pharmacists/store keepers operate; tenant admins configure. */
-const OPERATE = [Role.INVENTORY_MANAGER, Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
-const ADMIN = [Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Pharmacy Management System — gated by the `pharmacy` feature entitlement (ADR-009). */
 @Controller('pharmacy')
@@ -70,7 +66,6 @@ export class PharmacyController {
   }
 
   @Put('config')
-  @Roles(...ADMIN)
   @Permissions('pharmacy:config')
   setConfig(@Body() dto: SetPharmacyConfigDto) {
     return this.pharmacy.setConfig(dto);
@@ -83,7 +78,6 @@ export class PharmacyController {
   }
 
   @Post('drugs')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   createDrug(@Body() dto: CreateDrugDto) {
@@ -96,14 +90,12 @@ export class PharmacyController {
   }
 
   @Patch('drugs/:id')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   updateDrug(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDrugDto) {
     return this.pharmacy.updateDrug(id, dto);
   }
 
   @Delete('drugs/:id')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   deleteDrug(@Param('id', ParseUUIDPipe) id: string) {
     return this.pharmacy.deleteDrug(id);
@@ -111,7 +103,6 @@ export class PharmacyController {
 
   // ── Stock: batch receipt + lots + FEFO preview ────────────────────────────────
   @Post('stock/receive')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   receiveBatch(@Body() dto: ReceiveBatchDto) {
@@ -141,7 +132,6 @@ export class PharmacyController {
 
   // ── Dispensing & sales ────────────────────────────────────────────────────────
   @Post('dispense')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   dispense(@Body() dto: DispenseDto) {
@@ -159,7 +149,6 @@ export class PharmacyController {
   }
 
   @Post('dispenses/:id/return')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   returnDispense(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReturnDispenseDto) {
     return this.dispensing.returnDispense(id, dto);
@@ -167,7 +156,6 @@ export class PharmacyController {
 
   /** Re-emit a dispense's GL event (admin) — back-post vouchers for dispenses rung before GL setup. */
   @Post('dispenses/:id/repost-gl')
-  @Roles(...ADMIN)
   @Permissions('pharmacy:config')
   repostGl(@Param('id', ParseUUIDPipe) id: string) {
     return this.dispensing.repostGl(id);
@@ -180,7 +168,6 @@ export class PharmacyController {
   }
 
   @Put('gl-config')
-  @Roles(...ADMIN)
   @Permissions('pharmacy:config')
   setGlConfig(@Body() dto: SetPharmacyGlConfigDto) {
     return this.pharmacy.setGlConfig(dto as Record<string, string | undefined>);
@@ -194,7 +181,6 @@ export class PharmacyController {
 
   // ── Stock adjustments (return-to-vendor / write-off / adjust) ───────────────────
   @Post('rtv')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   returnToVendor(@Body() dto: ReturnToVendorDto) {
@@ -202,7 +188,6 @@ export class PharmacyController {
   }
 
   @Post('write-off')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   writeOff(@Body() dto: WriteOffDto) {
@@ -210,7 +195,6 @@ export class PharmacyController {
   }
 
   @Post('write-off-expired')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   writeOffExpired(@Body() dto: WriteOffExpiredDto) {
@@ -218,7 +202,6 @@ export class PharmacyController {
   }
 
   @Post('adjust')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   adjust(@Body() dto: AdjustStockDto) {
@@ -242,7 +225,6 @@ export class PharmacyController {
   }
 
   @Put('products/:productId/price-tiers')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   setPriceTiers(@Param('productId', ParseUUIDPipe) productId: string, @Body() dto: SetPriceTiersDto) {
     return this.pharmacy.setPriceTiers(productId, dto.tiers);
@@ -250,7 +232,6 @@ export class PharmacyController {
 
   // ── Hospital: ward requisitions ─────────────────────────────────────────────────
   @Post('ward-requisitions')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   createWardRequisition(@Body() dto: CreateWardRequisitionDto) {
@@ -268,28 +249,24 @@ export class PharmacyController {
   }
 
   @Post('ward-requisitions/:id/submit')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   submitWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
     return this.ward.setStatus(id, 'SUBMITTED');
   }
 
   @Post('ward-requisitions/:id/approve')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   approveWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
     return this.ward.setStatus(id, 'APPROVED');
   }
 
   @Post('ward-requisitions/:id/cancel')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   cancelWardRequisition(@Param('id', ParseUUIDPipe) id: string) {
     return this.ward.setStatus(id, 'CANCELLED');
   }
 
   @Post('ward-requisitions/:id/issue')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   issueWardRequisition(@Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueWardRequisitionDto) {
     return this.ward.issue(id, dto);
@@ -297,7 +274,6 @@ export class PharmacyController {
 
   // ── Wholesale: B2B sales orders ─────────────────────────────────────────────────
   @Post('sales-orders')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   @HttpCode(HttpStatus.CREATED)
   createSalesOrder(@Body() dto: CreateSalesOrderDto) {
@@ -315,21 +291,18 @@ export class PharmacyController {
   }
 
   @Post('sales-orders/:id/confirm')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   confirmSalesOrder(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesOrders.setStatus(id, 'CONFIRMED');
   }
 
   @Post('sales-orders/:id/cancel')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   cancelSalesOrder(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesOrders.setStatus(id, 'CANCELLED');
   }
 
   @Post('sales-orders/:id/fulfill')
-  @Roles(...OPERATE)
   @Permissions('pharmacy:operate')
   fulfillSalesOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: FulfillSalesOrderDto) {
     return this.salesOrders.fulfill(id, dto);

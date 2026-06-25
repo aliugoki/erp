@@ -137,10 +137,12 @@ The binding decisions live in [`docs/adr/`](docs/adr/) and are referenced in eac
 - **ADR-007** — Observability & money (OTel trace propagation; money as integer minor units).
 - **ADR-008** — UI/UX stack (Next.js + Tailwind + shadcn/ui + next-themes; enterprise, open-source, multi-theme).
 - **ADR-009** — Per-tenant feature entitlements (module registry + entitlements table + `FeatureGuard`; companies add/remove features).
+- **ADR-010** — Permission-level RBAC (permission catalog + `@Permissions` enforcement via the token `perms` claim; per-tenant custom roles grant capabilities and/or fine-grained permissions; `@Roles` only on platform routes).
 
 **Two more Nevers (product constraints):** Never add a paid/closed-source dependency — open-source,
 self-hostable tooling only. Never gate a feature in the UI alone — the backend `FeatureGuard` is
-authoritative (ADR-009).
+authoritative (ADR-009). **Authorize business endpoints by permission** (`@Permissions`, ADR-010), not
+by role — `@Roles` is reserved for platform/admin routes (e.g. `@Roles(SUPER_ADMIN)`).
 
 ---
 

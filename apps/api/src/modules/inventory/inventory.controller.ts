@@ -17,9 +17,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import type { UploadedFileLike } from '../storage/storage.service';
 import {
@@ -35,7 +33,6 @@ import {
 import { InventoryCategoriesService } from './inventory-categories.service';
 import { InventoryService } from './inventory.service';
 
-const WRITE = [Role.INVENTORY_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Inventory module — gated by the `inventory` feature; writes require an inventory manager (or admin). */
 @Controller('inventory')
@@ -58,7 +55,6 @@ export class InventoryController {
   }
 
   @Post('categories')
-  @Roles(...WRITE)
   @Permissions('inventory:category:write')
   @HttpCode(HttpStatus.CREATED)
   createCategory(@Body() dto: CreateCategoryDto) {
@@ -66,14 +62,12 @@ export class InventoryController {
   }
 
   @Patch('categories/:id')
-  @Roles(...WRITE)
   @Permissions('inventory:category:write')
   updateCategory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto) {
     return this.categories.updateCategory(id, dto);
   }
 
   @Delete('categories/:id')
-  @Roles(...WRITE)
   @Permissions('inventory:category:write')
   removeCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.categories.removeCategory(id);
@@ -85,7 +79,6 @@ export class InventoryController {
   }
 
   @Post('warehouses')
-  @Roles(...WRITE)
   @Permissions('inventory:warehouse:write')
   @HttpCode(HttpStatus.CREATED)
   createWarehouse(@Body() dto: CreateWarehouseDto) {
@@ -93,7 +86,6 @@ export class InventoryController {
   }
 
   @Patch('warehouses/:id')
-  @Roles(...WRITE)
   @Permissions('inventory:warehouse:write')
   updateWarehouse(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateWarehouseDto) {
     return this.inventory.updateWarehouse(id, dto);
@@ -111,7 +103,6 @@ export class InventoryController {
   }
 
   @Post('products')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   @HttpCode(HttpStatus.CREATED)
   createProduct(@Body() dto: CreateProductDto) {
@@ -124,21 +115,18 @@ export class InventoryController {
   }
 
   @Patch('products/:id/category')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   setProductCategory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetProductCategoryDto) {
     return this.inventory.setProductCategory(id, dto.categoryId ?? null);
   }
 
   @Patch('products/:id')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   updateProduct(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
     return this.inventory.updateProduct(id, dto);
   }
 
   @Delete('products/:id')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   @HttpCode(HttpStatus.OK)
   deleteProduct(@Param('id', ParseUUIDPipe) id: string) {
@@ -158,7 +146,6 @@ export class InventoryController {
 
   /** Upload an image for a product — multipart `file` field (image, ≤8 MiB). */
   @Post('products/:id/images')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   @UseInterceptors(FileInterceptor('file'))
   uploadImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
@@ -179,14 +166,12 @@ export class InventoryController {
   }
 
   @Patch('products/:id/images/:imageId/primary')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   setPrimaryImage(@Param('id', ParseUUIDPipe) id: string, @Param('imageId', ParseUUIDPipe) imageId: string) {
     return this.inventory.setPrimaryImage(id, imageId);
   }
 
   @Delete('products/:id/images/:imageId')
-  @Roles(...WRITE)
   @Permissions('inventory:product:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteImage(@Param('id', ParseUUIDPipe) id: string, @Param('imageId', ParseUUIDPipe) imageId: string) {
@@ -194,7 +179,6 @@ export class InventoryController {
   }
 
   @Post('movements')
-  @Roles(...WRITE)
   @Permissions('inventory:stock:write')
   @HttpCode(HttpStatus.CREATED)
   createMovement(@Body() dto: CreateMovementDto) {

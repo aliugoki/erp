@@ -11,9 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AsOfQueryDto,
@@ -49,7 +47,6 @@ import {
 } from './dto/finance.dto';
 import { FinanceService } from './finance.service';
 
-const WRITE = [Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Finance module — gated by the `finance` feature; writes require a finance manager (or admin). */
 @Controller('finance')
@@ -64,7 +61,6 @@ export class FinanceController {
   }
 
   @Post('accounts')
-  @Roles(...WRITE)
   @Permissions('finance:account:write')
   @HttpCode(HttpStatus.CREATED)
   createAccount(@Body() dto: CreateAccountDto) {
@@ -72,7 +68,6 @@ export class FinanceController {
   }
 
   @Patch('accounts/:id')
-  @Roles(...WRITE)
   @Permissions('finance:account:write')
   updateAccount(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) {
     return this.finance.updateAccount(id, dto);
@@ -85,7 +80,6 @@ export class FinanceController {
   }
 
   @Post('periods')
-  @Roles(...WRITE)
   @Permissions('finance:period:write')
   @HttpCode(HttpStatus.CREATED)
   createPeriod(@Body() dto: CreatePeriodDto) {
@@ -93,14 +87,12 @@ export class FinanceController {
   }
 
   @Patch('periods/:id')
-  @Roles(...WRITE)
   @Permissions('finance:period:write')
   updatePeriod(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePeriodDto) {
     return this.finance.updatePeriod(id, dto);
   }
 
   @Post('year-end-close')
-  @Roles(...WRITE)
   @Permissions('finance:period:write')
   @HttpCode(HttpStatus.CREATED)
   yearEndClose(@Body() dto: YearEndCloseDto) {
@@ -114,7 +106,6 @@ export class FinanceController {
   }
 
   @Post('recurring')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:write')
   @HttpCode(HttpStatus.CREATED)
   createRecurring(@Body() dto: CreateRecurringDto) {
@@ -122,7 +113,6 @@ export class FinanceController {
   }
 
   @Post('recurring/:id/run')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   runRecurring(@Param('id', ParseUUIDPipe) id: string) {
@@ -130,7 +120,6 @@ export class FinanceController {
   }
 
   @Post('recurring/run-due')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   runDue() {
@@ -156,7 +145,6 @@ export class FinanceController {
   }
 
   @Post('vendors')
-  @Roles(...WRITE)
   @Permissions('finance:vendor:write')
   @HttpCode(HttpStatus.CREATED)
   createVendor(@Body() dto: CreateVendorDto) {
@@ -169,7 +157,6 @@ export class FinanceController {
   }
 
   @Post('customers')
-  @Roles(...WRITE)
   @Permissions('finance:customer:write')
   @HttpCode(HttpStatus.CREATED)
   createCustomer(@Body() dto: CreateCustomerDto) {
@@ -182,7 +169,6 @@ export class FinanceController {
   }
 
   @Post('bills')
-  @Roles(...WRITE)
   @Permissions('finance:bill:write')
   @HttpCode(HttpStatus.CREATED)
   createBill(@Body() dto: CreateBillDto) {
@@ -195,7 +181,6 @@ export class FinanceController {
   }
 
   @Post('bills/:id/payments')
-  @Roles(...WRITE)
   @Permissions('finance:payment:write')
   @HttpCode(HttpStatus.CREATED)
   payBill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateBillPaymentDto) {
@@ -214,7 +199,6 @@ export class FinanceController {
   }
 
   @Post('reconciliation')
-  @Roles(...WRITE)
   @Permissions('finance:reconciliation:write')
   setReconciled(@Body() dto: ReconcileDto) {
     return this.finance.setReconciled(dto);
@@ -226,7 +210,6 @@ export class FinanceController {
   }
 
   @Post('bank-statements/import')
-  @Roles(...WRITE)
   @Permissions('finance:reconciliation:write')
   @HttpCode(HttpStatus.CREATED)
   importStatement(@Body() dto: ImportStatementDto) {
@@ -234,7 +217,6 @@ export class FinanceController {
   }
 
   @Post('bank-statements/auto-match')
-  @Roles(...WRITE)
   @Permissions('finance:reconciliation:write')
   autoMatch(@Body() dto: AutoMatchDto) {
     return this.finance.autoMatch(dto);
@@ -247,7 +229,6 @@ export class FinanceController {
   }
 
   @Post('transactions')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:write')
   @HttpCode(HttpStatus.CREATED)
   createTransaction(@Body() dto: CreateTransactionDto) {
@@ -260,7 +241,6 @@ export class FinanceController {
   }
 
   @Post('transactions/:id/reverse')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:post')
   @HttpCode(HttpStatus.CREATED)
   reverseTransaction(@Param('id', ParseUUIDPipe) id: string) {
@@ -268,14 +248,12 @@ export class FinanceController {
   }
 
   @Post('transactions/:id/post')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:post')
   postTransaction(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.postTransaction(id);
   }
 
   @Delete('transactions/:id')
-  @Roles(...WRITE)
   @Permissions('finance:voucher:write')
   deleteDraft(@Param('id', ParseUUIDPipe) id: string) {
     return this.finance.deleteDraft(id);
@@ -314,7 +292,6 @@ export class FinanceController {
   }
 
   @Post('cost-centers')
-  @Roles(...WRITE)
   @Permissions('finance:costcenter:write')
   @HttpCode(HttpStatus.CREATED)
   createCostCenter(@Body() dto: CreateCostCenterDto) {
@@ -328,7 +305,6 @@ export class FinanceController {
 
   // Budgets
   @Post('budgets')
-  @Roles(...WRITE)
   @Permissions('finance:budget:write')
   @HttpCode(HttpStatus.CREATED)
   setBudget(@Body() dto: SetBudgetDto) {
@@ -347,7 +323,6 @@ export class FinanceController {
   }
 
   @Post('currencies')
-  @Roles(...WRITE)
   @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   createCurrency(@Body() dto: CreateCurrencyDto) {
@@ -360,7 +335,6 @@ export class FinanceController {
   }
 
   @Post('exchange-rates')
-  @Roles(...WRITE)
   @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   setRate(@Body() dto: SetRateDto) {
@@ -373,7 +347,6 @@ export class FinanceController {
   }
 
   @Post('revalue')
-  @Roles(...WRITE)
   @Permissions('finance:currency:write')
   @HttpCode(HttpStatus.CREATED)
   revalueForeign(@Body() dto: RevalueFxDto) {
@@ -387,7 +360,6 @@ export class FinanceController {
   }
 
   @Post('invoices')
-  @Roles(...WRITE)
   @Permissions('finance:invoice:write')
   @HttpCode(HttpStatus.CREATED)
   createInvoice(@Body() dto: CreateInvoiceDto) {
@@ -400,7 +372,6 @@ export class FinanceController {
   }
 
   @Patch('invoices/:id/pay')
-  @Roles(...WRITE)
   @Permissions('finance:payment:write')
   payInvoice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PayInvoiceDto) {
     return this.finance.payInvoice(id, dto);

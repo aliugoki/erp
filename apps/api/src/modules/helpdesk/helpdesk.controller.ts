@@ -2,10 +2,8 @@ import {
   Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   AssignTicketDto, CreateTicketDto, CsatDto, ReplyDto, SetStatusDto,
@@ -13,8 +11,6 @@ import {
 } from './dto/helpdesk.dto';
 import { HelpdeskService } from './helpdesk.service';
 
-const AGENT = [Role.SUPPORT_AGENT, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
-const ADMIN = [Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Help Desk agent console — gated by the `helpdesk` feature entitlement (ADR-009). */
 @Controller('helpdesk')
@@ -52,7 +48,6 @@ export class HelpdeskController {
   }
 
   @Post('tickets')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: AuthenticatedUser) {
@@ -60,14 +55,12 @@ export class HelpdeskController {
   }
 
   @Patch('tickets/:id')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTicketDto) {
     return this.hd.updateTicket(id, dto);
   }
 
   @Post('tickets/:id/reply')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   reply(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthenticatedUser) {
@@ -75,7 +68,6 @@ export class HelpdeskController {
   }
 
   @Post('tickets/:id/assign')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignTicketDto, @CurrentUser() user: AuthenticatedUser) {
@@ -83,7 +75,6 @@ export class HelpdeskController {
   }
 
   @Post('tickets/:id/status')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetStatusDto, @CurrentUser() user: AuthenticatedUser) {
@@ -91,7 +82,6 @@ export class HelpdeskController {
   }
 
   @Post('tickets/:id/csat')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   csat(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CsatDto) {
@@ -99,7 +89,6 @@ export class HelpdeskController {
   }
 
   @Post('sla/sweep')
-  @Roles(...ADMIN)
   @Permissions('helpdesk:config:write')
   @HttpCode(HttpStatus.OK)
   sweep() {
@@ -113,7 +102,6 @@ export class HelpdeskController {
   }
 
   @Post('teams')
-  @Roles(...ADMIN)
   @Permissions('helpdesk:config:write')
   @HttpCode(HttpStatus.CREATED)
   createTeam(@Body() dto: UpsertTeamDto) {
@@ -121,14 +109,12 @@ export class HelpdeskController {
   }
 
   @Patch('teams/:id')
-  @Roles(...ADMIN)
   @Permissions('helpdesk:config:write')
   updateTeam(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertTeamDto) {
     return this.hd.updateTeam(id, dto);
   }
 
   @Delete('teams/:id')
-  @Roles(...ADMIN)
   @Permissions('helpdesk:config:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTeam(@Param('id', ParseUUIDPipe) id: string) {
@@ -142,7 +128,6 @@ export class HelpdeskController {
   }
 
   @Put('sla-policies')
-  @Roles(...ADMIN)
   @Permissions('helpdesk:config:write')
   @HttpCode(HttpStatus.OK)
   upsertSla(@Body() dto: UpsertSlaPolicyDto) {
@@ -156,7 +141,6 @@ export class HelpdeskController {
   }
 
   @Post('canned-responses')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.CREATED)
   createCanned(@Body() dto: UpsertCannedResponseDto) {
@@ -164,7 +148,6 @@ export class HelpdeskController {
   }
 
   @Delete('canned-responses/:id')
-  @Roles(...AGENT)
   @Permissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteCanned(@Param('id', ParseUUIDPipe) id: string) {

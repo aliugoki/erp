@@ -11,9 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { ProjectsService } from './projects.service';
 import {
@@ -29,7 +27,6 @@ import {
 } from './dto/projects.dto';
 
 /** Project writes require a manager or admin. */
-const WRITE = [Role.HR_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Project Management & Timesheets — gated by the `projects` feature entitlement. */
 @Controller('projects')
@@ -55,7 +52,6 @@ export class ProjectsController {
   }
 
   @Post()
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateProjectDto) {
@@ -68,21 +64,18 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  @Roles(...WRITE)
   @Permissions('project:write')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProjectDto) {
     return this.projects.updateProject(id, dto);
   }
 
   @Patch(':id/status')
-  @Roles(...WRITE)
   @Permissions('project:write')
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ProjectStatusDto) {
     return this.projects.setStatus(id, dto.status);
   }
 
   @Delete(':id')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string) {
@@ -96,14 +89,12 @@ export class ProjectsController {
   }
 
   @Post(':id/members')
-  @Roles(...WRITE)
   @Permissions('project:write')
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto) {
     return this.projects.addMember(id, dto);
   }
 
   @Delete(':id/members/:memberId')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Param('id', ParseUUIDPipe) id: string, @Param('memberId', ParseUUIDPipe) memberId: string) {
@@ -117,7 +108,6 @@ export class ProjectsController {
   }
 
   @Post(':id/tasks')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   createTask(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateTaskDto) {
@@ -125,14 +115,12 @@ export class ProjectsController {
   }
 
   @Patch(':id/tasks/:taskId')
-  @Roles(...WRITE)
   @Permissions('project:write')
   updateTask(@Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string, @Body() dto: UpdateTaskDto) {
     return this.projects.updateTask(id, taskId, dto);
   }
 
   @Delete(':id/tasks/:taskId')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTask(@Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string) {
@@ -146,7 +134,6 @@ export class ProjectsController {
   }
 
   @Post(':id/time')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   logTime(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LogTimeDto) {
@@ -154,14 +141,12 @@ export class ProjectsController {
   }
 
   @Patch(':id/time/:entryId/status')
-  @Roles(...WRITE)
   @Permissions('project:write')
   setTimeStatus(@Param('id', ParseUUIDPipe) id: string, @Param('entryId', ParseUUIDPipe) entryId: string, @Body() dto: TimeStatusDto) {
     return this.projects.setTimeStatus(id, entryId, dto.status);
   }
 
   @Delete(':id/time/:entryId')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTime(@Param('id', ParseUUIDPipe) id: string, @Param('entryId', ParseUUIDPipe) entryId: string) {
@@ -175,7 +160,6 @@ export class ProjectsController {
   }
 
   @Post(':id/expenses')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.CREATED)
   addExpense(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateExpenseDto) {
@@ -183,7 +167,6 @@ export class ProjectsController {
   }
 
   @Delete(':id/expenses/:expenseId')
-  @Roles(...WRITE)
   @Permissions('project:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteExpense(@Param('id', ParseUUIDPipe) id: string, @Param('expenseId', ParseUUIDPipe) expenseId: string) {
