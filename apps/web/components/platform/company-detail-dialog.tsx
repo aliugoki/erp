@@ -11,7 +11,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+interface FeatureModuleView {
+  key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
 
 export interface Company {
   id: string;
@@ -62,6 +70,20 @@ export function CompanyDetailDialog({
     queryKey: ['tenant-users', id],
     queryFn: () => apiGet<TenantUser[]>(`/tenants/${id}/users`),
     enabled: open,
+  });
+
+  const { data: features } = useQuery({
+    queryKey: ['tenant-features', id],
+    queryFn: () => apiGet<FeatureModuleView[]>(`/tenants/${id}/features`),
+    enabled: open,
+  });
+  const toggleFeature = useMutation({
+    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) => apiPatch(`/tenants/${id}/features/${key}`, { enabled }),
+    onSuccess: () => {
+      toast.success('Module updated');
+      qc.invalidateQueries({ queryKey: ['tenant-features', id] });
+    },
+    onError: (e) => toast.error('Could not update module', { description: e instanceof ApiError ? e.message : '' }),
   });
 
   const rename = useMutation({
@@ -204,6 +226,23 @@ export function CompanyDetailDialog({
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" disabled={applyPlan.isPending} onClick={() => applyPlan.mutate()}>Apply</Button>
+          </div>
+        </div>
+
+        {/* Modules — managed by the platform operator per company */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Modules</h3>
+          <div className="grid max-h-44 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-lg border p-3">
+            {(features ?? []).map((m) => (
+              <label key={m.key} className="flex items-center justify-between gap-2 py-1 text-sm">
+                <span className="truncate" title={m.description}>{m.name}</span>
+                <Switch
+                  checked={m.enabled}
+                  disabled={toggleFeature.isPending}
+                  onCheckedChange={(enabled) => toggleFeature.mutate({ key: m.key, enabled })}
+                />
+              </label>
+            ))}
           </div>
         </div>
 

@@ -34,9 +34,12 @@ export class AuditService {
   }
 
   /** Record an audit row using an existing transaction's manager, so it commits atomically with the
-   * mutation that produced it (the tenant GUC must already be set on that transaction). */
-  async recordWith(manager: EntityManager, entry: AuditEntry): Promise<void> {
-    const tenantId = RequestContext.tenantId();
+   * mutation that produced it (the tenant GUC must already be set on that transaction). Pass
+   * `tenantOverride` when acting on another tenant's data (e.g. a SUPER_ADMIN cross-tenant change) so
+   * the audit row is scoped to THAT tenant and satisfies its RLS WITH CHECK — the actor (userId) is
+   * still taken from RequestContext. */
+  async recordWith(manager: EntityManager, entry: AuditEntry, tenantOverride?: string): Promise<void> {
+    const tenantId = tenantOverride ?? RequestContext.tenantId();
     if (!tenantId) return;
     await this.insert(manager, tenantId, entry);
   }
