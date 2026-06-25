@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
@@ -52,6 +53,7 @@ export class HelpdeskController {
 
   @Post('tickets')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: AuthenticatedUser) {
     return this.hd.createTicket(dto, user.userId);
@@ -59,12 +61,14 @@ export class HelpdeskController {
 
   @Patch('tickets/:id')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTicketDto) {
     return this.hd.updateTicket(id, dto);
   }
 
   @Post('tickets/:id/reply')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   reply(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReplyDto, @CurrentUser() user: AuthenticatedUser) {
     return this.hd.reply(id, dto, user.userId);
@@ -72,6 +76,7 @@ export class HelpdeskController {
 
   @Post('tickets/:id/assign')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignTicketDto, @CurrentUser() user: AuthenticatedUser) {
     return this.hd.assign(id, dto, user.userId);
@@ -79,6 +84,7 @@ export class HelpdeskController {
 
   @Post('tickets/:id/status')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetStatusDto, @CurrentUser() user: AuthenticatedUser) {
     return this.hd.setStatus(id, dto, user.userId);
@@ -86,6 +92,7 @@ export class HelpdeskController {
 
   @Post('tickets/:id/csat')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.OK)
   csat(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CsatDto) {
     return this.hd.setCsat(id, dto);
@@ -93,6 +100,7 @@ export class HelpdeskController {
 
   @Post('sla/sweep')
   @Roles(...ADMIN)
+  @ShadowPermissions('helpdesk:config:write')
   @HttpCode(HttpStatus.OK)
   sweep() {
     return this.hd.sweepBreaches();
@@ -106,6 +114,7 @@ export class HelpdeskController {
 
   @Post('teams')
   @Roles(...ADMIN)
+  @ShadowPermissions('helpdesk:config:write')
   @HttpCode(HttpStatus.CREATED)
   createTeam(@Body() dto: UpsertTeamDto) {
     return this.hd.createTeam(dto);
@@ -113,12 +122,14 @@ export class HelpdeskController {
 
   @Patch('teams/:id')
   @Roles(...ADMIN)
+  @ShadowPermissions('helpdesk:config:write')
   updateTeam(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpsertTeamDto) {
     return this.hd.updateTeam(id, dto);
   }
 
   @Delete('teams/:id')
   @Roles(...ADMIN)
+  @ShadowPermissions('helpdesk:config:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteTeam(@Param('id', ParseUUIDPipe) id: string) {
     return this.hd.deleteTeam(id);
@@ -132,6 +143,7 @@ export class HelpdeskController {
 
   @Put('sla-policies')
   @Roles(...ADMIN)
+  @ShadowPermissions('helpdesk:config:write')
   @HttpCode(HttpStatus.OK)
   upsertSla(@Body() dto: UpsertSlaPolicyDto) {
     return this.hd.upsertSlaPolicy(dto);
@@ -145,6 +157,7 @@ export class HelpdeskController {
 
   @Post('canned-responses')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.CREATED)
   createCanned(@Body() dto: UpsertCannedResponseDto) {
     return this.hd.createCanned(dto);
@@ -152,6 +165,7 @@ export class HelpdeskController {
 
   @Delete('canned-responses/:id')
   @Roles(...AGENT)
+  @ShadowPermissions('helpdesk:ticket:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteCanned(@Param('id', ParseUUIDPipe) id: string) {
     return this.hd.deleteCanned(id);

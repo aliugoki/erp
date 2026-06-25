@@ -11,6 +11,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { ShadowPermissions } from '../auth/decorators/shadow-permissions.decorator';
 import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
@@ -35,6 +36,7 @@ export class CrmController {
 
   @Post('clients')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:account:write')
   @HttpCode(HttpStatus.CREATED)
   createClient(@Body() dto: CreateClientDto) {
     return this.crm.createClient(dto);
@@ -52,12 +54,14 @@ export class CrmController {
 
   @Patch('clients/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:account:write')
   updateClient(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClientDto) {
     return this.crm.updateClient(id, dto);
   }
 
   @Delete('clients/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:account:write')
   @HttpCode(HttpStatus.OK)
   deleteClient(@Param('id', ParseUUIDPipe) id: string) {
     return this.crm.deleteClient(id);
@@ -66,6 +70,7 @@ export class CrmController {
   // Contacts
   @Post('contacts')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:contact:write')
   @HttpCode(HttpStatus.CREATED)
   createContact(@Body() dto: CreateContactDto) {
     return this.crm.createContact(dto);
@@ -73,12 +78,14 @@ export class CrmController {
 
   @Patch('contacts/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:contact:write')
   updateContact(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContactDto) {
     return this.crm.updateContact(id, dto);
   }
 
   @Delete('contacts/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:contact:write')
   @HttpCode(HttpStatus.OK)
   deleteContact(@Param('id', ParseUUIDPipe) id: string) {
     return this.crm.deleteContact(id);
@@ -97,6 +104,7 @@ export class CrmController {
 
   @Post('deals')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:deal:write')
   @HttpCode(HttpStatus.CREATED)
   createDeal(@Body() dto: CreateDealDto) {
     return this.crm.createDeal(dto);
@@ -109,18 +117,21 @@ export class CrmController {
 
   @Patch('deals/:id/stage')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:deal:write')
   updateStage(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealStageDto) {
     return this.crm.updateStage(id, dto.stage, dto.lostReason ?? null);
   }
 
   @Patch('deals/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:deal:write')
   updateDeal(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealDto) {
     return this.crm.updateDeal(id, dto);
   }
 
   @Delete('deals/:id')
   @Roles(...WRITE)
+  @ShadowPermissions('crm:deal:write')
   @HttpCode(HttpStatus.OK)
   deleteDeal(@Param('id', ParseUUIDPipe) id: string) {
     return this.crm.deleteDeal(id);
