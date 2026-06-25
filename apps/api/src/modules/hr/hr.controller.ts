@@ -18,9 +18,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import type { UploadedFileLike } from '../storage/storage.service';
 import {
@@ -38,7 +36,6 @@ import {
 import { HrService } from './hr.service';
 
 /** HR module — gated by the `hr` feature entitlement; writes require an HR manager (or an admin). */
-const WRITE = [Role.HR_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 @Controller('hr')
 @RequiresFeature('hr')
@@ -52,7 +49,6 @@ export class HrController {
   }
 
   @Post('employees')
-  @Roles(...WRITE)
   @Permissions('hr:employee:write')
   @HttpCode(HttpStatus.CREATED)
   createEmployee(@Body() dto: CreateEmployeeDto) {
@@ -65,14 +61,12 @@ export class HrController {
   }
 
   @Patch('employees/:id')
-  @Roles(...WRITE)
   @Permissions('hr:employee:write')
   updateEmployee(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEmployeeDto) {
     return this.hr.updateEmployee(id, dto);
   }
 
   @Delete('employees/:id')
-  @Roles(...WRITE)
   @Permissions('hr:employee:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteEmployee(@Param('id', ParseUUIDPipe) id: string) {
@@ -81,7 +75,6 @@ export class HrController {
 
   /** Upload (or replace) an employee photo — multipart `file` field (image, ≤8 MiB). */
   @Post('employees/:id/photo')
-  @Roles(...WRITE)
   @Permissions('hr:employee:write')
   @UseInterceptors(FileInterceptor('file'))
   uploadPhoto(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file?: UploadedFileLike) {
@@ -105,7 +98,6 @@ export class HrController {
   }
 
   @Post('departments')
-  @Roles(...WRITE)
   @Permissions('hr:department:write')
   @HttpCode(HttpStatus.CREATED)
   createDepartment(@Body() dto: CreateDepartmentDto) {
@@ -113,14 +105,12 @@ export class HrController {
   }
 
   @Patch('departments/:id')
-  @Roles(...WRITE)
   @Permissions('hr:department:write')
   updateDepartment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDepartmentDto) {
     return this.hr.updateDepartment(id, dto);
   }
 
   @Delete('departments/:id')
-  @Roles(...WRITE)
   @Permissions('hr:department:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDepartment(@Param('id', ParseUUIDPipe) id: string) {
@@ -134,7 +124,6 @@ export class HrController {
   }
 
   @Post('positions')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   @HttpCode(HttpStatus.CREATED)
   createPosition(@Body() dto: CreatePositionDto) {
@@ -142,14 +131,12 @@ export class HrController {
   }
 
   @Patch('positions/:id')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   updatePosition(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePositionDto) {
     return this.hr.updatePosition(id, dto);
   }
 
   @Delete('positions/:id')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deletePosition(@Param('id', ParseUUIDPipe) id: string) {
@@ -163,7 +150,6 @@ export class HrController {
   }
 
   @Post('designations')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   @HttpCode(HttpStatus.CREATED)
   createDesignation(@Body() dto: CreateDesignationDto) {
@@ -171,14 +157,12 @@ export class HrController {
   }
 
   @Patch('designations/:id')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   updateDesignation(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDesignationDto) {
     return this.hr.updateDesignation(id, dto);
   }
 
   @Delete('designations/:id')
-  @Roles(...WRITE)
   @Permissions('hr:org:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDesignation(@Param('id', ParseUUIDPipe) id: string) {
@@ -187,7 +171,6 @@ export class HrController {
 
   // Attendance
   @Post('attendance')
-  @Roles(...WRITE)
   @Permissions('hr:attendance:write')
   @HttpCode(HttpStatus.CREATED)
   createAttendance(@Body() dto: CreateAttendanceDto) {

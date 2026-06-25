@@ -10,15 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { CreateReportDto, ProfitLossQueryDto, RunReportDto } from './dto/reports.dto';
 import { ReportBuilderService } from './report-builder.service';
 import { ReportingService } from './reporting.service';
 
-const WRITE = [Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /**
  * Cross-module reports (Chunk 5.2). Every response is `{ raw, series }` and tenant-scoped (served from
@@ -65,7 +62,6 @@ export class ReportsController {
 
   @Post('builder/custom')
   @RequiresFeature('reporting')
-  @Roles(...WRITE)
   @Permissions('report:write')
   @HttpCode(HttpStatus.CREATED)
   createReport(@Body() dto: CreateReportDto) {
@@ -80,7 +76,6 @@ export class ReportsController {
 
   @Delete('builder/custom/:id')
   @RequiresFeature('reporting')
-  @Roles(...WRITE)
   @Permissions('report:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteReport(@Param('id', ParseUUIDPipe) id: string) {
@@ -109,7 +104,6 @@ export class ReportsController {
 
   /** Recompute this tenant's read models now (the schedule does this automatically in production). */
   @Post('refresh')
-  @Roles(Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   @Permissions('report:write')
   @HttpCode(HttpStatus.OK)
   refresh() {

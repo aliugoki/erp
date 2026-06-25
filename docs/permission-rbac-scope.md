@@ -117,9 +117,17 @@ gap). Default-deny is preserved throughout.
   (`roles=[]`, `perms=[finance:invoice:write]`) can POST `finance/invoices` but is denied
   `finance/accounts`/`hr`; refresh preserves `perms`; live permission edits propagate on re-login.
 
-**Phase D — Cleanup (optional, not yet done).**
-- Remove the now-redundant `@Roles(...)` from permission-tagged business endpoints; write ADR-010;
-  update `CLAUDE.md`. Deferred — the system is fully permission-enforced and correct as-is.
+**Phase D — Cleanup. ✅ SHIPPED.**
+- ✅ Removed the now-redundant `@Roles(...)` from all 18 permission-tagged business controllers (and
+  pruned the now-unused role-set consts + `Role`/`Roles` imports). `@Roles` survives only on
+  platform/admin routes (tenants, features, users, rbac, account `adminPing`).
+- ✅ **ADR-010** (`docs/adr/ADR-010-permission-rbac.md`) records the binding decision; `CLAUDE.md`
+  updated (new Never: authorize business endpoints by permission, not role).
+- Verified a pure no-op: built-in roles, permission-only custom roles, admin-only routes and the
+  SUPER_ADMIN platform route all behave identically before/after removal.
+
+**Path 2 is COMPLETE** (Phases A–D). Authorization is permission-based end-to-end; companies define
+least-privilege custom roles from the catalog.
 
 ## 5. Risks & mitigations
 

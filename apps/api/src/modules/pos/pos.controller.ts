@@ -21,10 +21,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { UploadedFileLike } from '../storage/storage.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
-import { Role } from '../auth/rbac/role.enum';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import {
   CloseShiftDto,
@@ -41,8 +39,6 @@ import {
 import { PosService } from './pos.service';
 
 /** Cashiers (sales reps) ring sales; admins manage registers. Reports also open to finance managers. */
-const WRITE = [Role.SALES_REP, Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
-const ADMIN = [Role.TENANT_ADMIN, Role.SUPER_ADMIN] as const;
 
 /** Point of Sale — gated by the `pos` feature entitlement. */
 @Controller('pos')
@@ -57,7 +53,6 @@ export class PosController {
   }
 
   @Post('registers')
-  @Roles(...ADMIN)
   @Permissions('pos:config:write')
   @HttpCode(HttpStatus.CREATED)
   createRegister(@Body() dto: CreateRegisterDto) {
@@ -70,14 +65,12 @@ export class PosController {
   }
 
   @Patch('registers/:id')
-  @Roles(...ADMIN)
   @Permissions('pos:config:write')
   updateRegister(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRegisterDto) {
     return this.pos.updateRegister(id, dto);
   }
 
   @Delete('registers/:id')
-  @Roles(...ADMIN)
   @Permissions('pos:config:write')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteRegister(@Param('id', ParseUUIDPipe) id: string) {
@@ -91,7 +84,6 @@ export class PosController {
 
   /** Initiate a card charge on this register's terminal; returns the approval to attach as a tender. */
   @Post('registers/:id/charge')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   @HttpCode(HttpStatus.OK)
   charge(@Param('id', ParseUUIDPipe) id: string, @Body() dto: TerminalChargeDto) {
@@ -105,7 +97,6 @@ export class PosController {
   }
 
   @Post('shifts/open')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   @HttpCode(HttpStatus.CREATED)
   openShift(@Body() dto: OpenShiftDto, @CurrentUser() user: AuthenticatedUser) {
@@ -118,7 +109,6 @@ export class PosController {
   }
 
   @Patch('shifts/:id/close')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   closeShift(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CloseShiftDto) {
     return this.pos.closeShift(id, dto);
@@ -131,7 +121,6 @@ export class PosController {
   }
 
   @Post('sales')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   @HttpCode(HttpStatus.CREATED)
   createSale(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthenticatedUser) {
@@ -144,7 +133,6 @@ export class PosController {
   }
 
   @Post('sales/:id/complete')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   completeSale(
     @Param('id', ParseUUIDPipe) id: string,
@@ -155,14 +143,12 @@ export class PosController {
   }
 
   @Post('sales/:id/void')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   voidSale(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.pos.voidSale(id, user.userId);
   }
 
   @Post('sales/:id/refund')
-  @Roles(...WRITE)
   @Permissions('pos:sale:write')
   refundSale(
     @Param('id', ParseUUIDPipe) id: string,
@@ -174,14 +160,12 @@ export class PosController {
 
   // ── Reports ─────────────────────────────────────────────────────────────────
   @Get('reports/daily')
-  @Roles(Role.SALES_REP, Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   @Permissions('pos:report:read')
   dailySummary(@Query('date') date?: string) {
     return this.pos.dailySummary(date);
   }
 
   @Get('reports/top-products')
-  @Roles(Role.SALES_REP, Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   @Permissions('pos:report:read')
   topProducts(@Query('limit') limit?: string) {
     return this.pos.topProducts(limit ? Number(limit) : 10);
@@ -195,7 +179,6 @@ export class PosController {
   }
 
   @Put('branding')
-  @Roles(...ADMIN)
   @Permissions('pos:config:write')
   @HttpCode(HttpStatus.OK)
   setBranding(@Body() dto: SetBrandingDto) {
@@ -203,7 +186,6 @@ export class PosController {
   }
 
   @Post('branding/logo')
-  @Roles(...ADMIN)
   @Permissions('pos:config:write')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
@@ -223,14 +205,12 @@ export class PosController {
 
   // ── GL posting config ───────────────────────────────────────────────────────
   @Get('gl-config')
-  @Roles(Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   @Permissions('pos:glconfig:write')
   getGlConfig() {
     return this.pos.getGlConfig();
   }
 
   @Put('gl-config')
-  @Roles(Role.FINANCE_MANAGER, Role.TENANT_ADMIN, Role.SUPER_ADMIN)
   @Permissions('pos:glconfig:write')
   @HttpCode(HttpStatus.OK)
   setGlConfig(@Body() dto: SetPosGlConfigDto) {
