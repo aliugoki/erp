@@ -100,6 +100,33 @@ export class AuthService {
     await this.refreshTokens.revokeByToken(refreshToken);
   }
 
+  /** Change the authenticated user's own password: verify the current one, store the new hash, then
+   * revoke every session so the old credential can't outlive the change (forces re-login). */
+  async changePassword(
+    userId: string,
+    tenantId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const rows = (await this.tenantTx.runFor(tenantId, (m) =>
+      m.query('SELECT password_hash FROM users WHERE id = $1', [userId]),
+    )) as Array<{ password_hash: string }>;
+    const hash = rows[0]?.password_hash;
+    const ok = hash ? await argon2.verify(hash, currentPassword).catch(() => false) : false;
+    if (!ok) throw new UnauthorizedException('Current password is incorrect');
+
+    const newHash = await argon2.hash(newPassword);
+    await this.tenantTx.runFor(tenantId, (m) =>
+      m.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [newHash, userId]),
+    );
+    await this.refreshTokens.revokeAllForUser(userId);
+  }
+
+  /** Revoke every session of a user (used after a SUPER_ADMIN password reset). */
+  async revokeUserSessions(userId: string): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(userId);
+  }
+
   /** Reject login/refresh for a suspended company. The synthetic platform tenant (the SUPER_ADMIN's
    * tenant_id) has no row in `tenants` → treated as active so platform operators are never locked
    * out. The `tenants` table is not RLS-scoped, so the app role can read it directly. */

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RequestContext } from '../../common/request-context/request-context';
+import type { AuthenticatedUser } from '../auth/rbac/authenticated-user';
+import { Role } from '../auth/rbac/role.enum';
 import { FeatureService } from './feature.service';
 import { REQUIRES_FEATURE_KEY } from './requires-feature.decorator';
 
@@ -27,6 +29,10 @@ export class FeatureGuard implements CanActivate {
       context.getClass(),
     ]);
     if (!required) return true;
+
+    // Platform operators (SUPER_ADMIN) are entitled to every feature, regardless of tenant.
+    const user = context.switchToHttp().getRequest().user as AuthenticatedUser | undefined;
+    if (user?.roles.includes(Role.SUPER_ADMIN)) return true;
 
     const tenantId = RequestContext.tenantId();
     if (!tenantId) throw new ForbiddenException('No tenant in context');

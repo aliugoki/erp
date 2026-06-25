@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { randomSecret } from '@/lib/secret';
 
 type Plan = 'starter' | 'business' | 'enterprise';
 
@@ -30,14 +31,6 @@ const PLAN_HINT: Record<Plan, string> = {
   business: 'Most modules (default).',
   enterprise: 'Every module enabled.',
 };
-
-/** Generate a readable strong credential the operator can hand to the new company admin. */
-function randomSecret(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const bytes = new Uint32Array(14);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (n) => alphabet[n % alphabet.length]).join('') + '!9';
-}
 
 /** Provision a new company + its first TENANT_ADMIN, then surface the credentials so the operator can
  * hand them over. Mirrors `POST /tenants` (SUPER_ADMIN-only). */
