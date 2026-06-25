@@ -5,10 +5,19 @@ import { TenantTransactionService } from '../../common/tenant/tenant-transaction
 import { Role } from '../auth/rbac/role.enum';
 import { FeatureService } from '../features/feature.service';
 import type { CreateTenantDto } from './dto/create-tenant.dto';
+import type { TenantStatus } from './entities/tenant.entity';
 
 export interface ProvisionResult {
   tenant: { id: string; name: string; slug: string; status: string };
   admin: { id: string; email: string };
+}
+
+export interface TenantSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  createdAt: string;
 }
 
 function slugify(name: string): string {
@@ -70,6 +79,25 @@ export class TenantsService {
     }
 
     return { tenant, admin };
+  }
+
+  /** List every company in the platform registry, newest first. SUPER_ADMIN-only (guarded at the
+   * route). The `tenants` table is not RLS-scoped, so this is a direct cross-tenant read. */
+  async list(): Promise<TenantSummary[]> {
+    return (await this.dataSource.query(
+      `SELECT id, name, slug, status, created_at AS "createdAt" FROM tenants ORDER BY created_at DESC`,
+    )) as TenantSummary[];
+  }
+
+  /** Activate or suspend a company. A suspended company's users are blocked at login/refresh
+   * (enforced in AuthService). SUPER_ADMIN-only (guarded at the route). */
+  async setStatus(id: string, status: TenantStatus): Promise<ProvisionResult['tenant']> {
+    const rows = (await this.dataSource.query(
+      `UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1 RETURNING id, name, slug, status`,
+      [id, status],
+    )) as ProvisionResult['tenant'][];
+    if (!rows[0]) throw new NotFoundException('Tenant not found');
+    return rows[0];
   }
 
   /** Resolve an ACTIVE tenant by its public slug (used by the unauthenticated storefront). Null if

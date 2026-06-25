@@ -49,6 +49,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    await this.assertTenantActive(user.tenant_id);
+
     await this.tenantTx.runFor(user.tenant_id, (manager) =>
       manager.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]),
     );
@@ -78,6 +80,12 @@ export class AuthService {
       await this.refreshTokens.revokeByToken(nextToken);
       throw new UnauthorizedException('Account is no longer active');
     }
+    try {
+      await this.assertTenantActive(record.tenantId);
+    } catch (err) {
+      await this.refreshTokens.revokeByToken(nextToken);
+      throw err;
+    }
 
     return {
       accessToken: this.signAccess(record.userId, record.tenantId, current.roles ?? []),
@@ -90,6 +98,18 @@ export class AuthService {
   /** Revoke the refresh token's family (logout). Idempotent. */
   async logout(refreshToken: string): Promise<void> {
     await this.refreshTokens.revokeByToken(refreshToken);
+  }
+
+  /** Reject login/refresh for a suspended company. The synthetic platform tenant (the SUPER_ADMIN's
+   * tenant_id) has no row in `tenants` → treated as active so platform operators are never locked
+   * out. The `tenants` table is not RLS-scoped, so the app role can read it directly. */
+  private async assertTenantActive(tenantId: string): Promise<void> {
+    const rows = (await this.dataSource.query('SELECT status FROM tenants WHERE id = $1 LIMIT 1', [
+      tenantId,
+    ])) as Array<{ status: string }>;
+    if (rows[0] && rows[0].status !== 'active') {
+      throw new UnauthorizedException('Company account is suspended');
+    }
   }
 
   private async issueTokens(userId: string, tenantId: string, roles: string[]): Promise<TokenPair> {

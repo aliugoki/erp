@@ -12,6 +12,7 @@ import {
   Repeat,
   ScanLine,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   Sparkles,
   Users,
@@ -48,6 +49,8 @@ export const MODULE_NAV: Record<string, NavItem> = {
 
 export const DASHBOARD_ITEM: NavItem = { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard };
 export const SETTINGS_ITEM: NavItem = { key: 'settings', label: 'Settings', href: '/settings/features', icon: Settings };
+/** Platform-operator surface — only rendered for SUPER_ADMIN (see sidebar). */
+export const COMPANIES_ITEM: NavItem = { key: 'companies', label: 'Companies', href: '/platform/companies', icon: ShieldCheck };
 
 export interface FeatureModule {
   key: string;

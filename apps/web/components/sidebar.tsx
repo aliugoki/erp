@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Boxes, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import { DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
+import { useAuth } from '@/lib/auth';
+import { COMPANIES_ITEM, DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 
 const STORE_KEY = 'mx_sidebar_collapsed';
@@ -38,6 +39,9 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => { setCollapsed(localStorage.getItem(STORE_KEY) === '1'); }, []);
   const toggle = () => setCollapsed((c) => { const n = !c; localStorage.setItem(STORE_KEY, n ? '1' : '0'); return n; });
+
+  const { user } = useAuth();
+  const isSuperAdmin = (user?.roles ?? []).includes('SUPER_ADMIN');
 
   const { data: modules } = useQuery({
     queryKey: ['features'],
@@ -84,6 +88,13 @@ export function Sidebar() {
             .filter((i): i is NavItem => Boolean(i))
             .map((item) => <NavLink key={item.key} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} />)
         )}
+
+        {isSuperAdmin ? (
+          <>
+            <SectionLabel>Platform</SectionLabel>
+            <NavLink item={COMPANIES_ITEM} active={pathname.startsWith('/platform')} collapsed={collapsed} />
+          </>
+        ) : null}
 
         <SectionLabel>Admin</SectionLabel>
         <NavLink item={SETTINGS_ITEM} active={pathname.startsWith('/settings')} collapsed={collapsed} />
