@@ -76,6 +76,17 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'crm:deal:read', label: 'View deals' },
       { key: 'crm:deal:write', label: 'Create / edit deals' },
       { key: 'crm:contact:write', label: 'Manage contacts' },
+      { key: 'crm:account:write', label: 'Manage accounts / clients' },
+      { key: 'crm:lead:write', label: 'Manage leads & conversion' },
+      { key: 'crm:activity:write', label: 'Manage activities' },
+    ],
+  },
+  {
+    domain: 'sales',
+    label: 'Sales',
+    permissions: [
+      { key: 'sales:quotation:write', label: 'Manage quotations' },
+      { key: 'sales:order:write', label: 'Manage sales orders' },
     ],
   },
   {
@@ -84,6 +95,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
     permissions: [
       { key: 'helpdesk:ticket:read', label: 'View tickets' },
       { key: 'helpdesk:ticket:write', label: 'Work tickets' },
+      { key: 'helpdesk:config:write', label: 'Configure teams & SLA policies (admin)' },
     ],
   },
 ];

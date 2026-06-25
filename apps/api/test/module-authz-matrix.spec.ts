@@ -12,6 +12,8 @@ import { PERMISSION_CATALOG } from '../src/modules/auth/rbac/permission-catalog'
 const MODULES: Array<{ domain: string; owner: Role }> = [
   { domain: 'hr', owner: Role.HR_MANAGER },
   { domain: 'inventory', owner: Role.INVENTORY_MANAGER },
+  { domain: 'crm', owner: Role.SALES_REP },
+  { domain: 'sales', owner: Role.SALES_REP },
 ];
 const ADMINS = [Role.TENANT_ADMIN, Role.SUPER_ADMIN];
 const CAPS = [

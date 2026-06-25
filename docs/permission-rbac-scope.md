@@ -79,10 +79,16 @@ gap). Default-deny is preserved throughout.
   `leave`/`payroll`/`performance`/`lifecycle`/`document`/`policy`/`profile`). Live: HR_MANAGER, 0 divergences.
 - ✅ **Inventory** — all 13 write endpoints tagged; group grown to 5 (`product`/`stock`/`category`/
   `warehouse`). Live: INVENTORY_MANAGER, 0 divergences.
-- 🔁 Shared `test/module-authz-matrix.spec.ts` parametrises the matrix per module (hr, inventory; finance
-  has its own dedicated spec).
-- ☐ Remaining modules: CRM, Sales, POS, Helpdesk, Projects, Assets, Production, Pharmacy, Ecommerce,
-  Subscriptions, Reporting, AI (one PR each; CRM already has a pilot tag).
+- ✅ **CRM** — all 19 write endpoints (2 controllers) tagged; group grown to 6 (`deal`/`contact`/
+  `account`/`lead`/`activity`). Live: SALES_REP, 0 divergences.
+- ✅ **Sales** — all 6 write endpoints tagged; new group (`quotation`/`order`). Live: SALES_REP, 0 div.
+- ✅ **Help Desk** — all 13 write endpoints tagged across two tiers: agent endpoints →
+  `helpdesk:ticket:write` (SUPPORT_AGENT), admin endpoints (teams/SLA) → `helpdesk:config:write`
+  (admin-only — SUPPORT_AGENT deliberately does NOT hold it). Dedicated `test/helpdesk-authz-matrix.spec.ts`.
+  Live: SUPPORT_AGENT works tickets (201) but is denied team config (403); 0 divergences.
+- 🔁 Shared `test/module-authz-matrix.spec.ts` covers hr/inventory/crm/sales; finance & helpdesk have
+  dedicated specs.
+- ☐ Remaining modules: POS, Projects, Assets, Production, Pharmacy, Ecommerce, Subscriptions, Reporting, AI.
 
 **Phase C — Flip to permissions.**
 - Once all modules are tagged and matrix-green, remove the redundant `@Roles(...)` from business
