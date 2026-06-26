@@ -57,6 +57,9 @@ export class ReportBuilderService {
         dateTo: dto.dateTo ?? null,
         agg: dto.agg ?? null,
         measure: dto.measure ?? null,
+        orderBy: dto.orderBy ?? null,
+        orderDir: dto.orderDir ?? null,
+        limit: dto.limit ?? null,
       })),
     };
   }

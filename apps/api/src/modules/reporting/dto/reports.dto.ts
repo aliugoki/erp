@@ -2,10 +2,13 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsISO8601,
   IsOptional,
   IsString,
   Matches,
+  Max,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -36,6 +39,9 @@ export class RunReportDto {
   @IsOptional() @Matches(ISO_DATE, { message: 'dateTo must be an ISO date (YYYY-MM-DD)' }) dateTo?: string;
   @IsOptional() @IsIn(AGGS) agg?: (typeof AGGS)[number];
   @IsOptional() @IsString() measure?: string;
+  @IsOptional() @IsString() orderBy?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) orderDir?: 'asc' | 'desc';
+  @IsOptional() @IsInt() @Min(1) @Max(500) limit?: number;
 }
 
 export class CreateReportDto extends RunReportDto {
