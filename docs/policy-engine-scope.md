@@ -38,8 +38,13 @@ throws an RFC-7807 error when violated (never UI-only).
 
 ## Phases
 
-- **A — Engine + catalog.** `tenant_policy` migration, `PolicyService` (+ cache), `PolicyCatalog`
-  registry seeded with a first set, `/tenant/policies` CRUD, Settings → Policies UI. No enforcement yet.
+- **A — Engine + catalog. ✅ SHIPPED.** `tenant_policy` migration (RLS); `PolicyService` (Redis-cached
+  effective value = override ∨ default, with `get/getNumber/getBool` for module use + `set/reset` +
+  audit); `policy-catalog.ts` registry seeded with 9 policies across Finance/Inventory/Sales-CRM/POS/
+  HR/Pharmacy (typed, schema-validated, defaults = today's behaviour); `/tenant/policies` CRUD
+  (TENANT_ADMIN); **Settings → Policies** UI grouped by module (Switch / number / money / enum
+  controls + reset). No enforcement yet (config-only, non-breaking). Live-proven: set/reset/validation
+  /admin-only all correct.
 - **B — Enforce, module by module.** Wire `PolicyService.assert(...)` into each module's decision
   points (one PR per module), with tests asserting allow/deny at the boundary. Start with Finance
   (approval thresholds) and Inventory (negative-stock / reorder).
