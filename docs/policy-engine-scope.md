@@ -70,8 +70,12 @@ throws an RFC-7807 error when violated (never UI-only).
     customer's exposure (Σ total of their non-cancelled orders) past the limit. Live-proven (cumulative
     across orders: 3000 ok, +3000 → blocked at 6000>5000, +1500 ok at 4500). Definition note: exposure
     uses open sales orders (sales_so carries no payment state); a fuller model would net off paid AR.
-  - ☐ **`pharmacy.block_expired_dispense`** — the only one left; relaxation-type (default already
-    blocks), like negative-stock it means relaxing an existing hard guard — its own PR if wanted.
+  - ✅ **`pharmacy.block_expired_dispense`** — FEFO (`consumeFefoInTx`) excludes expired lots when on.
+    Default flipped to **false** (FEFO did *not* filter expiry before, so off = unchanged; on = the
+    stricter control). Live-proven: off dispenses the expired lot, on → "available 0" (excluded),
+    reset → dispenses again.
+  - ✅ **Phase B COMPLETE — all 9 catalog policies are enforced** across Finance, HR, POS, Sales/CRM,
+    Inventory and Pharmacy.
 - **C — Approval workflows (optional, larger).** If thresholds need multi-step maker–checker routing
   beyond the existing finance maker/checker, model `approval_request` + routing rules. Separate scope.
 

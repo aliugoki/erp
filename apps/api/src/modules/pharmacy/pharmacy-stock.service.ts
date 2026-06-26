@@ -153,11 +153,21 @@ export class PharmacyStockService {
    */
   async consumeFefoInTx(
     m: Mgr,
-    p: { productId: string; qty: number; docType: string; docId?: string | null; docNo?: string | null; allowShort?: boolean },
+    p: {
+      productId: string;
+      qty: number;
+      docType: string;
+      docId?: string | null;
+      docNo?: string | null;
+      allowShort?: boolean;
+      /** Policy (ADR-011): when true, expired lots are excluded from FEFO selection. */
+      blockExpired?: boolean;
+    },
   ): Promise<{ cogsMinor: number; allocations: Array<{ lotId: string; lotNo: string; expiryDate: string | null; qty: number }> }> {
+    const expiryFilter = p.blockExpired ? `AND (expiry_date IS NULL OR expiry_date >= current_date)` : '';
     const lotRows = (await m.query(
       `SELECT id, lot_no, expiry_date::text AS expiry_date, qty_on_hand, unit_cost_minor, received_on::text AS received_on
-       FROM pharmacy_stock_lot WHERE product_id=$1 AND qty_on_hand > 0 AND status='ACTIVE' AND deleted_at IS NULL
+       FROM pharmacy_stock_lot WHERE product_id=$1 AND qty_on_hand > 0 AND status='ACTIVE' AND deleted_at IS NULL ${expiryFilter}
        ORDER BY expiry_date ASC NULLS LAST, received_on ASC, id ASC FOR UPDATE`,
       [p.productId],
     )) as Row[];

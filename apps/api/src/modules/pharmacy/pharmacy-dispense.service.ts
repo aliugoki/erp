@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { EVENT_TYPES } from '@metaxperts/shared';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PolicyService } from '../policy/policy.service';
 import type { DispenseDto, ReturnDispenseDto } from './dto/pharmacy.dto';
 import { PharmacyService } from './pharmacy.service';
 import { PharmacyStockService } from './pharmacy-stock.service';
@@ -27,6 +29,7 @@ export class PharmacyDispenseService {
     private readonly stock: PharmacyStockService,
     private readonly pharmacy: PharmacyService,
     private readonly outbox: OutboxService,
+    private readonly policy: PolicyService,
   ) {}
 
   private async nextDocNo(m: Mgr, docType: keyof typeof DOC_PREFIX): Promise<string> {
@@ -56,6 +59,9 @@ export class PharmacyDispenseService {
       const cfg = cfgRows[0];
       const allowShort = cfg ? Boolean(cfg.allow_dispense_without_stock) : false;
       const controlledEnabled = cfg ? Boolean(cfg.controlled_register_enabled) : true;
+      // Policy (ADR-011): when on, FEFO skips expired lots so they can't be dispensed.
+      const tenantId = RequestContext.tenantId();
+      const blockExpired = tenantId ? await this.policy.getBool(tenantId, 'pharmacy.block_expired_dispense') : false;
       const defaultTaxBp = cfg ? Number(cfg.default_tax_bp) : 0;
       const currency = dto.currency ?? (cfg?.currency as string) ?? 'PKR';
 
@@ -113,7 +119,7 @@ export class PharmacyDispenseService {
         let expiry: string | null = null;
         try {
           const consumed = await this.stock.consumeFefoInTx(m, {
-            productId: item.productId, qty: item.qty, docType: 'DSP', docId: dispenseId, docNo: dispenseNo, allowShort,
+            productId: item.productId, qty: item.qty, docType: 'DSP', docId: dispenseId, docNo: dispenseNo, allowShort, blockExpired,
           });
           cogsMinor = consumed.cogsMinor;
           const first = consumed.allocations[0];
