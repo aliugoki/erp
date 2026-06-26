@@ -1,8 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Download, Play, Save, Trash2 } from 'lucide-react';
+import { AreaChart as AreaIcon, BarChart3, Download, LineChart as LineIcon, PieChart as PieIcon, Play, Save, Table as TableIcon, Trash2 } from 'lucide-react';
 import { ApiError, apiDelete, apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
+import { type ChartType, ReportChart, isChartable } from '@/components/charts/report-chart';
 import type { ReportDataset, ReportPreset, ReportResult, SavedReport } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
@@ -25,6 +26,15 @@ export default function ReportingPage() {
   const [name, setName] = useState('');
   const [result, setResult] = useState<ReportResult | null>(null);
   const [title, setTitle] = useState('');
+  const [view, setView] = useState<'table' | ChartType>('table');
+  const chartable = isChartable(result);
+  const VIEWS: { k: 'table' | ChartType; icon: typeof TableIcon; label: string }[] = [
+    { k: 'table', icon: TableIcon, label: 'Table' },
+    { k: 'bar', icon: BarChart3, label: 'Bar' },
+    { k: 'line', icon: LineIcon, label: 'Line' },
+    { k: 'area', icon: AreaIcon, label: 'Area' },
+    { k: 'pie', icon: PieIcon, label: 'Pie' },
+  ];
   // How to re-fetch the currently-shown report as a downloadable file (PDF/XLSX/CSV).
   const [dl, setDl] = useState<{ method: 'GET' | 'POST'; path: string; body?: unknown; title: string } | null>(null);
 
@@ -57,7 +67,7 @@ export default function ReportingPage() {
 
   const ds = datasets.data?.find((d) => d.key === source);
 
-  const show = (t: string) => (r: ReportResult) => { setResult(r); setTitle(t); };
+  const show = (t: string) => (r: ReportResult) => { setResult(r); setTitle(t); setView('table'); };
   const fail = (e: unknown) => toast.error('Report failed', { description: e instanceof ApiError ? e.message : '' });
 
   const adHocTitle = () => ds?.label ?? 'Ad-hoc report';
@@ -144,16 +154,39 @@ export default function ReportingPage() {
           <div className="min-w-0">
             {result ? (
               <Card className="overflow-x-auto">
-                <div className="flex items-center justify-between gap-2 border-b p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
                   <p className="text-sm font-medium">{title} <Badge variant="secondary" className="ml-2">{result.rows.length} rows</Badge></p>
-                  {dl ? (
-                    <span className="flex gap-1">
-                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('pdf')}><Download className="size-3.5" /> PDF</Button>
-                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('xlsx')}><Download className="size-3.5" /> Excel</Button>
-                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('csv')}><Download className="size-3.5" /> CSV</Button>
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {chartable ? (
+                      <span className="flex rounded-md border p-0.5">
+                        {VIEWS.map((v) => (
+                          <button
+                            key={v.k}
+                            type="button"
+                            title={v.label}
+                            onClick={() => setView(v.k)}
+                            className={`flex size-7 items-center justify-center rounded ${view === v.k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                          >
+                            <v.icon className="size-4" />
+                          </button>
+                        ))}
+                      </span>
+                    ) : null}
+                    {dl ? (
+                      <span className="flex gap-1">
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => download('pdf')}><Download className="size-3.5" /> PDF</Button>
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => download('xlsx')}><Download className="size-3.5" /> Excel</Button>
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => download('csv')}><Download className="size-3.5" /> CSV</Button>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
+                {chartable && view !== 'table' ? (
+                  <div className="p-4">
+                    <ReportChart report={result} type={view} />
+                  </div>
+                ) : null}
+                <div className={chartable && view !== 'table' ? 'hidden' : ''}>
                 <Table>
                   <TableHeader><TableRow>{result.columns.map((c) => <TableHead key={c.key}>{c.label}</TableHead>)}</TableRow></TableHeader>
                   <TableBody>
@@ -169,6 +202,7 @@ export default function ReportingPage() {
                     {result.rows.length === 0 ? <TableRow><TableCell colSpan={result.columns.length} className="text-sm text-muted-foreground">No data.</TableCell></TableRow> : null}
                   </TableBody>
                 </Table>
+                </div>
               </Card>
             ) : (
               <div className="flex h-full items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
