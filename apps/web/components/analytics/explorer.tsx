@@ -12,12 +12,14 @@ import {
   Filter,
   LineChart as LineIcon,
   PieChart as PieIcon,
+  Printer,
   Sheet,
   Table as TableIcon,
   X,
 } from 'lucide-react';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import { type ReportFormat, downloadReport } from '@/lib/download-report';
+import { printReport } from '@/lib/print-report';
 import type { ReportDataset, ReportResult } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { type ChartType, ReportChart, isChartable } from '@/components/charts/report-chart';
@@ -70,9 +72,10 @@ function FilterSelect({ dataset, column, value, onChange }: { dataset: string; c
   );
 }
 
-export function AnalyticsExplorer() {
+/** `allow` restricts the dataset dropdown to these source keys (e.g. an inventory-only explorer). */
+export function AnalyticsExplorer({ allow }: { allow?: string[] } = {}) {
   const datasets = useQuery({ queryKey: ['rb-datasets'], queryFn: () => apiGet<ReportDataset[]>('/reports/builder/datasets') });
-  const list = datasets.data ?? [];
+  const list = (datasets.data ?? []).filter((d) => !allow || allow.includes(d.key));
 
   const [source, setSource] = useState('');
   const [groupBy, setGroupBy] = useState('');
@@ -218,18 +221,24 @@ export function AnalyticsExplorer() {
             </button>
           ))}
         </span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-8" disabled={!chartable && !(data && data.rows.length)}>
-              <Download className="size-3.5" /> Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[8rem]">
-            {EXPORTS.map(({ fmt, label, icon: Icon }) => (
-              <DropdownMenuItem key={fmt} onSelect={() => exportAs(fmt)}><Icon className="size-4" /> {label}</DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8" disabled={!data || !data.rows.length}
+            onClick={() => data && printReport(`${ds?.label ?? 'Analysis'} by ${colLabel(groupBy)}`, data.columns, data.rows)}>
+            <Printer className="size-3.5" /> Print
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8" disabled={!chartable && !(data && data.rows.length)}>
+                <Download className="size-3.5" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[8rem]">
+              {EXPORTS.map(({ fmt, label, icon: Icon }) => (
+                <DropdownMenuItem key={fmt} onSelect={() => exportAs(fmt)}><Icon className="size-4" /> {label}</DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Result */}

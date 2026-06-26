@@ -102,14 +102,37 @@ export const DATASETS: Record<string, DatasetDef> = {
       sku: { label: 'SKU', sql: 'sku' },
       name: { label: 'Name', sql: 'name' },
       category: { label: 'Category', sql: "COALESCE(NULLIF(category,''), 'Uncategorized')" },
+      unit: { label: 'Unit', sql: "COALESCE(unit,'')" },
       on_hand: { label: 'On hand', sql: 'on_hand' },
       min_stock: { label: 'Min stock', sql: 'min_stock' },
       cost_price_minor: { label: 'Cost', sql: 'cost_price_minor', money: true },
       sell_price_minor: { label: 'Sell price', sql: 'sell_price_minor', money: true },
+      margin_minor: { label: 'Unit margin', sql: '(sell_price_minor - cost_price_minor)', money: true },
+      stock_value: { label: 'Stock value', sql: 'stock_value_minor', money: true },
+      // Computed dimensions for stock-health reporting.
+      stock_status: {
+        label: 'Stock status',
+        sql: "CASE WHEN on_hand <= 0 THEN 'Out of stock' WHEN on_hand <= min_stock THEN 'Low stock' ELSE 'In stock' END",
+      },
+      below_reorder: { label: 'Below reorder', sql: "CASE WHEN on_hand <= min_stock THEN 'true' ELSE 'false' END" },
     },
-    filterable: ['category'],
-    groupable: ['category'],
-    aggregatable: ['on_hand', 'min_stock', 'cost_price_minor', 'sell_price_minor'],
+    filterable: ['category', 'stock_status', 'below_reorder'],
+    groupable: ['category', 'stock_status'],
+    aggregatable: ['on_hand', 'min_stock', 'cost_price_minor', 'sell_price_minor', 'margin_minor', 'stock_value'],
+  },
+  product_sales: {
+    key: 'product_sales',
+    label: 'POS — Product sales',
+    table: 'pos_sale_line',
+    columns: {
+      product: { label: 'Product', sql: 'description' },
+      quantity: { label: 'Qty sold', sql: 'quantity' },
+      revenue: { label: 'Revenue', sql: 'line_total_minor', money: true },
+      returned: { label: 'Returned', sql: 'returned_qty' },
+    },
+    filterable: [],
+    groupable: ['product'],
+    aggregatable: ['quantity', 'revenue', 'returned'],
   },
   finance_invoices: {
     key: 'finance_invoices',
@@ -156,6 +179,15 @@ export interface ReportConfig {
   /** Grouped measure: the aggregate (default `count`) and, for sum/avg/min/max, the column to aggregate. */
   agg?: Agg | null;
   measure?: string | null;
+  /** List-mode sort (any whitelisted column) + row cap — enables "top N" reports. */
+  orderBy?: string | null;
+  orderDir?: 'asc' | 'desc' | null;
+  limit?: number | null;
+}
+
+function clampLimit(limit: number | null | undefined, max: number): number {
+  if (limit == null || !Number.isFinite(limit)) return max;
+  return Math.min(Math.max(1, Math.floor(limit)), max);
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -213,7 +245,7 @@ export function buildReportQuery(config: ReportConfig): CompiledReport {
         : `${agg.toUpperCase()}(${m.sql})::bigint`;
       return {
         sql: `SELECT ${col.sql} AS "${config.groupBy}", ${expr} AS "value"
-              FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY "value" DESC`,
+              FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY "value" DESC LIMIT ${clampLimit(config.limit, 500)}`,
         params,
         columns: [
           { key: config.groupBy, label: col.label },
@@ -224,7 +256,7 @@ export function buildReportQuery(config: ReportConfig): CompiledReport {
 
     return {
       sql: `SELECT ${col.sql} AS "${config.groupBy}", count(*)::int AS "count"
-            FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY count DESC`,
+            FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY count DESC LIMIT ${clampLimit(config.limit, 500)}`,
       params,
       columns: [
         { key: config.groupBy, label: col.label },
@@ -233,12 +265,18 @@ export function buildReportQuery(config: ReportConfig): CompiledReport {
     };
   }
 
-  // List mode: the selected whitelisted columns.
+  // List mode: the selected whitelisted columns, optionally sorted + capped.
   const cols = config.columns.filter((c) => ds.columns[c]);
   if (cols.length === 0) throw new Error('Select at least one valid column');
   const select = cols.map((c) => `${ds.columns[c]!.sql} AS "${c}"`).join(', ');
+  let orderSql = 'created_at DESC';
+  if (config.orderBy) {
+    if (!ds.columns[config.orderBy]) throw new Error(`Column "${config.orderBy}" is not on ${ds.key}`);
+    const dir = config.orderDir === 'asc' ? 'ASC' : 'DESC';
+    orderSql = `${ds.columns[config.orderBy]!.sql} ${dir}`;
+  }
   return {
-    sql: `SELECT ${select} FROM ${ds.table} ${whereSql} ORDER BY created_at DESC LIMIT ${LIST_LIMIT}`,
+    sql: `SELECT ${select} FROM ${ds.table} ${whereSql} ORDER BY ${orderSql} LIMIT ${clampLimit(config.limit, LIST_LIMIT)}`,
     params,
     columns: cols.map((c) => ({ key: c, label: ds.columns[c]!.label, money: ds.columns[c]!.money })),
   };
@@ -284,4 +322,35 @@ export const PRESETS: PresetDef[] = [
   { key: 'leads-by-rating', name: 'Leads by rating', config: { source: 'crm_leads', columns: [], groupBy: 'rating' } },
   { key: 'leave-by-status', name: 'Leave requests by status', config: { source: 'hr_leave_requests', columns: [], groupBy: 'status' } },
   { key: 'stock-list', name: 'Stock list', config: { source: 'inventory_products', columns: ['sku', 'name', 'on_hand', 'min_stock', 'sell_price_minor'] } },
+  // ── Inventory ──────────────────────────────────────────────────────────────
+  {
+    key: 'inv-products-list',
+    name: 'Products list',
+    config: { source: 'inventory_products', columns: ['sku', 'name', 'category', 'unit', 'on_hand', 'cost_price_minor', 'sell_price_minor'], orderBy: 'name', orderDir: 'asc' },
+  },
+  { key: 'inv-products-by-category', name: 'Products by category', config: { source: 'inventory_products', columns: [], groupBy: 'category' } },
+  { key: 'inv-stock-value-by-category', name: 'Stock value by category', config: { source: 'inventory_products', columns: [], groupBy: 'category', agg: 'sum', measure: 'stock_value' } },
+  {
+    key: 'inv-low-stock',
+    name: 'Low stock products',
+    config: { source: 'inventory_products', columns: ['sku', 'name', 'category', 'on_hand', 'min_stock', 'stock_status'], filters: [{ column: 'below_reorder', value: 'true' }], orderBy: 'on_hand', orderDir: 'asc' },
+  },
+  {
+    key: 'inv-out-of-stock',
+    name: 'Out of stock',
+    config: { source: 'inventory_products', columns: ['sku', 'name', 'category', 'on_hand', 'min_stock'], filters: [{ column: 'stock_status', value: 'Out of stock' }], orderBy: 'name', orderDir: 'asc' },
+  },
+  { key: 'inv-by-status', name: 'Stock by status', config: { source: 'inventory_products', columns: [], groupBy: 'stock_status' } },
+  {
+    key: 'inv-valuation',
+    name: 'Stock valuation',
+    config: { source: 'inventory_products', columns: ['sku', 'name', 'category', 'on_hand', 'cost_price_minor', 'stock_value'], orderBy: 'stock_value', orderDir: 'desc' },
+  },
+  {
+    key: 'inv-price-list',
+    name: 'Price list',
+    config: { source: 'inventory_products', columns: ['sku', 'name', 'category', 'cost_price_minor', 'sell_price_minor', 'margin_minor'], orderBy: 'name', orderDir: 'asc' },
+  },
+  { key: 'inv-top-selling', name: 'Top selling products (qty)', config: { source: 'product_sales', columns: [], groupBy: 'product', agg: 'sum', measure: 'quantity', limit: 10 } },
+  { key: 'inv-top-revenue', name: 'Top products by revenue', config: { source: 'product_sales', columns: [], groupBy: 'product', agg: 'sum', measure: 'revenue', limit: 10 } },
 ];
