@@ -27,7 +27,7 @@ export default function DashboardPage() {
       <PageHeader title="Welcome back" description="Your workspace at a glance." />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Layers} label="Active modules" value={enabled.length} accent="primary" delayMs={0} />
+        <StatCard icon={Layers} label="Active modules" value={enabled.length} accent="primary" delayMs={0} className="glass elevated" />
         <StatCard
           icon={ToggleRight}
           label="Enabled features"
@@ -35,8 +35,9 @@ export default function DashboardPage() {
           format={(v) => `${v}/${features.length}`}
           accent="success"
           delayMs={70}
+          className="glass elevated"
         />
-        <StatCard icon={ShieldCheck} label="Your roles" value={user?.roles.length ?? 0} accent="warning" delayMs={140} />
+        <StatCard icon={ShieldCheck} label="Your roles" value={user?.roles.length ?? 0} accent="warning" delayMs={140} className="glass elevated" />
       </div>
 
       <DashboardCharts enabledModules={enabledKeys} />
@@ -48,7 +49,7 @@ export default function DashboardPage() {
             const nav = MODULE_NAV[m.key];
             const body = (
               <Card
-                className={cn('h-full animate-fade-up', m.enabled ? 'hover-lift' : 'opacity-55')}
+                className={cn('h-full glass elevated animate-fade-up', m.enabled ? 'hover-lift' : 'opacity-55')}
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <CardHeader>
