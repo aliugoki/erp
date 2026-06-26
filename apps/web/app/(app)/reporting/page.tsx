@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AreaChart as AreaIcon, BarChart3, Download, LineChart as LineIcon, PieChart as PieIcon, Play, Save, Table as TableIcon, Trash2 } from 'lucide-react';
+import { AreaChart as AreaIcon, BarChart3, CalendarRange, Download, LineChart as LineIcon, PieChart as PieIcon, Play, Save, Table as TableIcon, Trash2, X } from 'lucide-react';
 import { ApiError, apiDelete, apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
 import { type ChartType, ReportChart, isChartable } from '@/components/charts/report-chart';
 import type { ReportDataset, ReportPreset, ReportResult, SavedReport } from '@/lib/types';
@@ -18,6 +18,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const NONE = '__none__';
 
+/** Build a `?from&to` query string for the run endpoints (empty when no range is set). */
+function rangeQuery(r: { from: string; to: string }): string {
+  const qs = new URLSearchParams();
+  if (r.from) qs.set('from', r.from);
+  if (r.to) qs.set('to', r.to);
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
 export default function ReportingPage() {
   const qc = useQueryClient();
   const [source, setSource] = useState('');
@@ -27,6 +36,8 @@ export default function ReportingPage() {
   const [result, setResult] = useState<ReportResult | null>(null);
   const [title, setTitle] = useState('');
   const [view, setView] = useState<'table' | ChartType>('table');
+  const [range, setRange] = useState({ from: '', to: '' });
+  const hasRange = !!(range.from || range.to);
   const chartable = isChartable(result);
   const VIEWS: { k: 'table' | ChartType; icon: typeof TableIcon; label: string }[] = [
     { k: 'table', icon: TableIcon, label: 'Table' },
@@ -71,16 +82,23 @@ export default function ReportingPage() {
   const fail = (e: unknown) => toast.error('Report failed', { description: e instanceof ApiError ? e.message : '' });
 
   const adHocTitle = () => ds?.label ?? 'Ad-hoc report';
+  const adHocBody = () => ({
+    source,
+    columns: cols,
+    groupBy: groupBy === NONE ? undefined : groupBy,
+    dateFrom: range.from || undefined,
+    dateTo: range.to || undefined,
+  });
   const runAdHoc = useMutation({
-    mutationFn: () => apiPost<ReportResult>('/reports/builder/run', { source, columns: cols, groupBy: groupBy === NONE ? undefined : groupBy }),
+    mutationFn: () => apiPost<ReportResult>('/reports/builder/run', adHocBody()),
     onSuccess: (r) => {
       show(adHocTitle())(r);
-      setDl({ method: 'POST', path: '/reports/builder/run', body: { source, columns: cols, groupBy: groupBy === NONE ? undefined : groupBy }, title: adHocTitle() });
+      setDl({ method: 'POST', path: '/reports/builder/run', body: adHocBody(), title: adHocTitle() });
     },
     onError: fail,
   });
-  const runPreset = useMutation({ mutationFn: (p: ReportPreset) => apiGet<ReportResult>(`/reports/builder/presets/${p.key}/run`), onSuccess: () => {}, onError: fail });
-  const runSaved = useMutation({ mutationFn: (r: SavedReport) => apiGet<ReportResult>(`/reports/builder/custom/${r.id}/run`), onError: fail });
+  const runPreset = useMutation({ mutationFn: (p: ReportPreset) => apiGet<ReportResult>(`/reports/builder/presets/${p.key}/run${rangeQuery(range)}`), onSuccess: () => {}, onError: fail });
+  const runSaved = useMutation({ mutationFn: (r: SavedReport) => apiGet<ReportResult>(`/reports/builder/custom/${r.id}/run${rangeQuery(range)}`), onError: fail });
   const create = useMutation({
     mutationFn: () => apiPost('/reports/builder/custom', { name, source, columns: cols, groupBy: groupBy === NONE ? undefined : groupBy }),
     onSuccess: () => { toast.success('Report saved', { description: name }); qc.invalidateQueries({ queryKey: ['rb-saved'] }); setName(''); },
@@ -95,15 +113,31 @@ export default function ReportingPage() {
       <PageHeader title="Reporting" description="Preset reports and a custom report builder." />
 
       <Card className="p-4">
-        <p className="mb-3 flex items-center gap-2 font-medium"><BarChart3 className="size-4" /> Preset reports</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-2 font-medium"><BarChart3 className="size-4" /> Preset reports</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <CalendarRange className="size-4 text-muted-foreground" />
+            <Input type="date" aria-label="From date" value={range.from} max={range.to || undefined}
+              onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="h-8 w-[9.5rem]" />
+            <span className="text-muted-foreground">–</span>
+            <Input type="date" aria-label="To date" value={range.to} min={range.from || undefined}
+              onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="h-8 w-[9.5rem]" />
+            {hasRange ? (
+              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => setRange({ from: '', to: '' })}>
+                <X className="size-4" /> Clear
+              </Button>
+            ) : null}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {(presets.data ?? []).map((p) => (
             <Button key={p.key} variant="outline" size="sm"
-              onClick={() => { runPreset.mutate(p, { onSuccess: show(p.name) }); setDl({ method: 'GET', path: `/reports/builder/presets/${p.key}/run`, title: p.name }); }}>
+              onClick={() => { runPreset.mutate(p, { onSuccess: show(p.name) }); setDl({ method: 'GET', path: `/reports/builder/presets/${p.key}/run${rangeQuery(range)}`, title: p.name }); }}>
               {p.name}
             </Button>
           ))}
         </div>
+        {hasRange ? <p className="mt-2 text-xs text-muted-foreground">Date range applies to runs by <code>created_at</code>. Re-run a report to apply a changed range.</p> : null}
       </Card>
 
       <Card className="p-4">
@@ -223,7 +257,7 @@ export default function ReportingPage() {
               <li key={r.id} className="flex items-center justify-between rounded-lg border p-2 text-sm">
                 <span><span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">· {r.source}{r.groupBy ? ` · by ${r.groupBy}` : ''}</span></span>
                 <span className="flex gap-1">
-                  <Button size="sm" variant="outline" className="h-7" onClick={() => { runSaved.mutate(r, { onSuccess: show(r.name) }); setDl({ method: 'GET', path: `/reports/builder/custom/${r.id}/run`, title: r.name }); }}><Play className="size-3.5" /></Button>
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => { runSaved.mutate(r, { onSuccess: show(r.name) }); setDl({ method: 'GET', path: `/reports/builder/custom/${r.id}/run${rangeQuery(range)}`, title: r.name }); }}><Play className="size-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-destructive" onClick={() => del.mutate(r.id)}><Trash2 className="size-3.5" /></Button>
                 </span>
               </li>

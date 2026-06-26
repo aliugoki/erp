@@ -4,6 +4,10 @@ import type { CreateReportDto, RunReportDto } from './dto/reports.dto';
 import { DATASETS, PRESETS, type ReportConfig, buildReportQuery, datasetCatalog } from './report-builder';
 
 type Row = Record<string, unknown>;
+export interface DateRange {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}
 
 /** The report builder: lists datasets/presets, runs ad-hoc or saved report configs against the
  * whitelisted query compiler, and stores custom report definitions. All execution is RLS-scoped and
@@ -34,15 +38,25 @@ export class ReportBuilderService {
     });
   }
 
-  async runPreset(key: string) {
+  async runPreset(key: string, range?: DateRange) {
     const preset = PRESETS.find((p) => p.key === key);
     if (!preset) throw new NotFoundException('Preset not found');
-    return { title: preset.name, ...(await this.run(preset.config)) };
+    return { title: preset.name, ...(await this.run({ ...preset.config, ...range })) };
   }
 
   async runAdHoc(dto: RunReportDto) {
     const title = DATASETS[dto.source]?.label ?? 'Report';
-    return { title, ...(await this.run({ source: dto.source, columns: dto.columns ?? [], filters: dto.filters, groupBy: dto.groupBy ?? null })) };
+    return {
+      title,
+      ...(await this.run({
+        source: dto.source,
+        columns: dto.columns ?? [],
+        filters: dto.filters,
+        groupBy: dto.groupBy ?? null,
+        dateFrom: dto.dateFrom ?? null,
+        dateTo: dto.dateTo ?? null,
+      })),
+    };
   }
 
   // ── Saved custom reports ────────────────────────────────────────────────────
@@ -73,7 +87,7 @@ export class ReportBuilderService {
     });
   }
 
-  async runSaved(id: string) {
+  async runSaved(id: string, range?: DateRange) {
     const def = await this.tenantTx.run(async (m) => {
       const rows = (await m.query(
         `SELECT name, source, columns, filters, group_by FROM rpt_report_definition WHERE id=$1 AND deleted_at IS NULL`,
@@ -89,6 +103,8 @@ export class ReportBuilderService {
         columns: (def.columns as string[]) ?? [],
         filters: (def.filters as { column: string; value: string }[]) ?? [],
         groupBy: (def.group_by as string | null) ?? null,
+        dateFrom: range?.dateFrom ?? null,
+        dateTo: range?.dateTo ?? null,
       })),
     };
   }

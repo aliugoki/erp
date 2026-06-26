@@ -133,7 +133,12 @@ export interface ReportConfig {
   columns: string[];
   filters?: { column: string; value: string }[];
   groupBy?: string | null;
+  /** Optional inclusive date range on the row's `created_at` (ISO `YYYY-MM-DD`). */
+  dateFrom?: string | null;
+  dateTo?: string | null;
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface CompiledReport {
   sql: string;
@@ -155,6 +160,17 @@ export function buildReportQuery(config: ReportConfig): CompiledReport {
     if (!ds.filterable.includes(f.column)) throw new Error(`Column "${f.column}" is not filterable on ${ds.key}`);
     params.push(f.value);
     where.push(`${ds.columns[f.column]!.sql} = $${params.length}`);
+  }
+  // Inclusive date range on created_at (every dataset table extends BaseEntity, so the column exists).
+  if (config.dateFrom) {
+    if (!ISO_DATE.test(config.dateFrom)) throw new Error('dateFrom must be an ISO date (YYYY-MM-DD)');
+    params.push(config.dateFrom);
+    where.push(`created_at::date >= $${params.length}::date`);
+  }
+  if (config.dateTo) {
+    if (!ISO_DATE.test(config.dateTo)) throw new Error('dateTo must be an ISO date (YYYY-MM-DD)');
+    params.push(config.dateTo);
+    where.push(`created_at::date <= $${params.length}::date`);
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
