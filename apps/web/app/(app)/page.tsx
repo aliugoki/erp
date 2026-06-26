@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { type FeatureModule, MODULE_NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
+import { DashboardCharts } from '@/components/dashboard/dashboard-charts';
 import { PageHeader } from '@/components/page-header';
 import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const enabled = all.filter((m) => m.enabled);
   const features = all.flatMap((m) => m.features);
   const enabledFeatures = features.filter((f) => f.enabled);
+  const enabledKeys = new Set(enabled.map((m) => m.key));
 
   return (
     <div className="mx-auto max-w-6xl space-y-7">
@@ -36,6 +38,8 @@ export default function DashboardPage() {
         />
         <StatCard icon={ShieldCheck} label="Your roles" value={user?.roles.length ?? 0} accent="warning" delayMs={140} />
       </div>
+
+      <DashboardCharts enabledModules={enabledKeys} />
 
       <div>
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Modules</h3>
