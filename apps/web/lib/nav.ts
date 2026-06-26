@@ -7,6 +7,7 @@ import {
   Factory,
   FolderKanban,
   LayoutDashboard,
+  LineChart,
   LifeBuoy,
   Pill,
   Repeat,
@@ -48,6 +49,8 @@ export const MODULE_NAV: Record<string, NavItem> = {
 };
 
 export const DASHBOARD_ITEM: NavItem = { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard };
+/** Cross-module BI dashboard — shown when the `reporting` feature is enabled (see sidebar). */
+export const ANALYTICS_ITEM: NavItem = { key: 'analytics', label: 'Analytics', href: '/analytics', icon: LineChart };
 export const SETTINGS_ITEM: NavItem = { key: 'settings', label: 'Settings', href: '/settings/features', icon: Settings };
 /** Platform-operator surface — only rendered for SUPER_ADMIN (see sidebar). */
 export const COMPANIES_ITEM: NavItem = { key: 'companies', label: 'Companies', href: '/platform/companies', icon: ShieldCheck };

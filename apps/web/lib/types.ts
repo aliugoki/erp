@@ -229,6 +229,26 @@ export interface SavedReport {
   groupBy: string | null;
 }
 
+// ── BI analytics dashboard ───────────────────────────────────────────────────────
+export interface AnalyticsKpi {
+  key: string;
+  label: string;
+  value: number;
+  money: boolean;
+  currency?: string;
+  deltaPct?: number | null;
+  subtitle?: string;
+  trend?: number[];
+}
+export interface AnalyticsDashboard {
+  currency: string;
+  kpis: AnalyticsKpi[];
+  revenueSeries: { period: string; revenue: number; expense: number; profit: number }[];
+  pipeline: { stage: string; count: number; value: number }[];
+  inventoryByCategory: { category: string; value: number }[];
+  headcountByDept: { department: string; headcount: number }[];
+}
+
 export interface AttendanceSummaryRow {
   employeeId: string;
   employeeName: string;
