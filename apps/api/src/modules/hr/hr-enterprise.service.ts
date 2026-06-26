@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { EVENT_TYPES } from '@metaxperts/shared';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PolicyService } from '../policy/policy.service';
 import type {
   AttendanceQueryDto,
   BulkAttendanceDto,
@@ -45,6 +47,7 @@ export class HrEnterpriseService {
   constructor(
     private readonly tenantTx: TenantTransactionService,
     private readonly outbox: OutboxService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ── Leave types & balances ──────────────────────────────────────────────────
@@ -122,6 +125,12 @@ export class HrEnterpriseService {
   async createLeaveRequest(dto: CreateLeaveRequestDto) {
     const days = inclusiveDays(dto.startDate, dto.endDate);
     if (days <= 0) throw new BadRequestException('End date must be on or after start date');
+    // Policy (ADR-011): cap the length of a single leave request. 0 (default) = unlimited.
+    const tenantId = RequestContext.tenantId();
+    const maxDays = tenantId ? await this.policy.getNumber(tenantId, 'hr.max_leave_days_per_request') : 0;
+    if (maxDays > 0 && days > maxDays) {
+      throw new UnprocessableEntityException(`Leave request of ${days} days exceeds the company limit of ${maxDays} days.`);
+    }
     return this.tenantTx.run(async (m) => {
       const leaveNo = await nextHrDocNo(m, 'LEAVE', 'LEAVE');
       try {

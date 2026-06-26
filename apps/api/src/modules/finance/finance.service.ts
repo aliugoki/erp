@@ -5,8 +5,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EVENT_TYPES, type SuccessEnvelope, paginationMeta } from '@metaxperts/shared';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PolicyService } from '../policy/policy.service';
 import { normalizePagination } from '../hr/hr.util';
 import type {
   AsOfQueryDto,
@@ -73,6 +75,7 @@ export class FinanceService {
   constructor(
     private readonly tenantTx: TenantTransactionService,
     private readonly outbox: OutboxService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ── Chart of accounts (hierarchical, max 4 levels) ───────────────────────────
@@ -168,6 +171,23 @@ export class FinanceService {
 
   // ── Transactions (double-entry) ─────────────────────────────────────────────
   async createTransaction(dto: CreateTransactionDto) {
+    // Policy (ADR-011): a voucher at/above the approval threshold can't be posted in one step — it
+    // must be submitted as a draft for a second approver to post. Drafts and automated postings
+    // (postJournalInTx) are exempt. Threshold 0 (default) = no restriction.
+    if (!dto.draft) {
+      const tenantId = RequestContext.tenantId();
+      const threshold = tenantId
+        ? await this.policy.getNumber(tenantId, 'finance.voucher_approval_threshold_minor')
+        : 0;
+      if (threshold > 0) {
+        const total = (dto.entries ?? []).reduce((s, e) => s + (e.debitMinor ?? 0), 0);
+        if (total >= threshold) {
+          throw new UnprocessableEntityException(
+            `Voucher total (${total} minor) is at or above the approval threshold (${threshold}); submit it as a draft so a second approver can post it.`,
+          );
+        }
+      }
+    }
     return this.tenantTx.run((m) => this.postInTx(m, dto));
   }
 
