@@ -1559,6 +1559,11 @@ export class FinanceService {
   }
 
   async createBill(dto: CreateBillDto) {
+    // Policy (ADR-011): require a purchase-order reference on vendor bills when the tenant turns it on.
+    const tenantId = RequestContext.tenantId();
+    if (tenantId && (await this.policy.getBool(tenantId, 'finance.require_po_for_bill')) && !dto.poRef) {
+      throw new UnprocessableEntityException('Company policy requires a purchase-order reference on vendor bills.');
+    }
     const totals = computeInvoiceTotals(dto.lineItems, dto.taxMinor ?? 0);
     const currency = dto.currency ?? 'PKR';
     const lines = dto.lineItems.map((l) => ({
@@ -1572,10 +1577,10 @@ export class FinanceService {
       try {
         const rows = (await m.query(
           `INSERT INTO vendor_bill
-             (tenant_id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, currency, bill_date, due_date)
-           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, COALESCE($8::date, current_date), $9)
-           RETURNING id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, amount_paid_minor, currency, status, bill_date::text AS bill_date, due_date::text AS due_date`,
-          [dto.number, dto.vendorId, JSON.stringify(lines), totals.subtotalMinor, totals.taxMinor, totals.totalMinor, currency, dto.billDate ?? null, dto.dueDate ?? null],
+             (tenant_id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, currency, bill_date, due_date, po_ref)
+           VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3::jsonb, $4, $5, $6, $7, COALESCE($8::date, current_date), $9, $10)
+           RETURNING id, number, vendor_id, line_items, subtotal_minor, tax_minor, total_minor, amount_paid_minor, currency, status, bill_date::text AS bill_date, due_date::text AS due_date, po_ref`,
+          [dto.number, dto.vendorId, JSON.stringify(lines), totals.subtotalMinor, totals.taxMinor, totals.totalMinor, currency, dto.billDate ?? null, dto.dueDate ?? null, dto.poRef ?? null],
         )) as Row[];
         bill = rows[0]!;
       } catch (err) {

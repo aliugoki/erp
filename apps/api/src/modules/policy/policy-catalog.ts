@@ -52,6 +52,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     help: 'AP bills must reference an approved purchase order.',
     type: 'boolean',
     default: false,
+    enforced: true,
   },
   // ── Inventory ─────────────────────────────────────────────────────────────
   {
@@ -75,6 +76,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     default: 100,
     min: 0,
     max: 100,
+    enforced: true,
   },
   {
     key: 'sales.customer_credit_limit_minor',

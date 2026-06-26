@@ -260,6 +260,8 @@ export class CreateBillDto {
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsISO8601() billDate?: string;
   @IsOptional() @IsISO8601() dueDate?: string;
+  /** Purchase-order reference (required when the `finance.require_po_for_bill` policy is on). */
+  @IsOptional() @IsString() @MinLength(1) poRef?: string;
   /** Post the bill to the GL: Dr this expense account / Cr the vendor's payable account. */
   @IsOptional() @IsUUID() expenseAccountId?: string;
 }

@@ -20,11 +20,13 @@ export interface LineInput {
   description: string;
   quantity: number;
   unitPriceMinor: number;
+  discountPercent?: number;
 }
 
-/** A line's total = quantity × unit price (integer minor units). */
-export function lineTotalMinor(quantity: number, unitPriceMinor: number): number {
-  return quantity * unitPriceMinor;
+/** A line's total = quantity × unit price, less any line discount % (integer minor units). */
+export function lineTotalMinor(quantity: number, unitPriceMinor: number, discountPercent = 0): number {
+  const gross = quantity * unitPriceMinor;
+  return Math.round((gross * (100 - discountPercent)) / 100);
 }
 
 export interface DocTotals {
@@ -35,7 +37,7 @@ export interface DocTotals {
 
 /** Subtotal = Σ line totals; tax = floor(subtotal × rate%); total = subtotal + tax. All integer. */
 export function computeTotals(lines: LineInput[], taxRatePercent: number): DocTotals {
-  const subtotalMinor = lines.reduce((sum, l) => sum + lineTotalMinor(l.quantity, l.unitPriceMinor), 0);
+  const subtotalMinor = lines.reduce((sum, l) => sum + lineTotalMinor(l.quantity, l.unitPriceMinor, l.discountPercent ?? 0), 0);
   const taxMinor = Math.floor((subtotalMinor * taxRatePercent) / 100);
   return { subtotalMinor, taxMinor, totalMinor: subtotalMinor + taxMinor };
 }

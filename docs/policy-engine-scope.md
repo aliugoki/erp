@@ -63,8 +63,14 @@ throws an RFC-7807 error when violated (never UI-only).
     production) now app-gate oversell on the policy. WAVG already handled non-positive qty (value→0,
     last cost retained). Pharmacy's separate `ck_pharmacy_lot_qty` is untouched. Live-proven: default
     blocks oversell, enabling drives on-hand to -5, reset blocks again.
-  - ☐ Remaining policies/modules (require-cost-centre, require-PO-for-bill, discount caps, credit
-    limit, expired-dispense block) — wire next.
+  - ✅ **Finance `require_po_for_bill`** + **`crm.discount_cap_percent`** (added backing fields:
+    `vendor_bill.po_ref`; `sales_*_line.discount_percent`, which also folds into the line total).
+    Live-proven (bill blocked w/o PO; quote line blocked above cap, 5% folds to subtotal 1900).
+  - ☐ **`sales.customer_credit_limit_minor`** — not a field but an **AR-outstanding model**: needs a
+    customer-balance aggregation (unpaid invoices/orders) + a credit-vs-cash distinction at order time.
+    Its own design + PR.
+  - ☐ **`pharmacy.block_expired_dispense`** — relaxation-type (default already blocks); like
+    negative-stock it means relaxing an existing hard guard — its own PR if wanted.
 - **C — Approval workflows (optional, larger).** If thresholds need multi-step maker–checker routing
   beyond the existing finance maker/checker, model `approval_request` + routing rules. Separate scope.
 
