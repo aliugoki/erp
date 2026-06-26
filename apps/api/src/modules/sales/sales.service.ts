@@ -113,7 +113,24 @@ export class SalesService {
   async createOrder(dto: CreateOrderDto) {
     await this.assertDiscountWithinCap(dto.lines as LineInput[]);
     const totals = computeTotals(dto.lines as LineInput[], 0);
+    // Policy (ADR-011): block a new order that pushes the customer past their credit limit. Exposure =
+    // Σ total of the customer's non-cancelled orders. 0 (default) = unlimited.
+    const tenantId = RequestContext.tenantId();
+    const creditLimit = tenantId ? await this.policy.getNumber(tenantId, 'sales.customer_credit_limit_minor') : 0;
     return this.tenantTx.run(async (m) => {
+      if (creditLimit > 0) {
+        const out = (await m.query(
+          `SELECT COALESCE(SUM(total_minor),0)::bigint AS outstanding FROM sales_so
+           WHERE client_id=$1 AND status <> 'CANCELLED' AND deleted_at IS NULL`,
+          [dto.clientId],
+        )) as Array<{ outstanding: string }>;
+        const outstanding = Number(out[0]?.outstanding ?? 0);
+        if (outstanding + totals.totalMinor > creditLimit) {
+          throw new UnprocessableEntityException(
+            `Order would exceed the customer's credit limit (limit ${creditLimit}, outstanding ${outstanding}, this order ${totals.totalMinor}).`,
+          );
+        }
+      }
       const soNo = await nextSalesDocNo(m, 'SO', 'SO');
       let orderId: string;
       try {

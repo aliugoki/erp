@@ -66,11 +66,12 @@ throws an RFC-7807 error when violated (never UI-only).
   - ✅ **Finance `require_po_for_bill`** + **`crm.discount_cap_percent`** (added backing fields:
     `vendor_bill.po_ref`; `sales_*_line.discount_percent`, which also folds into the line total).
     Live-proven (bill blocked w/o PO; quote line blocked above cap, 5% folds to subtotal 1900).
-  - ☐ **`sales.customer_credit_limit_minor`** — not a field but an **AR-outstanding model**: needs a
-    customer-balance aggregation (unpaid invoices/orders) + a credit-vs-cash distinction at order time.
-    Its own design + PR.
-  - ☐ **`pharmacy.block_expired_dispense`** — relaxation-type (default already blocks); like
-    negative-stock it means relaxing an existing hard guard — its own PR if wanted.
+  - ✅ **`sales.customer_credit_limit_minor`** — `createOrder` blocks an order that pushes the
+    customer's exposure (Σ total of their non-cancelled orders) past the limit. Live-proven (cumulative
+    across orders: 3000 ok, +3000 → blocked at 6000>5000, +1500 ok at 4500). Definition note: exposure
+    uses open sales orders (sales_so carries no payment state); a fuller model would net off paid AR.
+  - ☐ **`pharmacy.block_expired_dispense`** — the only one left; relaxation-type (default already
+    blocks), like negative-stock it means relaxing an existing hard guard — its own PR if wanted.
 - **C — Approval workflows (optional, larger).** If thresholds need multi-step maker–checker routing
   beyond the existing finance maker/checker, model `approval_request` + routing rules. Separate scope.
 

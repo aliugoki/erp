@@ -82,11 +82,12 @@ export const POLICY_CATALOG: PolicyDef[] = [
     key: 'sales.customer_credit_limit_minor',
     module: 'sales',
     group: 'Sales & CRM',
-    label: 'Default customer credit limit',
-    help: 'Block new credit orders beyond this outstanding balance. 0 = unlimited.',
+    label: 'Customer credit limit',
+    help: "Block a new order when the customer's open-order exposure would exceed this. 0 = unlimited.",
     type: 'money',
     default: 0,
     min: 0,
+    enforced: true,
   },
   // ── POS ───────────────────────────────────────────────────────────────────
   {
