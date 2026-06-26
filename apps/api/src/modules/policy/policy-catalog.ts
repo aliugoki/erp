@@ -118,9 +118,10 @@ export const POLICY_CATALOG: PolicyDef[] = [
     module: 'pharmacy',
     group: 'Pharmacy',
     label: 'Block dispensing expired stock',
-    help: 'Refuse to dispense batches past their expiry date.',
+    help: 'Exclude expired batches from FEFO dispensing. Off by default (matches current behaviour) — turn on for stricter control.',
     type: 'boolean',
-    default: true,
+    default: false,
+    enforced: true,
   },
 ];
 
