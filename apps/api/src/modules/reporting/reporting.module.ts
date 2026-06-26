@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsController } from './analytics.controller';
+import { AnalyticsService } from './analytics.service';
 import { ReportBuilderService } from './report-builder.service';
 import { ReportsController } from './reports.controller';
 import { ReportingService } from './reporting.service';
@@ -9,8 +11,8 @@ import { ReportingRefreshScheduler } from './reporting.scheduler';
  * schedule (or on demand via POST /reports/refresh), plus the preset + custom report builder.
  */
 @Module({
-  controllers: [ReportsController],
-  providers: [ReportingService, ReportingRefreshScheduler, ReportBuilderService],
+  controllers: [ReportsController, AnalyticsController],
+  providers: [ReportingService, ReportingRefreshScheduler, ReportBuilderService, AnalyticsService],
   exports: [ReportingService],
 })
 export class ReportingModule {}

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Boxes, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { COMPANIES_ITEM, DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
+import { ANALYTICS_ITEM, COMPANIES_ITEM, DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 
 const STORE_KEY = 'mx_sidebar_collapsed';
@@ -48,6 +48,7 @@ export function Sidebar() {
     queryFn: () => apiGet<FeatureModule[]>('/tenant/features'),
   });
   const enabledModules = (modules ?? []).filter((m) => m.enabled);
+  const reportingOn = enabledModules.some((m) => m.key === 'reporting');
 
   const SectionLabel = ({ children }: { children: string }) =>
     collapsed ? (
@@ -78,6 +79,7 @@ export function Sidebar() {
 
       <nav className="relative flex-1 space-y-1 overflow-y-auto p-3">
         <NavLink item={DASHBOARD_ITEM} active={pathname === '/'} collapsed={collapsed} />
+        {reportingOn ? <NavLink item={ANALYTICS_ITEM} active={pathname.startsWith('/analytics')} collapsed={collapsed} /> : null}
 
         <SectionLabel>Modules</SectionLabel>
         {enabledModules.length === 0 ? (
