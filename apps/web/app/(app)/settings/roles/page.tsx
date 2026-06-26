@@ -27,7 +27,19 @@ export default function RolesPage() {
     queryFn: () => apiGet<CustomRole[]>('/tenant/roles'),
     enabled: isAdmin,
   });
+  const { data: catalog } = useQuery({
+    queryKey: ['permission-catalog'],
+    queryFn: () =>
+      apiGet<{ catalog: { permissions: { key: string; label: string }[] }[] }>('/tenant/roles/permissions').then(
+        (r) => r.catalog,
+      ),
+    enabled: isAdmin,
+  });
   const capName = useMemo(() => new Map((caps ?? []).map((c) => [c.key, c.name])), [caps]);
+  const permLabel = useMemo(
+    () => new Map((catalog ?? []).flatMap((g) => g.permissions).map((p) => [p.key, p.label])),
+    [catalog],
+  );
 
   const remove = useMutation({
     mutationFn: (id: string) => apiDelete(`/tenant/roles/${id}`),
@@ -91,6 +103,15 @@ export default function RolesPage() {
                 {r.memberRoles.map((m) => (
                   <Badge key={m} variant="secondary">{capName.get(m) ?? m}</Badge>
                 ))}
+                {r.permissions.slice(0, 6).map((p) => (
+                  <Badge key={p} variant="outline" title={p}>{permLabel.get(p) ?? p}</Badge>
+                ))}
+                {r.permissions.length > 6 ? (
+                  <Badge variant="outline">+{r.permissions.length - 6} more</Badge>
+                ) : null}
+                {r.memberRoles.length === 0 && r.permissions.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">No grants</span>
+                ) : null}
               </CardContent>
             </Card>
           ))}
