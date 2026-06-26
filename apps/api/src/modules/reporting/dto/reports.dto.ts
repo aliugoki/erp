@@ -4,9 +4,12 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  Matches,
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Optional inclusive month range for the profit & loss report (ISO dates, e.g. 2026-01-01). */
 export class ProfitLossQueryDto {
@@ -26,6 +29,8 @@ export class RunReportDto {
   @IsOptional() @IsArray() @IsString({ each: true }) columns?: string[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ReportFilterDto) filters?: ReportFilterDto[];
   @IsOptional() @IsString() groupBy?: string;
+  @IsOptional() @Matches(ISO_DATE, { message: 'dateFrom must be an ISO date (YYYY-MM-DD)' }) dateFrom?: string;
+  @IsOptional() @Matches(ISO_DATE, { message: 'dateTo must be an ISO date (YYYY-MM-DD)' }) dateTo?: string;
 }
 
 export class CreateReportDto extends RunReportDto {

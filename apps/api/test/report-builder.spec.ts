@@ -35,6 +35,22 @@ describe('report-builder', () => {
     expect(() => buildReportQuery({ source: 'crm_deals', columns: ['nope'] })).toThrow();
   });
 
+  it('applies an inclusive created_at date range as bound params (group + list mode)', () => {
+    const g = buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', dateFrom: '2026-01-01', dateTo: '2026-03-31' });
+    expect(g.sql).toContain('created_at::date >= $1::date');
+    expect(g.sql).toContain('created_at::date <= $2::date');
+    expect(g.params).toEqual(['2026-01-01', '2026-03-31']);
+
+    const l = buildReportQuery({ source: 'crm_deals', columns: ['title'], filters: [{ column: 'stage', value: 'WON' }], dateFrom: '2026-02-01' });
+    expect(l.params).toEqual(['WON', '2026-02-01']); // filter bound first, then dateFrom
+    expect(l.sql).toContain('created_at::date >= $2::date');
+  });
+
+  it('rejects a malformed date range (injection-safe)', () => {
+    expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', dateFrom: "2026-01-01'; DROP TABLE" })).toThrow();
+    expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', dateTo: 'not-a-date' })).toThrow();
+  });
+
   it('datasetCatalog exposes labels without leaking SQL', () => {
     const cat = datasetCatalog();
     expect(cat.find((d) => d.key === 'crm_deals')).toBeTruthy();

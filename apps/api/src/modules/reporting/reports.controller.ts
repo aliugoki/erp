@@ -63,8 +63,13 @@ export class ReportsController {
 
   @Get('builder/presets/:key/run')
   @RequiresFeature('reporting')
-  async runPreset(@Param('key') key: string, @Query('format') format?: string) {
-    return this.respond(await this.builder.runPreset(key), format);
+  async runPreset(
+    @Param('key') key: string,
+    @Query('format') format?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.respond(await this.builder.runPreset(key, { dateFrom: from, dateTo: to }), format);
   }
 
   @Get('builder/custom')
@@ -83,8 +88,13 @@ export class ReportsController {
 
   @Get('builder/custom/:id/run')
   @RequiresFeature('reporting')
-  async runSaved(@Param('id', ParseUUIDPipe) id: string, @Query('format') format?: string) {
-    return this.respond(await this.builder.runSaved(id), format);
+  async runSaved(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('format') format?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.respond(await this.builder.runSaved(id, { dateFrom: from, dateTo: to }), format);
   }
 
   /** Return JSON (default) or, when `?format=csv|xlsx|pdf`, a streamed downloadable file. */
