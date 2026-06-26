@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReportQuery, datasetCatalog } from '../src/modules/reporting/report-builder';
+import { buildDistinctValuesQuery, buildReportQuery, datasetCatalog } from '../src/modules/reporting/report-builder';
 
 describe('report-builder', () => {
   it('list mode selects only whitelisted columns, parameterizes filters', () => {
@@ -49,6 +49,29 @@ describe('report-builder', () => {
   it('rejects a malformed date range (injection-safe)', () => {
     expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', dateFrom: "2026-01-01'; DROP TABLE" })).toThrow();
     expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', dateTo: 'not-a-date' })).toThrow();
+  });
+
+  it('group mode supports an aggregate measure (sum of a money column) and flags it as money', () => {
+    const q = buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'sum', measure: 'value_minor' });
+    expect(q.sql).toContain('SUM(value_minor)');
+    expect(q.sql).toContain('AS "value"');
+    expect(q.columns.map((c) => c.key)).toEqual(['stage', 'value']);
+    expect(q.columns.find((c) => c.key === 'value')!.money).toBe(true);
+  });
+
+  it('rejects a non-aggregatable measure and an unknown aggregate', () => {
+    expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'sum', measure: 'title' })).toThrow();
+    expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'sum' })).toThrow(); // no measure
+    // @ts-expect-error invalid agg at runtime
+    expect(() => buildReportQuery({ source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'median', measure: 'value_minor' })).toThrow();
+  });
+
+  it('buildDistinctValuesQuery only allows filterable columns', () => {
+    const q = buildDistinctValuesQuery('hr_employees', 'city');
+    expect(q.sql).toContain('SELECT DISTINCT');
+    expect(q.sql).toContain('FROM hr_employee');
+    expect(() => buildDistinctValuesQuery('hr_employees', 'salary_amount_minor')).toThrow();
+    expect(() => buildDistinctValuesQuery('evil', 'x')).toThrow();
   });
 
   it('datasetCatalog exposes labels without leaking SQL', () => {

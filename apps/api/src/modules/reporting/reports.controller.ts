@@ -54,6 +54,12 @@ export class ReportsController {
     return this.builder.presets();
   }
 
+  @Get('builder/datasets/:key/values')
+  @RequiresFeature('reporting')
+  distinctValues(@Param('key') key: string, @Query('column') column: string) {
+    return this.builder.distinctValues(key, column);
+  }
+
   @Post('builder/run')
   @RequiresFeature('reporting')
   @HttpCode(HttpStatus.OK)

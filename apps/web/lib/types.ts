@@ -210,6 +210,7 @@ export interface ReportDataset {
   columns: { key: string; label: string; money: boolean }[];
   filterable: string[];
   groupable: string[];
+  aggregatable: string[];
 }
 export interface ReportPreset {
   key: string;

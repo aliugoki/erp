@@ -5,6 +5,7 @@ import { Activity, BarChart3, Boxes, PieChart as PieIcon, RefreshCw, Users } fro
 import { ApiError, apiGet, apiPost } from '@/lib/api';
 import type { AnalyticsDashboard } from '@/lib/types';
 import { type ChartableReport, ReportChart } from '@/components/charts/report-chart';
+import { AnalyticsExplorer } from '@/components/analytics/explorer';
 import { KpiCard } from '@/components/analytics/kpi-card';
 import { RevenueTrendChart } from '@/components/analytics/revenue-trend-chart';
 import { PageHeader } from '@/components/page-header';
@@ -84,6 +85,9 @@ export default function AnalyticsPage() {
           ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)
           : data.kpis.map((k, i) => <KpiCard key={k.key} kpi={k} delayMs={i * 60} />)}
       </div>
+
+      {/* Interactive explorer — slice any dataset by dimension, measure & filters */}
+      <AnalyticsExplorer />
 
       {/* Hero revenue trend */}
       <ChartPanel title="Revenue, expense & profit" icon={Activity}>

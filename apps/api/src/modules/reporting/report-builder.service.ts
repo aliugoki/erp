@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import type { CreateReportDto, RunReportDto } from './dto/reports.dto';
-import { DATASETS, PRESETS, type ReportConfig, buildReportQuery, datasetCatalog } from './report-builder';
+import { DATASETS, PRESETS, type ReportConfig, buildDistinctValuesQuery, buildReportQuery, datasetCatalog } from './report-builder';
 
 type Row = Record<string, unknown>;
 export interface DateRange {
@@ -55,8 +55,24 @@ export class ReportBuilderService {
         groupBy: dto.groupBy ?? null,
         dateFrom: dto.dateFrom ?? null,
         dateTo: dto.dateTo ?? null,
+        agg: dto.agg ?? null,
+        measure: dto.measure ?? null,
       })),
     };
+  }
+
+  /** Distinct values for a filterable column — powers the explorer's filter dropdowns. */
+  async distinctValues(source: string, column: string): Promise<string[]> {
+    let compiled;
+    try {
+      compiled = buildDistinctValuesQuery(source, column);
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
+    }
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(compiled.sql, compiled.params)) as Array<{ v: unknown }>;
+      return rows.map((r) => String(r.v)).filter((v) => v.length > 0);
+    });
   }
 
   // ── Saved custom reports ────────────────────────────────────────────────────
