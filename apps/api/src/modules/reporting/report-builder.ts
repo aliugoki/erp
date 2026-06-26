@@ -98,6 +98,34 @@ export const DATASETS: Record<string, DatasetDef> = {
     filterable: [],
     groupable: [],
   },
+  finance_invoices: {
+    key: 'finance_invoices',
+    label: 'Finance — Invoices',
+    table: 'finance_invoice',
+    columns: {
+      number: { label: 'Invoice #', sql: 'number' },
+      status: { label: 'Status', sql: 'status' },
+      subtotal_minor: { label: 'Subtotal', sql: 'subtotal_minor', money: true },
+      total_minor: { label: 'Total', sql: 'total_minor', money: true },
+      due_date: { label: 'Due', sql: "to_char(due_date,'YYYY-MM-DD')" },
+      created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
+    },
+    filterable: ['status'],
+    groupable: ['status'],
+  },
+  pos_sales: {
+    key: 'pos_sales',
+    label: 'POS — Sales',
+    table: 'pos_sale',
+    columns: {
+      sale_no: { label: 'Sale #', sql: 'sale_no' },
+      status: { label: 'Status', sql: 'status' },
+      total_minor: { label: 'Total', sql: 'total_minor', money: true },
+      created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
+    },
+    filterable: ['status'],
+    groupable: ['status'],
+  },
 };
 
 export interface ReportConfig {

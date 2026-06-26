@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import type { CreateReportDto, RunReportDto } from './dto/reports.dto';
-import { PRESETS, type ReportConfig, buildReportQuery, datasetCatalog } from './report-builder';
+import { DATASETS, PRESETS, type ReportConfig, buildReportQuery, datasetCatalog } from './report-builder';
 
 type Row = Record<string, unknown>;
 
@@ -34,14 +34,15 @@ export class ReportBuilderService {
     });
   }
 
-  runPreset(key: string) {
+  async runPreset(key: string) {
     const preset = PRESETS.find((p) => p.key === key);
     if (!preset) throw new NotFoundException('Preset not found');
-    return this.run(preset.config);
+    return { title: preset.name, ...(await this.run(preset.config)) };
   }
 
-  runAdHoc(dto: RunReportDto) {
-    return this.run({ source: dto.source, columns: dto.columns ?? [], filters: dto.filters, groupBy: dto.groupBy ?? null });
+  async runAdHoc(dto: RunReportDto) {
+    const title = DATASETS[dto.source]?.label ?? 'Report';
+    return { title, ...(await this.run({ source: dto.source, columns: dto.columns ?? [], filters: dto.filters, groupBy: dto.groupBy ?? null })) };
   }
 
   // ── Saved custom reports ────────────────────────────────────────────────────
@@ -75,18 +76,21 @@ export class ReportBuilderService {
   async runSaved(id: string) {
     const def = await this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT source, columns, filters, group_by FROM rpt_report_definition WHERE id=$1 AND deleted_at IS NULL`,
+        `SELECT name, source, columns, filters, group_by FROM rpt_report_definition WHERE id=$1 AND deleted_at IS NULL`,
         [id],
       )) as Row[];
       return rows[0];
     });
     if (!def) throw new NotFoundException('Report not found');
-    return this.run({
-      source: def.source as string,
-      columns: (def.columns as string[]) ?? [],
-      filters: (def.filters as { column: string; value: string }[]) ?? [],
-      groupBy: (def.group_by as string | null) ?? null,
-    });
+    return {
+      title: def.name as string,
+      ...(await this.run({
+        source: def.source as string,
+        columns: (def.columns as string[]) ?? [],
+        filters: (def.filters as { column: string; value: string }[]) ?? [],
+        groupBy: (def.group_by as string | null) ?? null,
+      })),
+    };
   }
 
   async deleteReport(id: string) {

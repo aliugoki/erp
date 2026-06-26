@@ -9,12 +9,25 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { RequiresFeature } from '../features/requires-feature.decorator';
 import { CreateReportDto, ProfitLossQueryDto, RunReportDto } from './dto/reports.dto';
 import { ReportBuilderService } from './report-builder.service';
 import { ReportingService } from './reporting.service';
+import { FORMAT_META, type ReportFormat, renderReport } from './report-export';
+
+interface RunResult {
+  title?: string;
+  columns: Array<{ key: string; label: string; money?: boolean }>;
+  rows: Array<Record<string, unknown>>;
+}
+
+const EXPORT_FORMATS: ReportFormat[] = ['csv', 'xlsx', 'pdf'];
+function slugifyFile(s: string): string {
+  return (s || 'report').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'report';
+}
 
 
 /**
@@ -44,14 +57,14 @@ export class ReportsController {
   @Post('builder/run')
   @RequiresFeature('reporting')
   @HttpCode(HttpStatus.OK)
-  runAdHoc(@Body() dto: RunReportDto) {
-    return this.builder.runAdHoc(dto);
+  async runAdHoc(@Body() dto: RunReportDto, @Query('format') format?: string) {
+    return this.respond(await this.builder.runAdHoc(dto), format);
   }
 
   @Get('builder/presets/:key/run')
   @RequiresFeature('reporting')
-  runPreset(@Param('key') key: string) {
-    return this.builder.runPreset(key);
+  async runPreset(@Param('key') key: string, @Query('format') format?: string) {
+    return this.respond(await this.builder.runPreset(key), format);
   }
 
   @Get('builder/custom')
@@ -70,8 +83,25 @@ export class ReportsController {
 
   @Get('builder/custom/:id/run')
   @RequiresFeature('reporting')
-  runSaved(@Param('id', ParseUUIDPipe) id: string) {
-    return this.builder.runSaved(id);
+  async runSaved(@Param('id', ParseUUIDPipe) id: string, @Query('format') format?: string) {
+    return this.respond(await this.builder.runSaved(id), format);
+  }
+
+  /** Return JSON (default) or, when `?format=csv|xlsx|pdf`, a streamed downloadable file. */
+  private async respond(result: RunResult, format?: string): Promise<RunResult | StreamableFile> {
+    if (!format) return result;
+    if (!EXPORT_FORMATS.includes(format as ReportFormat)) return result;
+    const fmt = format as ReportFormat;
+    const buf = await renderReport(fmt, {
+      title: result.title ?? 'Report',
+      columns: result.columns,
+      rows: result.rows,
+    });
+    const { type, ext } = FORMAT_META[fmt];
+    return new StreamableFile(buf, {
+      type,
+      disposition: `attachment; filename="${slugifyFile(result.title ?? 'report')}.${ext}"`,
+    });
   }
 
   @Delete('builder/custom/:id')
