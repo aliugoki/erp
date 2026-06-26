@@ -19,6 +19,8 @@ export class SalesLineDto {
   @IsString() @MinLength(1) description!: string;
   @IsInt() @Min(1) quantity!: number;
   @IsInt() @Min(0) unitPriceMinor!: number;
+  /** Per-line discount % (0–100), capped by the `crm.discount_cap_percent` policy. */
+  @IsOptional() @IsInt() @Min(0) @Max(100) discountPercent?: number;
 }
 
 export class CreateQuotationDto {

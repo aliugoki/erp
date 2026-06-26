@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { PolicyService } from '../policy/policy.service';
 import type { CreateOrderDto, CreateQuotationDto } from './dto/sales.dto';
 import {
   type LineInput,
@@ -21,10 +23,14 @@ const O_COLS = 'id, so_no, client_id, quotation_id, status, currency, order_date
  * integer minor units. */
 @Injectable()
 export class SalesService {
-  constructor(private readonly tenantTx: TenantTransactionService) {}
+  constructor(
+    private readonly tenantTx: TenantTransactionService,
+    private readonly policy: PolicyService,
+  ) {}
 
   // ── Quotations ────────────────────────────────────────────────────────────────
   async createQuotation(dto: CreateQuotationDto) {
+    await this.assertDiscountWithinCap(dto.lines as LineInput[]);
     const taxRate = dto.taxRate ?? 0;
     const totals = computeTotals(dto.lines as LineInput[], taxRate);
     return this.tenantTx.run(async (m) => {
@@ -105,6 +111,7 @@ export class SalesService {
 
   // ── Sales orders ────────────────────────────────────────────────────────────
   async createOrder(dto: CreateOrderDto) {
+    await this.assertDiscountWithinCap(dto.lines as LineInput[]);
     const totals = computeTotals(dto.lines as LineInput[], 0);
     return this.tenantTx.run(async (m) => {
       const soNo = await nextSalesDocNo(m, 'SO', 'SO');
@@ -164,11 +171,25 @@ export class SalesService {
   // ── helpers ─────────────────────────────────────────────────────────────────
   private async insertLines(m: EntityManager, table: string, fk: string, parentId: string, lines: LineInput[]) {
     for (const l of lines) {
+      const disc = l.discountPercent ?? 0;
       await m.query(
-        `INSERT INTO ${table} (tenant_id, ${fk}, product_id, description, quantity, unit_price_minor, line_total_minor)
-         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6)`,
-        [parentId, l.productId ?? null, l.description, l.quantity, l.unitPriceMinor, lineTotalMinor(l.quantity, l.unitPriceMinor)],
+        `INSERT INTO ${table} (tenant_id, ${fk}, product_id, description, quantity, unit_price_minor, discount_percent, line_total_minor)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7)`,
+        [parentId, l.productId ?? null, l.description, l.quantity, l.unitPriceMinor, disc, lineTotalMinor(l.quantity, l.unitPriceMinor, disc)],
       );
+    }
+  }
+
+  /** Policy (ADR-011): reject any line whose discount % exceeds the tenant's cap (100 = uncapped). */
+  private async assertDiscountWithinCap(lines: LineInput[]): Promise<void> {
+    const tenantId = RequestContext.tenantId();
+    if (!tenantId) return;
+    const cap = await this.policy.getNumber(tenantId, 'crm.discount_cap_percent');
+    if (cap >= 100) return;
+    for (const l of lines) {
+      if ((l.discountPercent ?? 0) > cap) {
+        throw new UnprocessableEntityException(`Line discount ${l.discountPercent}% exceeds the company cap of ${cap}%.`);
+      }
     }
   }
 
