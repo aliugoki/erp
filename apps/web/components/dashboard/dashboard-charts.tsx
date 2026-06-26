@@ -1,15 +1,18 @@
 'use client';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AreaChart as AreaIcon, BarChart3, CalendarRange, LineChart as LineIcon, PieChart as PieIcon, X } from 'lucide-react';
+import { AreaChart as AreaIcon, BarChart3, CalendarRange, Download, FileSpreadsheet, FileText, LineChart as LineIcon, PieChart as PieIcon, Sheet, X } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { type ReportFormat, downloadReport } from '@/lib/download-report';
 import { type ChartType, ReportChart, isChartable } from '@/components/charts/report-chart';
 import type { ReportResult } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/sonner';
 
 /** A dashboard chart card backed by a report preset, scoped to a module so it only shows when enabled. */
 interface ChartSpec {
@@ -62,14 +65,29 @@ function rangeQuery(range: Range): string {
   return s ? `?${s}` : '';
 }
 
+const EXPORTS: { fmt: ReportFormat; label: string; icon: typeof FileText }[] = [
+  { fmt: 'pdf', label: 'PDF', icon: FileText },
+  { fmt: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
+  { fmt: 'csv', label: 'CSV', icon: Sheet },
+];
+
 function ChartCard({ spec, range, delayMs }: { spec: ChartSpec; range: Range; delayMs: number }) {
   const [type, setType] = useState<ChartType>(spec.type);
   const hasRange = !!(range.from || range.to);
+  const path = `/reports/builder/presets/${spec.preset}/run${rangeQuery(range)}`;
   const { data, isLoading } = useQuery({
     queryKey: ['dash-chart', spec.preset, range.from, range.to],
-    queryFn: () => apiGet<ReportResult>(`/reports/builder/presets/${spec.preset}/run${rangeQuery(range)}`),
+    queryFn: () => apiGet<ReportResult>(path),
     staleTime: 60_000,
   });
+
+  const exportAs = async (fmt: ReportFormat) => {
+    try {
+      await downloadReport({ method: 'GET', path, title: spec.title }, fmt);
+    } catch {
+      toast.error('Export failed');
+    }
+  };
 
   const empty = !isLoading && !isChartable(data ?? null);
   // With no range active, hide an empty card (dead module). With a range active, keep it and
@@ -77,7 +95,7 @@ function ChartCard({ spec, range, delayMs }: { spec: ChartSpec; range: Range; de
   if (empty && !hasRange) return null;
 
   return (
-    <Card className="animate-fade-up" style={{ animationDelay: `${delayMs}ms` }}>
+    <Card className="glass elevated hover-lift animate-fade-up" style={{ animationDelay: `${delayMs}ms` }}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-semibold">{spec.title}</CardTitle>
         <div className="flex items-center gap-0.5">
@@ -95,6 +113,25 @@ function ChartCard({ spec, range, delayMs }: { spec: ChartSpec; range: Range; de
               <Icon className="size-4" />
             </button>
           ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Export"
+                disabled={empty}
+                className="ml-0.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+              >
+                <Download className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[8rem]">
+              {EXPORTS.map(({ fmt, label, icon: Icon }) => (
+                <DropdownMenuItem key={fmt} onSelect={() => exportAs(fmt)}>
+                  <Icon className="size-4" /> {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent>

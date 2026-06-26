@@ -13,6 +13,7 @@ interface StatCardProps {
   hint?: string;
   accent?: 'primary' | 'success' | 'warning' | 'destructive';
   delayMs?: number;
+  className?: string;
 }
 
 const ACCENT: Record<NonNullable<StatCardProps['accent']>, string> = {
@@ -22,11 +23,11 @@ const ACCENT: Record<NonNullable<StatCardProps['accent']>, string> = {
   destructive: 'bg-destructive/10 text-destructive',
 };
 
-export function StatCard({ icon: Icon, label, value, format, hint, accent = 'primary', delayMs = 0 }: StatCardProps) {
+export function StatCard({ icon: Icon, label, value, format, hint, accent = 'primary', delayMs = 0, className }: StatCardProps) {
   const animated = useCountUp(value);
   return (
     <Card
-      className="group relative overflow-hidden hover-lift animate-fade-up"
+      className={cn('group relative overflow-hidden hover-lift animate-fade-up', className)}
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-glow opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-20" />
