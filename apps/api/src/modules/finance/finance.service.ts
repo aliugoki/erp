@@ -171,20 +171,26 @@ export class FinanceService {
 
   // ── Transactions (double-entry) ─────────────────────────────────────────────
   async createTransaction(dto: CreateTransactionDto) {
-    // Policy (ADR-011): a voucher at/above the approval threshold can't be posted in one step — it
-    // must be submitted as a draft for a second approver to post. Drafts and automated postings
-    // (postJournalInTx) are exempt. Threshold 0 (default) = no restriction.
-    if (!dto.draft) {
-      const tenantId = RequestContext.tenantId();
-      const threshold = tenantId
-        ? await this.policy.getNumber(tenantId, 'finance.voucher_approval_threshold_minor')
-        : 0;
-      if (threshold > 0) {
-        const total = (dto.entries ?? []).reduce((s, e) => s + (e.debitMinor ?? 0), 0);
-        if (total >= threshold) {
-          throw new UnprocessableEntityException(
-            `Voucher total (${total} minor) is at or above the approval threshold (${threshold}); submit it as a draft so a second approver can post it.`,
-          );
+    // Policies (ADR-011), evaluated on the user-facing path only (automated postJournalInTx exempt).
+    const tenantId = RequestContext.tenantId();
+    if (tenantId) {
+      // Require a cost centre on every voucher line when the tenant turns it on.
+      if (await this.policy.getBool(tenantId, 'finance.require_cost_center')) {
+        if ((dto.entries ?? []).some((e) => !e.costCenterId)) {
+          throw new UnprocessableEntityException('Company policy requires a cost centre on every voucher line.');
+        }
+      }
+      // A voucher at/above the approval threshold can't be posted in one step — it must be submitted
+      // as a draft for a second approver. Drafts are exempt. Threshold 0 (default) = no restriction.
+      if (!dto.draft) {
+        const threshold = await this.policy.getNumber(tenantId, 'finance.voucher_approval_threshold_minor');
+        if (threshold > 0) {
+          const total = (dto.entries ?? []).reduce((s, e) => s + (e.debitMinor ?? 0), 0);
+          if (total >= threshold) {
+            throw new UnprocessableEntityException(
+              `Voucher total (${total} minor) is at or above the approval threshold (${threshold}); submit it as a draft so a second approver can post it.`,
+            );
+          }
         }
       }
     }

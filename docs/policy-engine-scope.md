@@ -48,11 +48,15 @@ throws an RFC-7807 error when violated (never UI-only).
 - **B — Enforce, module by module.** ▶ IN PROGRESS. Wire `PolicyService` reads into each module's
   decision points (one PR per module group). Defaults are no-ops, so enforcement only bites once a
   tenant overrides.
-  - ✅ **Finance** — `finance.voucher_approval_threshold_minor`: a voucher whose total ≥ threshold
-    can't be posted in one step; it must be submitted as a draft for a second approver (`createTransaction`;
-    automated `postJournalInTx` exempt). Live-proven (blocks immediate post, allows draft / below / reset).
+  - ✅ **Finance** — `finance.voucher_approval_threshold_minor` (post-above-threshold must be a draft
+    for a second approver) **and** `finance.require_cost_center` (every voucher line needs a cost
+    centre); both in `createTransaction` (automated `postJournalInTx` exempt). Live-proven.
   - ✅ **HR** — `hr.max_leave_days_per_request`: a leave request longer than the cap is rejected
     (`createLeaveRequest`). Live-proven.
+  - ✅ **POS** — `pos.max_discount_percent`: a line whose discount % exceeds the cap is rejected
+    (`createSale`). Live-proven.
+  - 🏷 The catalog now carries an `enforced` flag; the **Settings → Policies** UI tags any policy not
+    yet wired as "not enforced yet" so an admin is never misled by a no-op toggle.
   - ⏸ **Inventory `allow_negative_stock` deferred to its own PR.** It can't be honoured by an app
     check alone — a hard DB invariant `CHECK (on_hand >= 0)` blocks negative stock and is relied on by
     ~5 decrement paths (inventory movements + docs, pharmacy dispense, production consume, POS) and the
