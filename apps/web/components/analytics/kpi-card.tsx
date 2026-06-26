@@ -1,10 +1,20 @@
 'use client';
 import { useMemo } from 'react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Boxes, type LucideIcon, Minus, Target, TrendingUp, Trophy, Users, Wallet } from 'lucide-react';
 import type { AnalyticsKpi } from '@/lib/types';
 import { cn, formatMoney } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
+
+/** Per-KPI icon + accent colour, so each tile reads at a glance. */
+const ICONS: Record<string, { icon: LucideIcon; tint: string; chip: string }> = {
+  revenue: { icon: Wallet, tint: 'text-primary', chip: 'bg-primary/10' },
+  profit: { icon: TrendingUp, tint: 'text-success', chip: 'bg-success/10' },
+  pipeline: { icon: Target, tint: 'text-violet-500', chip: 'bg-violet-500/10' },
+  won: { icon: Trophy, tint: 'text-amber-500', chip: 'bg-amber-500/10' },
+  inventory: { icon: Boxes, tint: 'text-cyan-500', chip: 'bg-cyan-500/10' },
+  headcount: { icon: Users, tint: 'text-rose-500', chip: 'bg-rose-500/10' },
+};
 
 /** Compact value formatting for KPI tiles — money in major units (K/M/B), counts plain. */
 function formatValue(kpi: AnalyticsKpi): string {
@@ -25,11 +35,18 @@ export function KpiCard({ kpi, delayMs = 0 }: { kpi: AnalyticsKpi; delayMs?: num
   const tone = up ? 'success' : down ? 'destructive' : 'muted-foreground';
   const stroke = up ? 'hsl(var(--success))' : down ? 'hsl(var(--destructive))' : 'hsl(var(--primary))';
   const gid = `kpi-${kpi.key}`;
+  const meta = ICONS[kpi.key] ?? { icon: Wallet, tint: 'text-primary', chip: 'bg-primary/10' };
+  const Icon = meta.icon;
 
   return (
     <Card className="glass elevated hover-lift group relative overflow-hidden animate-fade-up" style={{ animationDelay: `${delayMs}ms` }}>
       <div className="relative flex flex-col gap-1 p-5">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
+          <span className={cn('flex size-8 items-center justify-center rounded-lg', meta.chip, meta.tint)}>
+            <Icon className="size-4" />
+          </span>
+        </div>
         <div className="flex items-end justify-between gap-2">
           <p className="text-2xl font-semibold tabular-nums leading-none">{formatValue(kpi)}</p>
           {typeof delta === 'number' ? (

@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsISO8601,
   IsOptional,
   IsString,
@@ -8,6 +9,8 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+
+const AGGS = ['count', 'sum', 'avg', 'min', 'max'] as const;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -31,6 +34,8 @@ export class RunReportDto {
   @IsOptional() @IsString() groupBy?: string;
   @IsOptional() @Matches(ISO_DATE, { message: 'dateFrom must be an ISO date (YYYY-MM-DD)' }) dateFrom?: string;
   @IsOptional() @Matches(ISO_DATE, { message: 'dateTo must be an ISO date (YYYY-MM-DD)' }) dateTo?: string;
+  @IsOptional() @IsIn(AGGS) agg?: (typeof AGGS)[number];
+  @IsOptional() @IsString() measure?: string;
 }
 
 export class CreateReportDto extends RunReportDto {

@@ -23,7 +23,13 @@ export interface DatasetDef {
   columns: Record<string, ColumnDef>;
   filterable: string[];
   groupable: string[];
+  /** Numeric/money columns that may be aggregated (sum/avg/min/max) as a grouped measure. */
+  aggregatable: string[];
 }
+
+export type Agg = 'count' | 'sum' | 'avg' | 'min' | 'max';
+const AGGS: Agg[] = ['count', 'sum', 'avg', 'min', 'max'];
+const AGG_LABEL: Record<Agg, string> = { count: 'Count', sum: 'Total', avg: 'Average', min: 'Minimum', max: 'Maximum' };
 
 export const DATASETS: Record<string, DatasetDef> = {
   crm_deals: {
@@ -36,9 +42,11 @@ export const DATASETS: Record<string, DatasetDef> = {
       value_minor: { label: 'Value', sql: 'value_minor', money: true },
       probability: { label: 'Probability %', sql: 'probability' },
       created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
+      created_month: { label: 'Month', sql: "to_char(created_at,'YYYY-MM')" },
     },
     filterable: ['stage'],
-    groupable: ['stage'],
+    groupable: ['stage', 'created_month'],
+    aggregatable: ['value_minor', 'probability'],
   },
   crm_leads: {
     key: 'crm_leads',
@@ -54,6 +62,7 @@ export const DATASETS: Record<string, DatasetDef> = {
     },
     filterable: ['status', 'rating'],
     groupable: ['status', 'rating'],
+    aggregatable: ['est_value_minor'],
   },
   hr_employees: {
     key: 'hr_employees',
@@ -70,6 +79,7 @@ export const DATASETS: Record<string, DatasetDef> = {
     },
     filterable: ['status', 'employment_type', 'city'],
     groupable: ['status', 'designation', 'city', 'employment_type'],
+    aggregatable: ['salary_amount_minor'],
   },
   hr_leave_requests: {
     key: 'hr_leave_requests',
@@ -82,6 +92,7 @@ export const DATASETS: Record<string, DatasetDef> = {
     },
     filterable: ['status'],
     groupable: ['status'],
+    aggregatable: ['days'],
   },
   inventory_products: {
     key: 'inventory_products',
@@ -90,13 +101,15 @@ export const DATASETS: Record<string, DatasetDef> = {
     columns: {
       sku: { label: 'SKU', sql: 'sku' },
       name: { label: 'Name', sql: 'name' },
+      category: { label: 'Category', sql: "COALESCE(NULLIF(category,''), 'Uncategorized')" },
       on_hand: { label: 'On hand', sql: 'on_hand' },
       min_stock: { label: 'Min stock', sql: 'min_stock' },
       cost_price_minor: { label: 'Cost', sql: 'cost_price_minor', money: true },
       sell_price_minor: { label: 'Sell price', sql: 'sell_price_minor', money: true },
     },
-    filterable: [],
-    groupable: [],
+    filterable: ['category'],
+    groupable: ['category'],
+    aggregatable: ['on_hand', 'min_stock', 'cost_price_minor', 'sell_price_minor'],
   },
   finance_invoices: {
     key: 'finance_invoices',
@@ -109,9 +122,11 @@ export const DATASETS: Record<string, DatasetDef> = {
       total_minor: { label: 'Total', sql: 'total_minor', money: true },
       due_date: { label: 'Due', sql: "to_char(due_date,'YYYY-MM-DD')" },
       created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
+      created_month: { label: 'Month', sql: "to_char(created_at,'YYYY-MM')" },
     },
     filterable: ['status'],
-    groupable: ['status'],
+    groupable: ['status', 'created_month'],
+    aggregatable: ['subtotal_minor', 'total_minor'],
   },
   pos_sales: {
     key: 'pos_sales',
@@ -122,9 +137,11 @@ export const DATASETS: Record<string, DatasetDef> = {
       status: { label: 'Status', sql: 'status' },
       total_minor: { label: 'Total', sql: 'total_minor', money: true },
       created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
+      created_month: { label: 'Month', sql: "to_char(created_at,'YYYY-MM')" },
     },
     filterable: ['status'],
-    groupable: ['status'],
+    groupable: ['status', 'created_month'],
+    aggregatable: ['total_minor'],
   },
 };
 
@@ -136,6 +153,9 @@ export interface ReportConfig {
   /** Optional inclusive date range on the row's `created_at` (ISO `YYYY-MM-DD`). */
   dateFrom?: string | null;
   dateTo?: string | null;
+  /** Grouped measure: the aggregate (default `count`) and, for sum/avg/min/max, the column to aggregate. */
+  agg?: Agg | null;
+  measure?: string | null;
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -174,10 +194,34 @@ export function buildReportQuery(config: ReportConfig): CompiledReport {
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
-  // Group mode: <groupCol> + count.
+  // Group mode: <groupCol> + an aggregate measure (count by default).
   if (config.groupBy) {
     if (!ds.groupable.includes(config.groupBy)) throw new Error(`Column "${config.groupBy}" is not groupable on ${ds.key}`);
     const col = ds.columns[config.groupBy]!;
+    const agg: Agg = config.agg ?? 'count';
+    if (!AGGS.includes(agg)) throw new Error(`Unknown aggregate "${agg}"`);
+
+    if (agg !== 'count') {
+      if (!config.measure || !ds.aggregatable.includes(config.measure)) {
+        throw new Error(`Column "${config.measure}" is not aggregatable on ${ds.key}`);
+      }
+      const m = ds.columns[config.measure]!;
+      // sum/min/max stay integral (money is minor units); avg is rounded to whole minor units.
+      const expr =
+        agg === 'sum' ? `COALESCE(SUM(${m.sql}), 0)::bigint`
+        : agg === 'avg' ? `COALESCE(ROUND(AVG(${m.sql})), 0)::bigint`
+        : `${agg.toUpperCase()}(${m.sql})::bigint`;
+      return {
+        sql: `SELECT ${col.sql} AS "${config.groupBy}", ${expr} AS "value"
+              FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY "value" DESC`,
+        params,
+        columns: [
+          { key: config.groupBy, label: col.label },
+          { key: 'value', label: `${AGG_LABEL[agg]} ${m.label}`, money: m.money },
+        ],
+      };
+    }
+
     return {
       sql: `SELECT ${col.sql} AS "${config.groupBy}", count(*)::int AS "count"
             FROM ${ds.table} ${whereSql} GROUP BY ${col.sql} ORDER BY count DESC`,
@@ -208,7 +252,22 @@ export function datasetCatalog() {
     columns: Object.entries(d.columns).map(([key, c]) => ({ key, label: c.label, money: !!c.money })),
     filterable: d.filterable,
     groupable: d.groupable,
+    aggregatable: d.aggregatable,
   }));
+}
+
+/** Compile a parameterized DISTINCT-values query for a filterable column (for filter dropdowns). */
+export function buildDistinctValuesQuery(source: string, column: string): { sql: string; params: unknown[] } {
+  const ds = DATASETS[source];
+  if (!ds) throw new Error(`Unknown dataset "${source}"`);
+  if (!ds.filterable.includes(column)) throw new Error(`Column "${column}" is not filterable on ${ds.key}`);
+  const col = ds.columns[column]!;
+  return {
+    sql: `SELECT DISTINCT ${col.sql} AS v FROM ${ds.table}
+          WHERE deleted_at IS NULL AND ${col.sql} IS NOT NULL AND ${col.sql} <> ''
+          ORDER BY v LIMIT 200`,
+    params: [],
+  };
 }
 
 export interface PresetDef {
