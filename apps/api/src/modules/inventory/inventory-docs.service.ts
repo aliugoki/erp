@@ -4,7 +4,9 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { PolicyService } from '../policy/policy.service';
 import type {
   AdjustStockDto,
   CreateGatePassDto,
@@ -28,7 +30,10 @@ type Mgr = { query: (sql: string, params?: unknown[]) => Promise<unknown> };
  */
 @Injectable()
 export class InventoryDocsService {
-  constructor(private readonly tenantTx: TenantTransactionService) {}
+  constructor(
+    private readonly tenantTx: TenantTransactionService,
+    private readonly policy: PolicyService,
+  ) {}
 
   // ── Ledger backbone (weighted-average cost) ─────────────────────────────────
   private async postLedger(
@@ -68,6 +73,15 @@ export class InventoryDocsService {
       valueOut = qtyOut * unitCost;
     }
     const newQty = curQty + qtyIn - qtyOut;
+    // Policy (ADR-011): block oversell unless the tenant allows negative stock (replaces the old
+    // hard CHECK). Cached lookup; default false = unchanged behaviour.
+    if (newQty < 0) {
+      const tenantId = RequestContext.tenantId();
+      const allowNegative = tenantId ? await this.policy.getBool(tenantId, 'inventory.allow_negative_stock') : false;
+      if (!allowNegative) {
+        throw new UnprocessableEntityException(`Insufficient stock: on hand ${curQty}, requested out ${qtyOut}`);
+      }
+    }
     let newValue = curValue + valueIn - valueOut;
     if (newQty <= 0) newValue = 0; // fully depleted → no residual value from rounding
     const newWavg = newQty > 0 ? Math.round(newValue / newQty) : qtyIn > 0 ? unitCost : Number(prod[0].cost_price_minor);

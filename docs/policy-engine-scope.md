@@ -57,11 +57,12 @@ throws an RFC-7807 error when violated (never UI-only).
     (`createSale`). Live-proven.
   - 🏷 The catalog now carries an `enforced` flag; the **Settings → Policies** UI tags any policy not
     yet wired as "not enforced yet" so an admin is never misled by a no-op toggle.
-  - ⏸ **Inventory `allow_negative_stock` deferred to its own PR.** It can't be honoured by an app
-    check alone — a hard DB invariant `CHECK (on_hand >= 0)` blocks negative stock and is relied on by
-    ~5 decrement paths (inventory movements + docs, pharmacy dispense, production consume, POS) and the
-    WAVG cost math. Making the policy authoritative means dropping that CHECK and app-gating every
-    path, which warrants a dedicated, carefully-tested change rather than a rushed first cut.
+  - ✅ **Inventory `allow_negative_stock`** (dedicated PR). Migration `1726600000000` drops the hard
+    `CHECK (on_hand >= 0)`; the two on-hand decrement paths (`InventoryService.createMovement`,
+    `InventoryDocsService.postLedger` — the shared valued-ledger backbone behind GRN/issue/POS/
+    production) now app-gate oversell on the policy. WAVG already handled non-positive qty (value→0,
+    last cost retained). Pharmacy's separate `ck_pharmacy_lot_qty` is untouched. Live-proven: default
+    blocks oversell, enabling drives on-hand to -5, reset blocks again.
   - ☐ Remaining policies/modules (require-cost-centre, require-PO-for-bill, discount caps, credit
     limit, expired-dispense block) — wire next.
 - **C — Approval workflows (optional, larger).** If thresholds need multi-step maker–checker routing

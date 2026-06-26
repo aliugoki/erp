@@ -5,8 +5,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EVENT_TYPES } from '@metaxperts/shared';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PolicyService } from '../policy/policy.service';
 import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
 import type { CreateMovementDto, CreateProductDto, CreateWarehouseDto, UpdateProductDto, UpdateWarehouseDto } from './dto/inventory.dto';
 import {
@@ -44,6 +46,7 @@ export class InventoryService {
     private readonly tenantTx: TenantTransactionService,
     private readonly outbox: OutboxService,
     private readonly storage: StorageService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ── Warehouses ──────────────────────────────────────────────────────────────
@@ -288,6 +291,10 @@ export class InventoryService {
   async createMovement(dto: CreateMovementDto) {
     const type = dto.type as MovementType;
     const delta = deltaFor(type, dto.quantity);
+    // Policy (ADR-011): negative on-hand is blocked unless the tenant allows it (replaces the old
+    // hard CHECK constraint). Resolved before the tx; default false = unchanged behaviour.
+    const tenantId = RequestContext.tenantId();
+    const allowNegative = tenantId ? await this.policy.getBool(tenantId, 'inventory.allow_negative_stock') : false;
 
     return this.tenantTx.run(async (m) => {
       // Lock the product row so concurrent movements serialize.
@@ -299,6 +306,9 @@ export class InventoryService {
       const current = prod[0].on_hand;
       const minStock = prod[0].min_stock;
       const next = current + delta;
+      if (next < 0 && !allowNegative) {
+        throw new UnprocessableEntityException(`Insufficient stock: on hand ${current}, requested ${dto.quantity}`);
+      }
 
       let movement: Record<string, unknown>;
       try {
