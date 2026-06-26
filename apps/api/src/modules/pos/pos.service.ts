@@ -8,7 +8,9 @@ import {
 import { randomBytes } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import { EVENT_TYPES, type PosSaleCompletedV1 } from '@metaxperts/shared';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { PolicyService } from '../policy/policy.service';
 import { InventoryDocsService } from '../inventory/inventory-docs.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { type FetchedAttachment, StorageService, type UploadedFileLike } from '../storage/storage.service';
@@ -65,6 +67,7 @@ export class PosService {
     private readonly outbox: OutboxService,
     private readonly terminal: PaymentTerminalService,
     private readonly storage: StorageService,
+    private readonly policy: PolicyService,
   ) {}
 
   // ── Receipt branding ──────────────────────────────────────────────────────────
@@ -292,6 +295,20 @@ export class PosService {
 
   // ── Sales ─────────────────────────────────────────────────────────────────────
   async createSale(dto: CreateSaleDto, userId: string | null) {
+    // Policy (ADR-011): cap the per-line discount %. 100 (default) = uncapped.
+    const tenantId = RequestContext.tenantId();
+    if (tenantId) {
+      const cap = await this.policy.getNumber(tenantId, 'pos.max_discount_percent');
+      if (cap < 100) {
+        for (const l of dto.lines ?? []) {
+          const gross = (l.unitPriceMinor ?? 0) * (l.quantity ?? 0);
+          const pct = gross > 0 ? ((l.discountMinor ?? 0) / gross) * 100 : 0;
+          if (pct > cap) {
+            throw new UnprocessableEntityException(`Line discount ${pct.toFixed(1)}% exceeds the company cap of ${cap}%.`);
+          }
+        }
+      }
+    }
     return this.tenantTx.run(async (m) => {
       const shift = await this.assertOpenShift(m, dto.shiftId, dto.registerId);
       const reg = await this.getRegisterWith(m, dto.registerId);

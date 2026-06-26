@@ -18,6 +18,9 @@ export interface PolicyDef {
   options?: string[]; // for enum
   min?: number; // for number/money
   max?: number;
+  /** True once a module actually enforces this policy at a decision point (Phase B). The UI flags the
+   * rest as "not enforced yet" so an admin is never misled by a toggle that does nothing. */
+  enforced?: boolean;
 }
 
 export const POLICY_CATALOG: PolicyDef[] = [
@@ -29,7 +32,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     label: 'Voucher approval threshold',
     help: 'Vouchers at or above this amount require a second approver. 0 = no threshold.',
     type: 'money',
-    default: 0,
+    default: 0, enforced: true,
     min: 0,
   },
   {
@@ -39,7 +42,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     label: 'Require cost centre on vouchers',
     help: 'Every voucher line must specify a cost centre.',
     type: 'boolean',
-    default: false,
+    default: false, enforced: true,
   },
   {
     key: 'finance.require_po_for_bill',
@@ -90,7 +93,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     label: 'Max POS line discount %',
     help: 'Cashiers cannot exceed this discount without a manager override. 100 = uncapped.',
     type: 'number',
-    default: 100,
+    default: 100, enforced: true,
     min: 0,
     max: 100,
   },
@@ -102,7 +105,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     label: 'Max leave days per request',
     help: 'Largest single leave request allowed. 0 = unlimited.',
     type: 'number',
-    default: 0,
+    default: 0, enforced: true,
     min: 0,
   },
   // ── Pharmacy ──────────────────────────────────────────────────────────────

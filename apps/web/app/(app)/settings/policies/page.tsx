@@ -25,6 +25,7 @@ interface Policy {
   max?: number;
   value: boolean | number | string;
   isOverride: boolean;
+  enforced?: boolean;
 }
 
 export default function PoliciesPage() {
@@ -107,6 +108,7 @@ export default function PoliciesPage() {
                   <p className="flex items-center gap-2 text-sm font-medium">
                     {p.label}
                     {p.isOverride ? <Badge variant="secondary" className="text-[10px]">customised</Badge> : null}
+                    {!p.enforced ? <Badge variant="outline" className="text-[10px] text-muted-foreground">not enforced yet</Badge> : null}
                   </p>
                   <p className="text-xs text-muted-foreground">{p.help}</p>
                 </div>
