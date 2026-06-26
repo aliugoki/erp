@@ -9,6 +9,7 @@ const TABS = [
   { href: '/settings/features', label: 'Features', adminOnly: false },
   { href: '/settings/users', label: 'Users', adminOnly: true },
   { href: '/settings/roles', label: 'Roles', adminOnly: true },
+  { href: '/settings/policies', label: 'Policies', adminOnly: true },
 ];
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
