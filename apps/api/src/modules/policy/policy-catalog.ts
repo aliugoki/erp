@@ -62,6 +62,7 @@ export const POLICY_CATALOG: PolicyDef[] = [
     help: 'Permit issues/movements that drive on-hand below zero.',
     type: 'boolean',
     default: false,
+    enforced: true,
   },
   // ── Sales / CRM ───────────────────────────────────────────────────────────
   {
