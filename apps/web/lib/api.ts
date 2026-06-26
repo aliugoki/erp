@@ -140,6 +140,15 @@ export async function apiBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+/** Fetch a downloadable file (GET or POST) as a Blob, attaching the bearer token — for report
+ * exports (PDF/XLSX/CSV) where the server streams an attachment. */
+export async function apiDownloadBlob(path: string, init: RequestInit = { method: 'GET' }): Promise<Blob> {
+  const tokens = getTokens();
+  const res = await raw(path, init, tokens?.accessToken);
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return res.blob();
+}
+
 export const apiGet = <T>(path: string) => apiFetch<T>(path);
 export const apiPost = <T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }) =>
   apiFetch<T>(path, {

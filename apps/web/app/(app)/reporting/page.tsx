@@ -1,8 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Play, Save, Trash2 } from 'lucide-react';
-import { ApiError, apiDelete, apiGet, apiPost } from '@/lib/api';
+import { BarChart3, Download, Play, Save, Trash2 } from 'lucide-react';
+import { ApiError, apiDelete, apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
 import type { ReportDataset, ReportPreset, ReportResult, SavedReport } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
@@ -25,6 +25,31 @@ export default function ReportingPage() {
   const [name, setName] = useState('');
   const [result, setResult] = useState<ReportResult | null>(null);
   const [title, setTitle] = useState('');
+  // How to re-fetch the currently-shown report as a downloadable file (PDF/XLSX/CSV).
+  const [dl, setDl] = useState<{ method: 'GET' | 'POST'; path: string; body?: unknown; title: string } | null>(null);
+
+  const EXT: Record<string, string> = { pdf: 'pdf', xlsx: 'xlsx', csv: 'csv' };
+  const download = async (fmt: 'pdf' | 'xlsx' | 'csv') => {
+    if (!dl) return;
+    try {
+      const sep = dl.path.includes('?') ? '&' : '?';
+      const init: RequestInit =
+        dl.method === 'POST'
+          ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dl.body) }
+          : { method: 'GET' };
+      const blob = await apiDownloadBlob(`${dl.path}${sep}format=${fmt}`, init);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(dl.title || 'report').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.${EXT[fmt]}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error('Download failed', { description: e instanceof ApiError ? e.message : '' });
+    }
+  };
 
   const datasets = useQuery({ queryKey: ['rb-datasets'], queryFn: () => apiGet<ReportDataset[]>('/reports/builder/datasets') });
   const presets = useQuery({ queryKey: ['rb-presets'], queryFn: () => apiGet<ReportPreset[]>('/reports/builder/presets') });
@@ -35,9 +60,14 @@ export default function ReportingPage() {
   const show = (t: string) => (r: ReportResult) => { setResult(r); setTitle(t); };
   const fail = (e: unknown) => toast.error('Report failed', { description: e instanceof ApiError ? e.message : '' });
 
+  const adHocTitle = () => ds?.label ?? 'Ad-hoc report';
   const runAdHoc = useMutation({
     mutationFn: () => apiPost<ReportResult>('/reports/builder/run', { source, columns: cols, groupBy: groupBy === NONE ? undefined : groupBy }),
-    onSuccess: show('Ad-hoc report'), onError: fail,
+    onSuccess: (r) => {
+      show(adHocTitle())(r);
+      setDl({ method: 'POST', path: '/reports/builder/run', body: { source, columns: cols, groupBy: groupBy === NONE ? undefined : groupBy }, title: adHocTitle() });
+    },
+    onError: fail,
   });
   const runPreset = useMutation({ mutationFn: (p: ReportPreset) => apiGet<ReportResult>(`/reports/builder/presets/${p.key}/run`), onSuccess: () => {}, onError: fail });
   const runSaved = useMutation({ mutationFn: (r: SavedReport) => apiGet<ReportResult>(`/reports/builder/custom/${r.id}/run`), onError: fail });
@@ -59,7 +89,7 @@ export default function ReportingPage() {
         <div className="flex flex-wrap gap-2">
           {(presets.data ?? []).map((p) => (
             <Button key={p.key} variant="outline" size="sm"
-              onClick={() => runPreset.mutate(p, { onSuccess: show(p.name) })}>
+              onClick={() => { runPreset.mutate(p, { onSuccess: show(p.name) }); setDl({ method: 'GET', path: `/reports/builder/presets/${p.key}/run`, title: p.name }); }}>
               {p.name}
             </Button>
           ))}
@@ -114,7 +144,16 @@ export default function ReportingPage() {
           <div className="min-w-0">
             {result ? (
               <Card className="overflow-x-auto">
-                <p className="border-b p-3 text-sm font-medium">{title} <Badge variant="secondary" className="ml-2">{result.rows.length} rows</Badge></p>
+                <div className="flex items-center justify-between gap-2 border-b p-3">
+                  <p className="text-sm font-medium">{title} <Badge variant="secondary" className="ml-2">{result.rows.length} rows</Badge></p>
+                  {dl ? (
+                    <span className="flex gap-1">
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('pdf')}><Download className="size-3.5" /> PDF</Button>
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('xlsx')}><Download className="size-3.5" /> Excel</Button>
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => download('csv')}><Download className="size-3.5" /> CSV</Button>
+                    </span>
+                  ) : null}
+                </div>
                 <Table>
                   <TableHeader><TableRow>{result.columns.map((c) => <TableHead key={c.key}>{c.label}</TableHead>)}</TableRow></TableHeader>
                   <TableBody>
@@ -150,7 +189,7 @@ export default function ReportingPage() {
               <li key={r.id} className="flex items-center justify-between rounded-lg border p-2 text-sm">
                 <span><span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">· {r.source}{r.groupBy ? ` · by ${r.groupBy}` : ''}</span></span>
                 <span className="flex gap-1">
-                  <Button size="sm" variant="outline" className="h-7" onClick={() => runSaved.mutate(r, { onSuccess: show(r.name) })}><Play className="size-3.5" /></Button>
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => { runSaved.mutate(r, { onSuccess: show(r.name) }); setDl({ method: 'GET', path: `/reports/builder/custom/${r.id}/run`, title: r.name }); }}><Play className="size-3.5" /></Button>
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-destructive" onClick={() => del.mutate(r.id)}><Trash2 className="size-3.5" /></Button>
                 </span>
               </li>
