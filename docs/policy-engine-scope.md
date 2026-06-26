@@ -45,9 +45,21 @@ throws an RFC-7807 error when violated (never UI-only).
   (TENANT_ADMIN); **Settings → Policies** UI grouped by module (Switch / number / money / enum
   controls + reset). No enforcement yet (config-only, non-breaking). Live-proven: set/reset/validation
   /admin-only all correct.
-- **B — Enforce, module by module.** Wire `PolicyService.assert(...)` into each module's decision
-  points (one PR per module), with tests asserting allow/deny at the boundary. Start with Finance
-  (approval thresholds) and Inventory (negative-stock / reorder).
+- **B — Enforce, module by module.** ▶ IN PROGRESS. Wire `PolicyService` reads into each module's
+  decision points (one PR per module group). Defaults are no-ops, so enforcement only bites once a
+  tenant overrides.
+  - ✅ **Finance** — `finance.voucher_approval_threshold_minor`: a voucher whose total ≥ threshold
+    can't be posted in one step; it must be submitted as a draft for a second approver (`createTransaction`;
+    automated `postJournalInTx` exempt). Live-proven (blocks immediate post, allows draft / below / reset).
+  - ✅ **HR** — `hr.max_leave_days_per_request`: a leave request longer than the cap is rejected
+    (`createLeaveRequest`). Live-proven.
+  - ⏸ **Inventory `allow_negative_stock` deferred to its own PR.** It can't be honoured by an app
+    check alone — a hard DB invariant `CHECK (on_hand >= 0)` blocks negative stock and is relied on by
+    ~5 decrement paths (inventory movements + docs, pharmacy dispense, production consume, POS) and the
+    WAVG cost math. Making the policy authoritative means dropping that CHECK and app-gating every
+    path, which warrants a dedicated, carefully-tested change rather than a rushed first cut.
+  - ☐ Remaining policies/modules (require-cost-centre, require-PO-for-bill, discount caps, credit
+    limit, expired-dispense block) — wire next.
 - **C — Approval workflows (optional, larger).** If thresholds need multi-step maker–checker routing
   beyond the existing finance maker/checker, model `approval_request` + routing rules. Separate scope.
 
