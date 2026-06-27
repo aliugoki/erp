@@ -6,6 +6,7 @@ import { apiGet } from '@/lib/api';
 import type { AgingBucketKey, ApAging, ArAging, BalanceSheet, CashFlow, IncomeStatement, StatementLine, TrialBalance } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { ModuleReports } from '@/components/reports/module-reports';
 import { cn } from '@/lib/utils';
 
 type Tab = 'tb' | 'bs' | 'is' | 'cf' | 'ar' | 'ap';
@@ -281,6 +282,7 @@ export function FinanceReports() {
         {tab === 'cf' ? <CashFlowReport /> : null}
         {tab === 'ar' ? <ArAgingReport /> : null}
         {tab === 'ap' ? <ApAgingReport /> : null}
+        <div className="mt-6 border-t pt-5"><ModuleReports sources={['finance_invoices']} /></div>
       </PaneBody>
     </>
   );
