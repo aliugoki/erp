@@ -230,6 +230,23 @@ export interface SavedReport {
   groupBy: string | null;
 }
 
+export interface ReportSchedule {
+  id: string;
+  name: string;
+  presetKey: string | null;
+  reportId: string | null;
+  format: 'pdf' | 'xlsx' | 'csv';
+  recipients: string[];
+  frequency: 'daily' | 'weekly' | 'monthly';
+  hour: number;
+  minute: number;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string;
+}
+
 // ── BI analytics dashboard ───────────────────────────────────────────────────────
 export interface AnalyticsKpi {
   key: string;
