@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AreaChart as AreaIcon, BarChart3, CalendarRange, Download, LineChart as LineIcon, PieChart as PieIcon, Play, Save, Table as TableIcon, Trash2, X } from 'lucide-react';
 import { ApiError, apiDelete, apiDownloadBlob, apiGet, apiPost } from '@/lib/api';
 import { type ChartType, ReportChart, isChartable } from '@/components/charts/report-chart';
+import { ReportSchedules } from '@/components/reporting/report-schedules';
 import type { ReportDataset, ReportPreset, ReportResult, SavedReport } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PageHeader } from '@/components/page-header';
@@ -265,6 +266,8 @@ export default function ReportingPage() {
           </ul>
         )}
       </Card>
+
+      <ReportSchedules />
     </div>
   );
 }

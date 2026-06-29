@@ -103,6 +103,19 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Scheduled report emails: a tick finds due report_schedule rows, renders the report and emails it
+  // (via the email queue). Off by default; needs NOTIFICATIONS_EMAIL_ENABLED + SMTP to actually send.
+  REPORT_SCHEDULES_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true' || v === '1')
+    .pipe(z.boolean()),
+  REPORT_SCHEDULES_INTERVAL_MS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 60_000 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Public base URL of the storefront (apps/web), used to build absolute links in customer emails
   // (e.g. password-reset). Optional — when unset, emails include the bare token instead of a link.
   STOREFRONT_BASE_URL: z.string().url().optional(),
