@@ -367,7 +367,7 @@ export class SubscriptionsService {
   }
 
   async runBillingAllTenants(): Promise<{ billed: number; dunned: number; canceled: number }> {
-    const tenants = (await this.dataSource.query(`SELECT id FROM tenants WHERE deleted_at IS NULL`)) as Array<{ id: string }>;
+    const tenants = (await this.dataSource.query(`SELECT id FROM tenants WHERE status = 'active'`)) as Array<{ id: string }>;
     const totals = { billed: 0, dunned: 0, canceled: 0 };
     for (const { id } of tenants) {
       try {

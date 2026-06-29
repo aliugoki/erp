@@ -51,9 +51,24 @@ x-app-env: &app-env
   WORKER_REACTIONS_ENABLED: "true"
   NOTIFICATIONS_ENABLED: "true"
   REPORTING_REFRESH_ENABLED: "false"
+  # Scheduled report emails → delivered via the email queue to Mailpit (open-source SMTP sink, below).
+  # Swap SMTP_HOST/SMTP_PORT for a real relay in a live deployment.
+  NOTIFICATIONS_EMAIL_ENABLED: "true"
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  REPORT_SCHEDULES_ENABLED: "true"
 
 services:
   # ── Infrastructure ────────────────────────────────────────────────────────
+  # Mailpit: open-source SMTP sink + web UI (inspect captured mail at :8025). For real delivery,
+  # repoint SMTP_HOST/SMTP_PORT above at your relay and remove this service.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    networks: [erp]
+    ports:
+      - "8025:8025" # web UI / REST API
+
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
