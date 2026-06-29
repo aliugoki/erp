@@ -230,6 +230,20 @@ export interface SavedReport {
   groupBy: string | null;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  userEmail: string | null;
+  action: string;
+  resource: string;
+  resourceId: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  ipAddress: string | null;
+  traceId: string | null;
+  createdAt: string;
+}
+
 export interface ReportSchedule {
   id: string;
   name: string;
