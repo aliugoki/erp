@@ -66,4 +66,12 @@ export class UsersController {
   setActive(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetActiveDto) {
     return this.users.setActive(id, dto.isActive);
   }
+
+  /** Clear an account lockout so the user can sign in again (TENANT_ADMIN). Records its own audit. */
+  @Patch(':id/unlock')
+  @Roles(Role.TENANT_ADMIN, Role.SUPER_ADMIN)
+  @SkipAudit()
+  unlock(@Param('id', ParseUUIDPipe) id: string) {
+    return this.users.unlock(id);
+  }
 }
