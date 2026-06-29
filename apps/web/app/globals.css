@@ -195,6 +195,30 @@
     pointer-events: none;
     background: linear-gradient(135deg, hsl(0 0% 100% / 0.18), transparent 45%);
   }
+  /* A glossy light-sweep that glides across on hover — premium micro-interaction for chips/brand. */
+  .sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .sheen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 70%;
+    height: 100%;
+    transform: skewX(-20deg);
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.3), transparent);
+    transition: left 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+  .sheen:hover::before {
+    left: 150%;
+  }
+  /* Smoothly cross-fade the brand/active-nav accent when the module (and its hue) changes. */
+  .accent-fade {
+    transition: background-color 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
+  }
   .glow-primary {
     box-shadow: 0 0 0 1px hsl(var(--primary) / 0.1), 0 0 32px -8px hsl(var(--glow) / 0.5);
   }

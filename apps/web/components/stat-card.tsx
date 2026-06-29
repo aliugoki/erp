@@ -32,7 +32,7 @@ export function StatCard({ icon: Icon, label, value, format, hint, accent = 'pri
     >
       <div className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-glow opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-20" />
       <div className="flex items-center gap-4 p-5">
-        <div className={cn('flex size-11 items-center justify-center rounded-xl', ACCENT[accent])}>
+        <div className={cn('sheen gloss flex size-11 items-center justify-center rounded-xl', ACCENT[accent])}>
           <Icon className="size-5" />
         </div>
         <div className="min-w-0">

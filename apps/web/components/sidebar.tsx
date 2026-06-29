@@ -70,7 +70,7 @@ export function Sidebar() {
     >
       <div className="pointer-events-none absolute -left-10 top-10 size-40 rounded-full bg-sidebar-accent opacity-15 blur-3xl" />
       <div className={cn('relative flex h-16 items-center gap-2.5 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'px-5')}>
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-white shadow-[0_0_18px_-2px_hsl(var(--sidebar-accent))]">
+        <div className="sheen accent-fade flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-white shadow-[0_0_18px_-2px_hsl(var(--sidebar-accent))]">
           <Boxes className="size-5" />
         </div>
         {collapsed ? null : <span className="text-lg font-semibold tracking-tight">MetaXperts</span>}

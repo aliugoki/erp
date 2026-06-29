@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Boxes, Factory, Layers, Loader2, Search, Settings2, Tag, Trash2, Wallet } from 'lucide-react';
@@ -143,7 +144,7 @@ export default function ProductionPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Manufacturing</h1>
+        <ModuleTitle>Manufacturing</ModuleTitle>
         <p className="text-sm text-muted-foreground">Work orders, bills of materials, work centers, and production costing.</p>
       </div>
       <div className="min-h-0 flex-1"><ThreePane rail={rail} list={list} detail={detail} showDetail={showDetail} /></div>

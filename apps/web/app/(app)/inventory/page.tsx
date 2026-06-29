@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -154,7 +155,7 @@ export default function InventoryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
+        <ModuleTitle>Inventory</ModuleTitle>
         <p className="text-sm text-muted-foreground">Products, valued stock ledger, and procurement documents.</p>
       </div>
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">

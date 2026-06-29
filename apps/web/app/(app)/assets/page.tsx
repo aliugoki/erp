@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Building2, Layers, Loader2, Search, Wallet, Wrench } from 'lucide-react';
@@ -120,7 +121,7 @@ export default function AssetsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Fixed Assets</h1>
+        <ModuleTitle>Fixed Assets</ModuleTitle>
         <p className="text-sm text-muted-foreground">Asset register, depreciation, disposal, and maintenance.</p>
       </div>
       <div className="min-h-0 flex-1"><ThreePane rail={rail} list={list} detail={detail} showDetail={showDetail} /></div>

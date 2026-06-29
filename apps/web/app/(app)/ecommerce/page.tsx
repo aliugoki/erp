@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -37,7 +38,7 @@ export default function EcommercePage() {
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Online Store</h1>
+          <ModuleTitle>Online Store</ModuleTitle>
           <p className="text-sm text-muted-foreground">Shopify-style storefront — catalogue, collections, discounts, shipping, and online orders.</p>
         </div>
         {slug && published ? (
