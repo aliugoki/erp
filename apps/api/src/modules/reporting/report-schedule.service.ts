@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { RequestContext } from '../../common/request-context/request-context';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { EmailQueueService } from '../notifications/email-queue.service';
 import type { CreateReportScheduleDto, UpdateReportScheduleDto } from './dto/report-schedule.dto';
@@ -167,11 +168,13 @@ export class ReportScheduleService {
 
   /** Tick entry point: render + email every due schedule across all tenants. */
   async runDueAllTenants(now = new Date()): Promise<number> {
-    const tenants = (await this.dataSource.query(`SELECT id FROM tenants WHERE deleted_at IS NULL`)) as Array<{ id: string }>;
+    const tenants = (await this.dataSource.query(`SELECT id FROM tenants WHERE status = 'active'`)) as Array<{ id: string }>;
     let count = 0;
     for (const { id } of tenants) {
       try {
-        count += await this.tenantTx.runFor(id, () => this.runDueForCurrentTenant(now));
+        // Set the tenant in AsyncLocalStorage so tenantTx.run() (used here + inside the report
+        // builder) resolves this tenant and applies RLS — the tick has no request context of its own.
+        count += await RequestContext.run({ requestId: `report-schedule-tick:${id}`, tenantId: id }, () => this.runDueForCurrentTenant(now));
       } catch (err) {
         this.logger.warn(`report schedule run failed for tenant ${id}: ${(err as Error).message}`);
       }

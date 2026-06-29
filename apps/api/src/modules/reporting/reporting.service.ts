@@ -36,7 +36,7 @@ export class ReportingService {
 
   /** Refresh all tenants (the scheduled job). `tenants` is a non-RLS platform registry. */
   async refreshAllTenants(): Promise<number> {
-    const rows = (await this.dataSource.query(`SELECT id FROM tenants WHERE deleted_at IS NULL`)) as Array<{ id: string }>;
+    const rows = (await this.dataSource.query(`SELECT id FROM tenants WHERE status = 'active'`)) as Array<{ id: string }>;
     for (const { id } of rows) {
       try {
         await this.refreshForTenant(id);
