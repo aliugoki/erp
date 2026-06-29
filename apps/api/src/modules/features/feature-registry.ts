@@ -199,6 +199,14 @@ export const FEATURE_MODULES: FeatureModuleDef[] = [
       { key: 'notifications.in_app', name: 'In-app' },
     ],
   },
+  {
+    key: 'tax',
+    name: 'Tax & Compliance',
+    description: 'Tax-authority integrations — FBR (Pakistan) digital invoicing: report POS sales for an FBR invoice number + QR.',
+    features: [
+      { key: 'tax.fbr', name: 'FBR digital invoicing' },
+    ],
+  },
 ];
 
 /** Every valid feature key (module keys + sub-feature keys). */

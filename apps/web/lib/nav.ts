@@ -6,6 +6,7 @@ import {
   Building2,
   Factory,
   FolderKanban,
+  Landmark,
   LayoutDashboard,
   LineChart,
   LifeBuoy,
@@ -46,6 +47,7 @@ export const MODULE_NAV: Record<string, NavItem> = {
   reporting: { key: 'reporting', label: 'Reporting', href: '/reporting', icon: BarChart3 },
   ai: { key: 'ai', label: 'AI Insights', href: '/ai', icon: Sparkles },
   notifications: { key: 'notifications', label: 'Notifications', href: '/notifications', icon: Bell },
+  tax: { key: 'tax', label: 'Tax / FBR', href: '/tax', icon: Landmark },
 };
 
 export const DASHBOARD_ITEM: NavItem = { key: 'dashboard', label: 'Dashboard', href: '/', icon: LayoutDashboard };
