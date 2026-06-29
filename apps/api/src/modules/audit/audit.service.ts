@@ -11,6 +11,18 @@ export interface AuditEntry {
   newValue?: unknown;
 }
 
+export interface AuditQuery {
+  from?: string;
+  to?: string;
+  action?: string;
+  resource?: string;
+  userId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+type Row = Record<string, unknown>;
+
 /**
  * Writes audit rows within the current tenant's RLS context. Actor (userId), tenantId, ip and
  * traceId are taken from RequestContext, so callers only describe the change. Audit failures are
@@ -42,6 +54,50 @@ export class AuditService {
     const tenantId = tenantOverride ?? RequestContext.tenantId();
     if (!tenantId) return;
     await this.insert(manager, tenantId, entry);
+  }
+
+  /** Paginated, filtered audit trail for the current tenant (RLS-scoped) — powers the audit viewer.
+   * Resolves the actor's email via a same-tenant LEFT JOIN. All filter values are bound as params. */
+  async listForTenant(q: AuditQuery) {
+    const page = Math.max(1, Number(q.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(q.pageSize) || 25));
+    const where: string[] = ['1=1'];
+    const params: unknown[] = [];
+    if (q.from) where.push(`a.created_at::date >= $${params.push(q.from)}::date`);
+    if (q.to) where.push(`a.created_at::date <= $${params.push(q.to)}::date`);
+    if (q.action) where.push(`a.action ILIKE $${params.push(`%${q.action}%`)}`);
+    if (q.resource) where.push(`a.resource ILIKE $${params.push(`%${q.resource}%`)}`);
+    if (q.userId) where.push(`a.user_id = $${params.push(q.userId)}`);
+    const clause = where.join(' AND ');
+
+    return this.tenantTx.run(async (m) => {
+      const total = Number(
+        ((await m.query(`SELECT count(*) AS c FROM audit_log a WHERE ${clause}`, params)) as Array<{ c: string }>)[0]!.c,
+      );
+      const rows = (await m.query(
+        `SELECT a.id, a.user_id, u.email AS user_email, a.action, a.resource, a.resource_id,
+                a.old_value, a.new_value, a.ip_address, a.trace_id, a.created_at
+         FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+         WHERE ${clause} ORDER BY a.created_at DESC LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+        params,
+      )) as Row[];
+      return {
+        data: rows.map((r) => ({
+          id: r.id,
+          userId: r.user_id,
+          userEmail: r.user_email ?? null,
+          action: r.action,
+          resource: r.resource,
+          resourceId: r.resource_id ?? null,
+          oldValue: r.old_value ?? null,
+          newValue: r.new_value ?? null,
+          ipAddress: r.ip_address ?? null,
+          traceId: r.trace_id ?? null,
+          createdAt: r.created_at,
+        })),
+        meta: { pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } },
+      };
+    });
   }
 
   private insert(manager: EntityManager, tenantId: string, entry: AuditEntry): Promise<unknown> {
