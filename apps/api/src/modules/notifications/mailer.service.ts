@@ -4,10 +4,19 @@ import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type { AppConfig } from '@metaxperts/config';
 
+/** A file attachment carried through the (JSON-serialised) email queue — content is base64. */
+export interface EmailAttachment {
+  filename: string;
+  contentBase64: string;
+  contentType: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  html?: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -42,9 +51,20 @@ export class MailerService {
     return this.transporter;
   }
 
-  /** Send one email. Throws on failure (the queue worker retries). */
+  /** Send one email (optionally with HTML body + attachments). Throws on failure (the queue worker retries). */
   async send(msg: EmailMessage): Promise<void> {
-    await this.transport().sendMail({ from: this.from, to: msg.to, subject: msg.subject, text: msg.text });
+    await this.transport().sendMail({
+      from: this.from,
+      to: msg.to,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+      attachments: msg.attachments?.map((a) => ({
+        filename: a.filename,
+        content: Buffer.from(a.contentBase64, 'base64'),
+        contentType: a.contentType,
+      })),
+    });
     this.logger.debug(`email sent to ${msg.to}: ${msg.subject}`);
   }
 }
