@@ -5,6 +5,7 @@ import { apiGet } from '@/lib/api';
 import type { ForecastReport, LeadFunnelRow, SalesByOwnerRow, WinLossReport } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { ModuleReports } from '@/components/reports/module-reports';
 import { StageBadge } from './crm-ui';
 
 const STAGE_LABEL: Record<string, string> = {
@@ -81,6 +82,7 @@ export function CrmReports() {
             </div>
           </section>
         </div>
+        <ModuleReports sources={['crm_deals', 'crm_leads']} />
       </PaneBody>
     </>
   );

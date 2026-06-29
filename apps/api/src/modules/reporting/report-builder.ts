@@ -353,4 +353,17 @@ export const PRESETS: PresetDef[] = [
   },
   { key: 'inv-top-selling', name: 'Top selling products (qty)', config: { source: 'product_sales', columns: [], groupBy: 'product', agg: 'sum', measure: 'quantity', limit: 10 } },
   { key: 'inv-top-revenue', name: 'Top products by revenue', config: { source: 'product_sales', columns: [], groupBy: 'product', agg: 'sum', measure: 'revenue', limit: 10 } },
+  // ── Finance ────────────────────────────────────────────────────────────────
+  { key: 'fin-invoices-list', name: 'Invoices', config: { source: 'finance_invoices', columns: ['number', 'status', 'subtotal_minor', 'total_minor', 'due_date'], orderBy: 'created', orderDir: 'desc', limit: 200 } },
+  { key: 'fin-invoices-by-status', name: 'Invoices by status', config: { source: 'finance_invoices', columns: [], groupBy: 'status' } },
+  { key: 'fin-invoiced-by-status', name: 'Invoiced amount by status', config: { source: 'finance_invoices', columns: [], groupBy: 'status', agg: 'sum', measure: 'total_minor' } },
+  { key: 'fin-invoiced-by-month', name: 'Invoiced by month', config: { source: 'finance_invoices', columns: [], groupBy: 'created_month', agg: 'sum', measure: 'total_minor' } },
+  // ── Point of Sale ────────────────────────────────────────────────────────────
+  { key: 'pos-sales-by-status', name: 'Sales by status', config: { source: 'pos_sales', columns: [], groupBy: 'status' } },
+  { key: 'pos-sales-by-month', name: 'Sales by month', config: { source: 'pos_sales', columns: [], groupBy: 'created_month', agg: 'sum', measure: 'total_minor' } },
+  // ── CRM ────────────────────────────────────────────────────────────────────
+  { key: 'crm-pipeline-value', name: 'Pipeline value by stage', config: { source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'sum', measure: 'value_minor' } },
+  { key: 'crm-leads-by-status', name: 'Leads by status', config: { source: 'crm_leads', columns: [], groupBy: 'status' } },
+  // ── HR ─────────────────────────────────────────────────────────────────────
+  { key: 'hr-salary-by-designation', name: 'Salary cost by designation', config: { source: 'hr_employees', columns: [], groupBy: 'designation', agg: 'sum', measure: 'salary_amount_minor' } },
 ];

@@ -4,6 +4,7 @@ import { apiGet } from '@/lib/api';
 import type { HeadcountReport, LeaveSummary, PayrollSummary } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { ModuleReports } from '@/components/reports/module-reports';
 import { MONTHS } from './hr-ui';
 
 export function HrReports() {
@@ -97,6 +98,7 @@ export function HrReports() {
             </table>
           </div>
         </section>
+        <ModuleReports sources={['hr_employees', 'hr_leave_requests']} />
       </PaneBody>
     </>
   );
