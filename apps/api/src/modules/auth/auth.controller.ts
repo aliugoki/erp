@@ -1,6 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { Public } from './decorators/public.decorator';
-import { LoginDto, RefreshDto } from './dto/auth.dto';
+import { LoginDto, RefreshDto, TwoFactorVerifyDto } from './dto/auth.dto';
 import { AuthService } from './auth.service';
 
 /** Authentication endpoints — all on the public allowlist (no bearer token required). */
@@ -13,6 +13,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
+  }
+
+  @Post('2fa/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyTwoFactor(@Body() dto: TwoFactorVerifyDto) {
+    return this.auth.verifyTwoFactor(dto.ticket, dto.code);
   }
 
   @Post('refresh')

@@ -4,6 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { AccountController } from '../identity/account.controller';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { TwoFactorController } from './two-factor.controller';
+import { TwoFactorService } from './two-factor.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -16,9 +18,10 @@ import { PermissionsGuard } from './guards/permissions.guard';
  */
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [AuthController, AccountController],
+  controllers: [AuthController, AccountController, TwoFactorController],
   providers: [
     AuthService,
+    TwoFactorService,
     RefreshTokenService,
     // Global guards run in this order: authenticate (JWT) → authorize by role → by permission.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
