@@ -12,9 +12,14 @@ export interface CurrentUser {
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** Returns a 2FA ticket when the account requires a second factor; otherwise signs in. */
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean; ticket?: string }>;
+  /** Complete a 2FA login with the challenge ticket + a TOTP/recovery code. */
+  completeTwoFactor: (ticket: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
 }
+
+type LoginResult = TokenPair | { twoFactorRequired: true; ticket: string };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
@@ -35,7 +40,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const tokens = await apiPost<TokenPair>('/auth/login', { email, password });
+    const res = await apiPost<LoginResult>('/auth/login', { email, password });
+    if ('twoFactorRequired' in res) return { twoFactorRequired: true, ticket: res.ticket };
+    setTokens(res);
+    setUser(await apiFetch<CurrentUser>('/me'));
+    return { twoFactorRequired: false };
+  };
+
+  const completeTwoFactor = async (ticket: string, code: string) => {
+    const tokens = await apiPost<TokenPair>('/auth/2fa/verify', { ticket, code });
     setTokens(tokens);
     setUser(await apiFetch<CurrentUser>('/me'));
   };
@@ -48,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, login, completeTwoFactor, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthState {

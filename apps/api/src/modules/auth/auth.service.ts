@@ -7,12 +7,19 @@ import type { AppConfig } from '@metaxperts/config';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
 import { RbacService } from '../rbac/rbac.service';
 import { RefreshError, RefreshTokenService } from './refresh-token.service';
+import { TwoFactorService } from './two-factor.service';
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: string;
+}
+
+/** Returned by login when the account has 2FA enabled — exchange `ticket` + a code at /auth/2fa/verify. */
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  ticket: string;
 }
 
 interface AuthUserRow {
@@ -32,10 +39,12 @@ export class AuthService {
     private readonly refreshTokens: RefreshTokenService,
     private readonly tenantTx: TenantTransactionService,
     private readonly rbac: RbacService,
+    private readonly twofa: TwoFactorService,
   ) {}
 
-  /** Authenticate by email/password and issue an access JWT + rotating refresh token. */
-  async login(email: string, password: string): Promise<TokenPair> {
+  /** Authenticate by email/password. Issues tokens directly, or — when the account has 2FA enabled —
+   * returns a short-lived challenge to be completed at `/auth/2fa/verify`. */
+  async login(email: string, password: string): Promise<TokenPair | TwoFactorChallenge> {
     // Pre-auth lookup crosses tenants, so it goes through a narrow SECURITY DEFINER function rather
     // than an RLS-scoped query (the app role can't see other tenants' rows).
     const rows = (await this.dataSource.query('SELECT * FROM auth_lookup_user($1)', [
@@ -53,17 +62,55 @@ export class AuthService {
 
     await this.assertTenantActive(user.tenant_id);
 
-    await this.tenantTx.runFor(user.tenant_id, (manager) =>
-      manager.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]),
-    );
+    // Second factor: if the account has 2FA enabled, don't issue tokens yet — hand back a short-lived
+    // challenge ticket. The session is only minted once /auth/2fa/verify confirms the code.
+    const twofaRows = (await this.tenantTx.runFor(user.tenant_id, (m) =>
+      m.query('SELECT twofa_enabled FROM users WHERE id = $1', [user.id]),
+    )) as Array<{ twofa_enabled: boolean }>;
+    if (twofaRows[0]?.twofa_enabled) {
+      return { twoFactorRequired: true, ticket: this.signTicket(user.id, user.tenant_id) };
+    }
 
-    // Expand assigned roles (built-in + custom composite) to the union of built-ins, and resolve the
-    // effective fine-grained permissions (built-in + custom-role permissions) for the access token.
+    return this.finishLogin(user.id, user.tenant_id);
+  }
+
+  /** Complete a 2FA login: validate the challenge ticket + TOTP/recovery code, then issue tokens. */
+  async verifyTwoFactor(ticket: string, code: string): Promise<TokenPair> {
+    let payload: { sub?: string; tenantId?: string; purpose?: string };
+    try {
+      payload = this.jwt.verify(ticket, { secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }) });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired two-factor session');
+    }
+    if (payload.purpose !== '2fa' || !payload.sub || !payload.tenantId) {
+      throw new UnauthorizedException('Invalid two-factor session');
+    }
+    const ok = await this.twofa.verifyForUser(payload.sub, payload.tenantId, code);
+    if (!ok) throw new UnauthorizedException('Invalid two-factor code');
+    await this.assertTenantActive(payload.tenantId);
+    return this.finishLogin(payload.sub, payload.tenantId);
+  }
+
+  /** Stamp last-login, resolve effective roles/permissions, and mint the token pair. */
+  private async finishLogin(userId: string, tenantId: string): Promise<TokenPair> {
+    const rows = (await this.tenantTx.runFor(tenantId, async (m) => {
+      await m.query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);
+      return m.query('SELECT roles FROM users WHERE id = $1', [userId]);
+    })) as Array<{ roles: string[] }>;
+    const assigned = rows[0]?.roles ?? [];
     const [roles, perms] = await Promise.all([
-      this.rbac.effectiveBuiltinRoles(user.tenant_id, user.roles ?? []),
-      this.rbac.effectivePermissionsForUser(user.tenant_id, user.roles ?? []),
+      this.rbac.effectiveBuiltinRoles(tenantId, assigned),
+      this.rbac.effectivePermissionsForUser(tenantId, assigned),
     ]);
-    return this.issueTokens(user.id, user.tenant_id, roles, perms);
+    return this.issueTokens(userId, tenantId, roles, perms);
+  }
+
+  /** Sign a short-lived (5m) challenge ticket that authorizes only the 2FA verify step. */
+  private signTicket(userId: string, tenantId: string): string {
+    return this.jwt.sign(
+      { sub: userId, tenantId, purpose: '2fa' },
+      { secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }), expiresIn: '5m' },
+    );
   }
 
   /** Rotate a refresh token (with reuse detection) and mint a fresh access token. Roles are reloaded
