@@ -304,6 +304,9 @@ export default function PosPage() {
       {/* Header bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          <span className="sheen gloss flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-[0_4px_16px_-6px_hsl(var(--glow)/0.6)]">
+            <ScanLine className="size-5" />
+          </span>
           <h2 className="text-xl font-semibold tracking-tight text-gradient">Point of Sale</h2>
           {registers.data && registers.data.length > 0 ? (
             <Select value={activeRegisterId} onValueChange={(v) => { setRegisterId(v); clearSale(); }}>

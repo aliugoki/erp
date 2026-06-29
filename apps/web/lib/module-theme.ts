@@ -47,3 +47,14 @@ export function moduleColor(key: string, alpha = 1): string | undefined {
   const a = MODULE_ACCENTS[key];
   return a ? `hsl(${a}${alpha < 1 ? ` / ${alpha}` : ''})` : undefined;
 }
+
+/** A brightened accent for use on the dark sidebar, where mid-tone hues read dim. Lifts lightness
+ * (and a touch of saturation) so each module icon stays vivid against the near-black nav. */
+export function moduleColorBright(key: string): string | undefined {
+  const a = MODULE_ACCENTS[key];
+  if (!a) return undefined;
+  const [h, s, l] = a.replace(/%/g, '').split(/\s+/).map(Number);
+  const bl = Math.min(72, Math.max(62, (l ?? 50) + 16));
+  const bs = Math.min(95, (s ?? 70) + 6);
+  return `hsl(${h} ${bs}% ${bl}%)`;
+}

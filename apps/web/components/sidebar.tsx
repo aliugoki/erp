@@ -7,7 +7,7 @@ import { Boxes, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { ANALYTICS_ITEM, COMPANIES_ITEM, DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
-import { moduleColor } from '@/lib/module-theme';
+import { moduleColorBright } from '@/lib/module-theme';
 import { cn } from '@/lib/utils';
 
 const STORE_KEY = 'mx_sidebar_collapsed';
@@ -83,7 +83,7 @@ export function Sidebar() {
 
       <nav className="relative flex-1 space-y-1 overflow-y-auto p-3">
         <NavLink item={DASHBOARD_ITEM} active={pathname === '/'} collapsed={collapsed} />
-        {reportingOn ? <NavLink item={ANALYTICS_ITEM} active={pathname.startsWith('/analytics')} collapsed={collapsed} accent={moduleColor('analytics')} /> : null}
+        {reportingOn ? <NavLink item={ANALYTICS_ITEM} active={pathname.startsWith('/analytics')} collapsed={collapsed} accent={moduleColorBright('analytics')} /> : null}
 
         <SectionLabel>Modules</SectionLabel>
         {enabledModules.length === 0 ? (
@@ -92,7 +92,7 @@ export function Sidebar() {
           enabledModules
             .map((m) => MODULE_NAV[m.key])
             .filter((i): i is NavItem => Boolean(i))
-            .map((item) => <NavLink key={item.key} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} accent={moduleColor(item.key)} />)
+            .map((item) => <NavLink key={item.key} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} accent={moduleColorBright(item.key)} />)
         )}
 
         {isSuperAdmin ? (
