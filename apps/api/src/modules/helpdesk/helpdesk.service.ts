@@ -261,7 +261,9 @@ export class HelpdeskService {
       if (filter.assignedTo) conds.push(`t.assigned_to = $${params.push(filter.assignedTo)}`);
       if (filter.teamId) conds.push(`t.team_id = $${params.push(filter.teamId)}`);
       if (filter.unassigned) conds.push(`t.assigned_to IS NULL`);
-      if (filter.breached) conds.push(`(t.first_response_breached OR t.resolution_breached)`);
+      // "Breached" = an ACTIVE breach — match the dashboard KPI by excluding resolved/closed tickets,
+      // whose historical breach flags are kept only as an audit record.
+      if (filter.breached) conds.push(`((t.first_response_breached OR t.resolution_breached) AND t.status NOT IN ('RESOLVED','CLOSED'))`);
       if (filter.q) conds.push(`(t.subject ILIKE $${params.push(`%${filter.q}%`)} OR t.ticket_no ILIKE $${params.length} OR t.requester_email ILIKE $${params.length})`);
       const rows = (await m.query(`${TICKET_SELECT} WHERE ${conds.join(' AND ')} ORDER BY t.last_activity_at DESC LIMIT 200`, params)) as Row[];
       return rows.map(mapTicket);
