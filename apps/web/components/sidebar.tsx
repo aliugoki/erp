@@ -7,11 +7,12 @@ import { Boxes, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { ANALYTICS_ITEM, COMPANIES_ITEM, DASHBOARD_ITEM, type FeatureModule, MODULE_NAV, type NavItem, SETTINGS_ITEM } from '@/lib/nav';
+import { moduleColor } from '@/lib/module-theme';
 import { cn } from '@/lib/utils';
 
 const STORE_KEY = 'mx_sidebar_collapsed';
 
-function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; collapsed: boolean }) {
+function NavLink({ item, active, collapsed, accent }: { item: NavItem; active: boolean; collapsed: boolean; accent?: string }) {
   const Icon = item.icon;
   return (
     <Link
@@ -28,7 +29,10 @@ function NavLink({ item, active, collapsed }: { item: NavItem; active: boolean; 
       {active && !collapsed ? (
         <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent shadow-[0_0_12px_hsl(var(--sidebar-accent))]" />
       ) : null}
-      <Icon className={cn('size-4 shrink-0 transition-transform group-hover:scale-110', active && 'drop-shadow')} />
+      <Icon
+        className={cn('size-4 shrink-0 transition-transform group-hover:scale-110', active && 'drop-shadow')}
+        style={!active && accent ? { color: accent } : undefined}
+      />
       {collapsed ? null : item.label}
     </Link>
   );
@@ -79,7 +83,7 @@ export function Sidebar() {
 
       <nav className="relative flex-1 space-y-1 overflow-y-auto p-3">
         <NavLink item={DASHBOARD_ITEM} active={pathname === '/'} collapsed={collapsed} />
-        {reportingOn ? <NavLink item={ANALYTICS_ITEM} active={pathname.startsWith('/analytics')} collapsed={collapsed} /> : null}
+        {reportingOn ? <NavLink item={ANALYTICS_ITEM} active={pathname.startsWith('/analytics')} collapsed={collapsed} accent={moduleColor('analytics')} /> : null}
 
         <SectionLabel>Modules</SectionLabel>
         {enabledModules.length === 0 ? (
@@ -88,7 +92,7 @@ export function Sidebar() {
           enabledModules
             .map((m) => MODULE_NAV[m.key])
             .filter((i): i is NavItem => Boolean(i))
-            .map((item) => <NavLink key={item.key} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} />)
+            .map((item) => <NavLink key={item.key} item={item} active={pathname.startsWith(item.href)} collapsed={collapsed} accent={moduleColor(item.key)} />)
         )}
 
         {isSuperAdmin ? (

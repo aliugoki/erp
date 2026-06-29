@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { moduleAccentVars } from '@/lib/module-theme';
 import { Sidebar } from '@/components/sidebar';
 import { Topbar } from '@/components/topbar';
 
@@ -44,11 +45,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="module-themed flex h-screen overflow-hidden" style={moduleAccentVars(pathname)}>
       <Sidebar />
       <div className="ambient flex flex-1 flex-col overflow-hidden">
         <Topbar title={titleFor(pathname)} />
-        <main className="relative z-10 flex-1 overflow-y-auto p-6 lg:p-8">{children}</main>
+        <main className="relative z-10 flex-1 overflow-y-auto p-5 lg:p-7">{children}</main>
       </div>
     </div>
   );
