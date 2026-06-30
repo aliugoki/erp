@@ -19,6 +19,8 @@ export interface UserRow {
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  lockedUntil: string | null;
+  failedAttempts: number;
 }
 
 export interface CreateUserInput {
@@ -51,7 +53,8 @@ export class UsersService {
     return (await this.tenantTx.run((m) =>
       m.query(
         `SELECT id, email, roles, is_active AS "isActive",
-                last_login_at AS "lastLoginAt", created_at AS "createdAt"
+                last_login_at AS "lastLoginAt", created_at AS "createdAt",
+                locked_until AS "lockedUntil", failed_login_attempts AS "failedAttempts"
          FROM users WHERE deleted_at IS NULL ORDER BY created_at`,
       ),
     )) as UserRow[];
@@ -140,6 +143,27 @@ export class UsersService {
     });
     if (!isActive) await this.auth.revokeUserSessions(id);
     return result;
+  }
+
+  /** Clear an account's lockout (admin action) so the user can sign in immediately. */
+  async unlock(id: string): Promise<{ id: string }> {
+    return this.tenantTx.run(async (manager) => {
+      const rows = (await manager.query('SELECT id, locked_until, failed_login_attempts FROM users WHERE id = $1', [id])) as Array<{
+        id: string;
+        locked_until: string | null;
+        failed_login_attempts: number;
+      }>;
+      if (!rows[0]) throw new NotFoundException('User not found');
+      await manager.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL, updated_at = now() WHERE id = $1', [id]);
+      await this.audit.recordWith(manager, {
+        action: 'USER_UNLOCK',
+        resource: 'users',
+        resourceId: id,
+        oldValue: { lockedUntil: rows[0].locked_until, failedAttempts: rows[0].failed_login_attempts },
+        newValue: { lockedUntil: null, failedAttempts: 0 },
+      });
+      return { id };
+    });
   }
 
   private async currentTenantId(): Promise<string> {
