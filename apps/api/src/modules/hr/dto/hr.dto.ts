@@ -311,3 +311,9 @@ export class SetPayrollGlDto {
   @IsOptional() @IsUUID() salaryPayableAccountId?: string;
   @IsOptional() @IsUUID() deductionsPayableAccountId?: string;
 }
+
+/** Set or clear a department's per-department salary-expense account override (null = clear → fall
+ * back to the tenant-level default). `@IsOptional` permits an explicit `null` to clear it. */
+export class SetDepartmentSalaryAccountDto {
+  @IsOptional() @IsUUID() salaryExpenseAccountId?: string | null;
+}

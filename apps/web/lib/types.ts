@@ -71,6 +71,12 @@ export interface PayrollRun {
   journalVoucherNo: string | null;
 }
 
+export interface DepartmentSalaryAccount {
+  departmentId: string;
+  departmentName: string;
+  salaryExpenseAccountId: string | null;
+}
+
 export interface Payslip {
   id: string;
   payslipNo: string;

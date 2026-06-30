@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
 import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
+import { DepartmentSalaryAccounts } from './department-salary-accounts';
 import { NewSalaryComponentDialog } from './new-salary-component-dialog';
 import { RunPayrollDialog } from './run-payroll-dialog';
 import { HrStatusBadge, MONTHS } from './hr-ui';
@@ -90,6 +91,7 @@ export function PayrollPanel() {
               { key: 'deductionsPayableAccountId', label: 'Deductions payable', types: ['LIABILITY'] },
             ]}
           />
+          <div className="mt-3"><DepartmentSalaryAccounts /></div>
         </section>
 
         <section>

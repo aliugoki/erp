@@ -28,6 +28,7 @@ import {
   DecideLeaveDto,
   LifecycleEventDto,
   LogAttendanceDto,
+  SetDepartmentSalaryAccountDto,
   SetLeaveBalanceDto,
   SetPayrollGlDto,
   UpdateGoalDto,
@@ -168,6 +169,18 @@ export class HrEnterpriseController {
   @Permissions('hr:payroll:write')
   setPayrollGlConfig(@Body() dto: SetPayrollGlDto) {
     return this.hr.setPayrollGlConfig(dto);
+  }
+
+  /** Per-department salary-expense account overrides (department gross debits its own account). */
+  @Get('payroll/department-accounts')
+  listDepartmentSalaryAccounts() {
+    return this.hr.listDepartmentSalaryAccounts();
+  }
+
+  @Put('payroll/department-accounts/:departmentId')
+  @Permissions('hr:payroll:write')
+  setDepartmentSalaryAccount(@Param('departmentId', ParseUUIDPipe) departmentId: string, @Body() dto: SetDepartmentSalaryAccountDto) {
+    return this.hr.setDepartmentSalaryAccount(departmentId, dto.salaryExpenseAccountId ?? null);
   }
 
   // ── Performance ─────────────────────────────────────────────────────────────────

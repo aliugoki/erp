@@ -117,6 +117,46 @@ sleep 1
 TXN_COUNT2=$(psql "$OWNER_URL" -tAc "SELECT count(*) FROM finance_transaction t WHERE t.tenant_id='$T' AND t.reference=(SELECT run_no FROM hr_payroll_run WHERE id='$RID');" 2>/dev/null | tr -d '[:space:]')
 check "still exactly one voucher (no double-post)" "$TXN_COUNT2" "1"
 
+echo "== per-department salary expense: a 2nd dept maps to its own expense account =="
+# Engineering dept → its own expense account; Ops stays on the default. Each dept's gross debits its
+# own account in the voucher.
+EXP2=$(post "$A" "finance/accounts" '{"code":"5-200","name":"Engineering Salaries Expense","type":"EXPENSE"}' | jget data.id)
+ENG=$(post "$A" "hr/departments" '{"name":"Engineering"}' | jget data.id)
+MAP=$(curl -s -XPUT "$B/hr/payroll/department-accounts/$ENG" -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d "{\"salaryExpenseAccountId\":\"$EXP2\"}")
+check "department account mapped" "$(echo "$MAP" | jget data.salaryExpenseAccountId)" "$EXP2"
+# A second employee in Engineering (basic PKR 200,000.00).
+post "$A" "hr/employees" "{\"firstName\":\"Bilal\",\"lastName\":\"Ahmed\",\"departmentId\":\"$ENG\",\"salary\":{\"amountMinor\":20000000,\"currency\":\"PKR\"},\"status\":\"ACTIVE\"}" >/dev/null
+
+RUN2=$(post "$A" "hr/payroll/runs" '{"year":2026,"month":6,"workingDays":26}')
+RID2=$(echo "$RUN2" | jget data.id)
+curl -s -XPATCH "$B/hr/payroll/runs/$RID2/approve" -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{}' >/dev/null
+VNO2=""
+for i in $(seq 1 40); do
+  VNO2=$(curl -s "$B/hr/payroll/runs" -H "Authorization: Bearer $A" | python3 -c "import sys,json
+rs=json.load(sys.stdin)['data']
+r=next((x for x in rs if x['id']=='$RID2'), {})
+print(r.get('journalVoucherNo') or '')" 2>/dev/null)
+  [ -n "$VNO2" ] && break || sleep 0.5
+done
+echo "  run2 voucher = $VNO2"
+check "2nd run posts a voucher" "$([ -n "$VNO2" ] && echo ok)" "ok"
+
+# Engineering employee (gross 200,000.00 = 20,000,000 minor) must debit EXP2; the Ops employee's gross
+# debits the default EXP. Verify the per-account debits and overall balance.
+SPLIT=$(psql "$OWNER_URL" -tAF',' -c "
+  SELECT
+    coalesce(sum(je.debit_minor) FILTER (WHERE je.account_id='$EXP2'),0),
+    coalesce(sum(je.debit_minor) FILTER (WHERE je.account_id='$EXP'),0),
+    coalesce(sum(je.debit_minor),0), coalesce(sum(je.credit_minor),0)
+  FROM finance_journal_entry je JOIN finance_transaction t ON t.id=je.transaction_id
+  WHERE t.tenant_id='$T' AND t.reference=(SELECT run_no FROM hr_payroll_run WHERE id='$RID2');" 2>/dev/null)
+DR_EXP2=$(echo "$SPLIT" | cut -d, -f1); DR_EXP_DEFAULT=$(echo "$SPLIT" | cut -d, -f2)
+SP_DR=$(echo "$SPLIT" | cut -d, -f3); SP_CR=$(echo "$SPLIT" | cut -d, -f4)
+echo "  Dr Engineering(EXP2)=$DR_EXP2 Dr default(EXP)=$DR_EXP_DEFAULT | Dr=$SP_DR Cr=$SP_CR"
+check "Engineering gross debits its own account (EXP2)" "$DR_EXP2" "20000000"
+check "Ops gross debits the default expense account" "$DR_EXP_DEFAULT" "10000000"
+check "split voucher is balanced" "$([ "$SP_DR" = "$SP_CR" ] && echo ok)" "ok"
+
 echo ""
 echo "Payroll→GL e2e: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || { echo "---- api log tail ----"; tail -40 /tmp/payroll-gl-e2e.out; exit 1; }
