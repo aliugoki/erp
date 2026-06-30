@@ -5,6 +5,7 @@ import { Check, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPut } from '@/lib/api';
 import type { Account } from '@/lib/types';
+import type { FeatureModule } from '@/lib/nav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -40,8 +41,11 @@ export function GlAccountsCard({
   slots: AccountSlot[];
 }) {
   const qc = useQueryClient();
-  const cfg = useQuery({ queryKey: [queryKey], queryFn: () => apiGet<Record<string, string | null>>(getPath) });
-  const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), retry: false });
+  // Accounts integration is optional per company — hide the whole card unless the Finance module is on.
+  const features = useQuery({ queryKey: ['features'], queryFn: () => apiGet<FeatureModule[]>('/tenant/features') });
+  const financeOff = features.isSuccess && !features.data.some((m) => m.key === 'finance' && m.enabled);
+  const cfg = useQuery({ queryKey: [queryKey], queryFn: () => apiGet<Record<string, string | null>>(getPath), enabled: !financeOff });
+  const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), retry: false, enabled: !financeOff });
   const [vals, setVals] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -65,6 +69,8 @@ export function GlAccountsCard({
     onSuccess: () => { toast.success('Posting accounts saved'); void qc.invalidateQueries({ queryKey: [queryKey] }); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save'),
   });
+
+  if (financeOff) return null; // company doesn't run Finance — accounts integration is hidden
 
   return (
     <div className="rounded-xl border p-4">

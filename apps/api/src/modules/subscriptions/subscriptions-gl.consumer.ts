@@ -4,6 +4,7 @@ import type { EntityManager } from 'typeorm';
 import { type BaseEvent, EVENT_TYPES, type SubscriptionInvoicePaidV1 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { SubscriptionsService } from './subscriptions.service';
@@ -25,6 +26,7 @@ export class SubscriptionsGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly subs: SubscriptionsService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -42,6 +44,8 @@ export class SubscriptionsGlConsumer implements OnApplicationBootstrap {
 
   async onInvoicePaid(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as SubscriptionInvoicePaidV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = await this.subs.glConfigInTx(m);
     const inv = await this.subs.invoiceForGlInTx(m, p.invoiceId);
     if (!inv) return;

@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { Permissions } from '../auth/decorators/permissions.decorator';
@@ -27,7 +28,9 @@ import {
   DecideLeaveDto,
   LifecycleEventDto,
   LogAttendanceDto,
+  SetDepartmentSalaryAccountDto,
   SetLeaveBalanceDto,
+  SetPayrollGlDto,
   UpdateGoalDto,
   UpdateLeaveTypeDto,
   UpdateSalaryComponentDto,
@@ -154,6 +157,30 @@ export class HrEnterpriseController {
   @Get('payslips/:id')
   getPayslip(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.getPayslip(id);
+  }
+
+  // ── Payroll → GL posting config ───────────────────────────────────────────────
+  @Get('payroll/gl-config')
+  getPayrollGlConfig() {
+    return this.hr.getPayrollGlConfig();
+  }
+
+  @Put('payroll/gl-config')
+  @Permissions('hr:payroll:write')
+  setPayrollGlConfig(@Body() dto: SetPayrollGlDto) {
+    return this.hr.setPayrollGlConfig(dto);
+  }
+
+  /** Per-department salary-expense account overrides (department gross debits its own account). */
+  @Get('payroll/department-accounts')
+  listDepartmentSalaryAccounts() {
+    return this.hr.listDepartmentSalaryAccounts();
+  }
+
+  @Put('payroll/department-accounts/:departmentId')
+  @Permissions('hr:payroll:write')
+  setDepartmentSalaryAccount(@Param('departmentId', ParseUUIDPipe) departmentId: string, @Body() dto: SetDepartmentSalaryAccountDto) {
+    return this.hr.setDepartmentSalaryAccount(departmentId, dto.salaryExpenseAccountId ?? null);
   }
 
   // ── Performance ─────────────────────────────────────────────────────────────────
