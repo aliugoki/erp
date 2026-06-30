@@ -20,10 +20,10 @@ HASH="$(cd apps/api && node -e "require('argon2').hash(process.argv[1]).then(h=>
 psql "$OWNER_URL" -q >/dev/null 2>&1 <<SQL
 -- Delete users by email first (email is globally unique; a prior run may have orphaned the admin
 -- user after its tenant was dropped — deleting via tenant membership alone would miss it).
-DELETE FROM users WHERE lower(email) IN ('paygl-sa@acme.test','admin@pay-gl.test');
-DELETE FROM tenant_feature_entitlement WHERE tenant_id IN (SELECT id FROM tenants WHERE slug='pay-gl-co');
-DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug='pay-gl-co');
-DELETE FROM tenants WHERE slug='pay-gl-co';
+DELETE FROM users WHERE lower(email) IN ('paygl-sa@acme.test','admin@pay-gl.test','admin@hr-only.test');
+DELETE FROM tenant_feature_entitlement WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('pay-gl-co','hr-only-co'));
+DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('pay-gl-co','hr-only-co'));
+DELETE FROM tenants WHERE slug IN ('pay-gl-co','hr-only-co');
 INSERT INTO users (tenant_id,email,password_hash,is_active,roles) VALUES ('$SUPER','paygl-sa@acme.test','$HASH',true,'{SUPER_ADMIN}');
 SQL
 
@@ -156,6 +156,31 @@ echo "  Dr Engineering(EXP2)=$DR_EXP2 Dr default(EXP)=$DR_EXP_DEFAULT | Dr=$SP_D
 check "Engineering gross debits its own account (EXP2)" "$DR_EXP2" "20000000"
 check "Ops gross debits the default expense account" "$DR_EXP_DEFAULT" "10000000"
 check "split voucher is balanced" "$([ "$SP_DR" = "$SP_CR" ] && echo ok)" "ok"
+
+echo "== optional integration: an HR-only tenant (no finance feature) posts NO voucher =="
+# Provision a 'starter'-plan tenant: it has the hr feature but NOT finance. Payroll still runs, but the
+# GL consumer must skip (accounts integration is opt-in per company).
+HO=$(curl -s -XPOST "$B/tenants" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' \
+  -d "{\"name\":\"HR Only Co\",\"adminEmail\":\"admin@hr-only.test\",\"adminPassword\":\"$PASSWORD\",\"plan\":\"starter\"}" | jget data.tenant.id)
+echo "  provisioned HR-only tenant=$HO"
+HA=$(login "admin@hr-only.test")
+check "HR-only tenant has NO finance feature (GET /finance/accounts → 403)" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$B/finance/accounts" -H "Authorization: Bearer $HA")" "403"
+HDEPT=$(post "$HA" "hr/departments" '{"name":"Ops"}' | jget data.id)
+post "$HA" "hr/employees" "{\"firstName\":\"Zara\",\"lastName\":\"Sheikh\",\"departmentId\":\"$HDEPT\",\"salary\":{\"amountMinor\":8000000,\"currency\":\"PKR\"},\"status\":\"ACTIVE\"}" >/dev/null
+HRUN=$(post "$HA" "hr/payroll/runs" '{"year":2026,"month":5,"workingDays":26}')
+HRID=$(echo "$HRUN" | jget data.id)
+curl -s -XPATCH "$B/hr/payroll/runs/$HRID/approve" -H "Authorization: Bearer $HA" -H 'Content-Type: application/json' -d '{}' >/dev/null
+check "HR-only payroll approved" "$(echo "$HRUN" | jget data.status)" "DRAFT"
+sleep 2 # let the event flow; the consumer should skip on the missing finance feature
+HO_TXNS=$(psql "$OWNER_URL" -tAc "SELECT count(*) FROM finance_transaction WHERE tenant_id='$HO';" 2>/dev/null | tr -d '[:space:]')
+HO_VNO=$(curl -s "$B/hr/payroll/runs" -H "Authorization: Bearer $HA" | python3 -c "import sys,json
+rs=json.load(sys.stdin)['data']
+r=next((x for x in rs if x['id']=='$HRID'), {})
+print(r.get('journalVoucherNo') or 'NONE')" 2>/dev/null)
+echo "  HR-only finance_transaction count=$HO_TXNS, run voucher=$HO_VNO"
+check "HR-only tenant posts NO GL voucher" "$HO_TXNS" "0"
+check "HR-only run is not linked to a voucher" "$HO_VNO" "NONE"
 
 echo ""
 echo "Payroll→GL e2e: $pass passed, $fail failed"

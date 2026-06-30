@@ -5,6 +5,7 @@ import { Pencil, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiDelete, apiGet, apiPatch } from '@/lib/api';
 import type { PayrollRun, Payslip, SalaryComponent } from '@/lib/types';
+import type { FeatureModule } from '@/lib/nav';
 import { formatMoney } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,9 @@ export function PayrollPanel() {
 
   const components = useQuery({ queryKey: ['salary-components'], queryFn: () => apiGet<SalaryComponent[]>('/hr/salary-components') });
   const runs = useQuery({ queryKey: ['payroll-runs'], queryFn: () => apiGet<PayrollRun[]>('/hr/payroll/runs') });
+  // The accounts (GL) integration is optional per company — only shown when the Finance module is on.
+  const features = useQuery({ queryKey: ['features'], queryFn: () => apiGet<FeatureModule[]>('/tenant/features') });
+  const financeOn = (features.data ?? []).some((m) => m.key === 'finance' && m.enabled);
   const payslips = useQuery({
     queryKey: ['payslips', openRun],
     queryFn: () => apiGet<Payslip[]>(`/hr/payroll/runs/${openRun}/payslips`),
@@ -77,22 +81,24 @@ export function PayrollPanel() {
         </div>
       </PaneHeader>
       <PaneBody className="space-y-6 p-5">
-        <section>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accounts integration</h3>
-          <GlAccountsCard
-            title="Payroll → General Ledger"
-            description="When set, approving a payroll run posts a journal voucher: Dr salary expense (gross), Cr deductions payable, Cr salaries payable (net). Expense + payable are required to post."
-            getPath="/hr/payroll/gl-config"
-            putPath="/hr/payroll/gl-config"
-            queryKey="hr-payroll-gl-config"
-            slots={[
-              { key: 'salaryExpenseAccountId', label: 'Salary expense', types: ['EXPENSE'], required: true },
-              { key: 'salaryPayableAccountId', label: 'Salaries payable', types: ['LIABILITY'], required: true },
-              { key: 'deductionsPayableAccountId', label: 'Deductions payable', types: ['LIABILITY'] },
-            ]}
-          />
-          <div className="mt-3"><DepartmentSalaryAccounts /></div>
-        </section>
+        {financeOn ? (
+          <section>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accounts integration <span className="font-normal normal-case text-muted-foreground/70">· optional</span></h3>
+            <GlAccountsCard
+              title="Payroll → General Ledger"
+              description="When set, approving a payroll run posts a journal voucher: Dr salary expense (gross), Cr deductions payable, Cr salaries payable (net). Expense + payable are required to post."
+              getPath="/hr/payroll/gl-config"
+              putPath="/hr/payroll/gl-config"
+              queryKey="hr-payroll-gl-config"
+              slots={[
+                { key: 'salaryExpenseAccountId', label: 'Salary expense', types: ['EXPENSE'], required: true },
+                { key: 'salaryPayableAccountId', label: 'Salaries payable', types: ['LIABILITY'], required: true },
+                { key: 'deductionsPayableAccountId', label: 'Deductions payable', types: ['LIABILITY'] },
+              ]}
+            />
+            <div className="mt-3"><DepartmentSalaryAccounts /></div>
+          </section>
+        ) : null}
 
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salary components</h3>
