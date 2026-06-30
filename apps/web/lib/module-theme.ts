@@ -23,6 +23,7 @@ export const MODULE_ACCENTS: Record<string, string> = {
   analytics: '243 75% 62%', // indigo
   ai: '291 80% 60%', // fuchsia
   notifications: '221 83% 56%',
+  tax: '168 76% 40%', // teal-green (compliance)
 };
 
 /** First path segment → module key (`/finance/x` → `finance`, `/` → `dashboard`). */

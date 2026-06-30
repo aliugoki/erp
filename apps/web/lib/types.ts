@@ -230,6 +230,28 @@ export interface SavedReport {
   groupBy: string | null;
 }
 
+export interface FbrConfig {
+  sellerNtn: string;
+  sellerName: string;
+  posId: string;
+  environment: 'sandbox' | 'production';
+  enabled: boolean;
+  hasToken: boolean;
+}
+export interface FbrInvoice {
+  id: string;
+  sourceId: string;
+  invoiceRef: string;
+  fbrInvoiceNumber: string | null;
+  qr: string | null;
+  status: 'PENDING' | 'REPORTED' | 'FAILED';
+  environment: string | null;
+  amountMinor: number;
+  error: string | null;
+  reportedAt: string | null;
+  createdAt: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   userId: string | null;

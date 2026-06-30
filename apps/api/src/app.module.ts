@@ -32,6 +32,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { StorageModule } from './modules/storage/storage.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
+import { TaxModule } from './modules/tax/tax.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { AiModule } from './modules/ai/ai.module';
 import { IdempotencyModule } from './modules/idempotency/idempotency.module';
@@ -85,6 +86,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     SubscriptionsModule,
     NotificationsModule,
     ReportingModule,
+    TaxModule,
     RealtimeModule,
     AiModule,
     IdempotencyModule,
