@@ -5,6 +5,7 @@ import { Check, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPut } from '@/lib/api';
 import type { Account, AssetGlConfig } from '@/lib/types';
+import type { FeatureModule } from '@/lib/nav';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,8 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * AssetGlConsumer posts a journal voucher per depreciation run. */
 export function GlConfigCard() {
   const qc = useQueryClient();
-  const cfg = useQuery({ queryKey: ['asset-gl-config'], queryFn: () => apiGet<AssetGlConfig>('/assets/gl-config') });
-  const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), retry: false });
+  // Accounts integration is optional per company — hide the card unless the Finance module is on.
+  const features = useQuery({ queryKey: ['features'], queryFn: () => apiGet<FeatureModule[]>('/tenant/features') });
+  const financeOff = features.isSuccess && !features.data.some((m) => m.key === 'finance' && m.enabled);
+  const cfg = useQuery({ queryKey: ['asset-gl-config'], queryFn: () => apiGet<AssetGlConfig>('/assets/gl-config'), enabled: !financeOff });
+  const accounts = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts'), retry: false, enabled: !financeOff });
   const [expense, setExpense] = useState('');
   const [accum, setAccum] = useState('');
 
@@ -36,6 +40,8 @@ export function GlConfigCard() {
     onSuccess: () => { toast.success('Depreciation posting accounts saved'); void qc.invalidateQueries({ queryKey: ['asset-gl-config'] }); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save'),
   });
+
+  if (financeOff) return null; // company doesn't run Finance — accounts integration is hidden
 
   return (
     <div className="rounded-xl border p-4">

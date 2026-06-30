@@ -4,6 +4,7 @@ import type { EntityManager } from 'typeorm';
 import { type BaseEvent, EVENT_TYPES, type EcommerceOrderPlacedV1 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { EcommerceService } from './ecommerce.service';
@@ -25,6 +26,7 @@ export class EcommerceGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly ec: EcommerceService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -42,6 +44,8 @@ export class EcommerceGlConsumer implements OnApplicationBootstrap {
 
   async onOrderPlaced(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as EcommerceOrderPlacedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = await this.ec.glConfigInTx(m);
     const order = await this.ec.orderForGlInTx(m, p.orderId);
     if (!order) return;

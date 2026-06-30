@@ -9,6 +9,7 @@ import {
 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { PharmacyService } from './pharmacy.service';
@@ -34,6 +35,7 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
     private readonly dispense: PharmacyDispenseService,
     private readonly adjustments: PharmacyAdjustmentService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -56,6 +58,8 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
 
   async onDispenseCompleted(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as PharmacyDispenseCompletedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = (await this.pharmacy.glConfigInTx(m)) as PharmacyGlAccounts;
     const dispense = await this.dispense.dispenseForGlInTx(m, p.dispenseId);
     if (!dispense) return; // not found — nothing to post
@@ -70,6 +74,8 @@ export class PharmacyGlConsumer implements OnApplicationBootstrap {
 
   async onStockAdjusted(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as PharmacyStockAdjustedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = (await this.pharmacy.glConfigInTx(m)) as PharmacyGlAccounts;
     const adj = await this.adjustments.adjustmentForGlInTx(m, p.adjustmentId);
     if (!adj) return;

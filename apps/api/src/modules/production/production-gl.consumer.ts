@@ -4,6 +4,7 @@ import type { EntityManager } from 'typeorm';
 import { type BaseEvent, EVENT_TYPES, type ProductionOrderCompletedV1 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { ProductionService } from './production.service';
@@ -25,6 +26,7 @@ export class ProductionGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly production: ProductionService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -42,6 +44,8 @@ export class ProductionGlConsumer implements OnApplicationBootstrap {
 
   async onOrderCompleted(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as ProductionOrderCompletedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = await this.production.glConfigInTx(m);
     const producedAt = (await this.production.producedAtInTx(m, p.orderId)) ?? p.orderNo;
     const voucher = productionVoucher(accounts, {
