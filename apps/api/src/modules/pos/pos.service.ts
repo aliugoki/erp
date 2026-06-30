@@ -44,7 +44,7 @@ import {
 type Row = Record<string, unknown>;
 type Mgr = EntityManager;
 
-const REG_COLS = 'id, name, code, warehouse_id, location, status, currency, card_terminal_provider, card_terminal_url';
+const REG_COLS = 'id, name, code, warehouse_id, branch_id, location, status, currency, card_terminal_provider, card_terminal_url';
 const SHIFT_COLS =
   'id, shift_no, register_id, cashier_id, status, opened_at, closed_at, opening_float_minor, counted_cash_minor, expected_cash_minor, variance_minor, currency, notes';
 const SALE_COLS =
@@ -146,9 +146,9 @@ export class PosService {
     return this.tenantTx.run(async (m) => {
       try {
         const rows = (await m.query(
-          `INSERT INTO pos_register (tenant_id, name, code, warehouse_id, location, currency, card_terminal_provider, card_terminal_url)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4, COALESCE($5,'PKR'), COALESCE($6,'NONE'), $7) RETURNING ${REG_COLS}`,
-          [dto.name, dto.code ?? null, dto.warehouseId ?? null, dto.location ?? null, dto.currency ?? null,
+          `INSERT INTO pos_register (tenant_id, name, code, warehouse_id, branch_id, location, currency, card_terminal_provider, card_terminal_url)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5, COALESCE($6,'PKR'), COALESCE($7,'NONE'), $8) RETURNING ${REG_COLS}`,
+          [dto.name, dto.code ?? null, dto.warehouseId ?? null, dto.branchId ?? null, dto.location ?? null, dto.currency ?? null,
             dto.cardTerminalProvider ?? null, dto.cardTerminalUrl ?? null],
         )) as Row[];
         return mapRegister(rows[0]!);
@@ -183,6 +183,7 @@ export class PosService {
       if (dto.name !== undefined) set('name', dto.name);
       if (dto.code !== undefined) set('code', dto.code);
       if (dto.warehouseId !== undefined) set('warehouse_id', dto.warehouseId);
+      if (dto.branchId !== undefined) set('branch_id', dto.branchId);
       if (dto.location !== undefined) set('location', dto.location);
       if (dto.status !== undefined) set('status', dto.status);
       if (dto.cardTerminalProvider !== undefined) set('card_terminal_provider', dto.cardTerminalProvider);

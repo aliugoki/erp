@@ -4,12 +4,14 @@ export class CreateWarehouseDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsUUID() branchId?: string;
 }
 
 export class UpdateWarehouseDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsUUID() branchId?: string;
 }
 
 /** Edit a product's master data — every field optional. SKU is immutable (it keys the ledger). */

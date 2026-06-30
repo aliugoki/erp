@@ -87,6 +87,15 @@ curl -s -XPATCH "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" -H 'Content
 curl -s -XDELETE "$B/branches/$TMP" -H "Authorization: Bearer $A1" >/dev/null
 check "removing a branch clears employee.branchId" "$(curl -s "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" | jget data.branchId)" ""
 
+echo "== Inventory + POS: warehouses and registers map to a branch =="
+WH=$(post "$A1" "inventory/warehouses" "{\"name\":\"Lahore Store\",\"code\":\"WH-LHR\",\"branchId\":\"$LHR\"}" | jget data.id)
+check "warehouse created with branch" "$(curl -s "$B/inventory/warehouses" -H "Authorization: Bearer $A1" | python3 -c "import sys,json;print(next((w['branchId'] for w in json.load(sys.stdin)['data'] if w['id']=='$WH'),''))")" "$LHR"
+REG=$(post "$A1" "pos/registers" "{\"name\":\"Counter 1\",\"warehouseId\":\"$WH\",\"branchId\":\"$LHR\"}" | jget data.id)
+check "register created with branch" "$(curl -s "$B/pos/registers/$REG" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
+# move the register to Karachi-less default (clear) then back via PATCH
+curl -s -XPATCH "$B/pos/registers/$REG" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$LHR\"}" >/dev/null
+check "register branch persists after PATCH" "$(curl -s "$B/pos/registers/$REG" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
+
 echo "== tenant isolation: T2 sees none of T1's branches =="
 check "T2 list -> 0" "$(curl -s "$B/branches" -H "Authorization: Bearer $A2" | jlen)" "0"
 check "T2 GET T1 branch -> 404" "$(code "$B/branches/$LHR" -H "Authorization: Bearer $A2")" "404"

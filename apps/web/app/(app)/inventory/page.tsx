@@ -31,7 +31,8 @@ import { NewGatePassDialog } from '@/components/inventory/new-gate-pass-dialog';
 import { NewIssueDialog } from '@/components/inventory/new-issue-dialog';
 import { NewMrnDialog } from '@/components/inventory/new-mrn-dialog';
 
-type Warehouse = { id: string; name: string; code: string | null; location: string | null };
+type Warehouse = { id: string; name: string; code: string | null; location: string | null; branchId: string | null };
+type BranchOpt = { id: string; name: string };
 type Section = 'products' | 'categories' | 'warehouses' | 'requisitions' | 'pos' | 'grns' | 'gatepasses' | 'issues' | 'mrns' | 'reports';
 
 export default function InventoryPage() {
@@ -190,9 +191,10 @@ function DocList({ query, empty, rows, header, sel, onSelect }: { query: { isLoa
 
 function WarehouseDetail({ id, warehouse, onBack }: { id: string; warehouse?: Warehouse; onBack?: () => void }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ name: warehouse?.name ?? '', code: warehouse?.code ?? '', location: warehouse?.location ?? '' });
+  const [f, setF] = useState({ name: warehouse?.name ?? '', code: warehouse?.code ?? '', location: warehouse?.location ?? '', branchId: warehouse?.branchId ?? '' });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<BranchOpt[]>('/branches') });
   const save = useMutation({
-    mutationFn: () => apiPatch(`/inventory/warehouses/${id}`, { name: f.name, code: f.code || undefined, location: f.location || undefined }),
+    mutationFn: () => apiPatch(`/inventory/warehouses/${id}`, { name: f.name, code: f.code || undefined, location: f.location || undefined, branchId: f.branchId || undefined }),
     onSuccess: () => { toast.success('Warehouse saved'); void qc.invalidateQueries({ queryKey: ['warehouses'] }); },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Failed'),
   });
@@ -204,6 +206,14 @@ function WarehouseDetail({ id, warehouse, onBack }: { id: string; warehouse?: Wa
           <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Name</span><Input value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></label>
           <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Code</span><Input value={f.code} onChange={(e) => setF((s) => ({ ...s, code: e.target.value }))} /></label>
           <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Location</span><Input value={f.location} onChange={(e) => setF((s) => ({ ...s, location: e.target.value }))} /></label>
+          {(branches.data ?? []).length > 0 ? (
+            <label className="grid gap-1 text-sm"><span className="text-muted-foreground">Branch</span>
+              <select value={f.branchId} onChange={(e) => setF((s) => ({ ...s, branchId: e.target.value }))} className="h-9 rounded-md border bg-background px-2 text-sm">
+                <option value="">—</option>
+                {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </label>
+          ) : null}
           <div><Button disabled={!f.name.trim() || save.isPending} onClick={() => save.mutate()}>{save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Save</Button></div>
         </div>
       </PaneBody>

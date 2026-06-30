@@ -616,6 +616,7 @@ export interface PosRegister {
   name: string;
   code: string | null;
   warehouseId: string | null;
+  branchId: string | null;
   location: string | null;
   status: string;
   currency: string;
