@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { PosRegister } from '@/lib/types';
+import type { Branch, PosRegister } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,11 +34,12 @@ const PROVIDER_HELP: Record<string, string> = {
 export function NewRegisterDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const EMPTY = { name: '', code: '', warehouseId: '', currency: 'PKR', cardTerminalProvider: 'NONE', cardTerminalUrl: '' };
+  const EMPTY = { name: '', code: '', warehouseId: '', branchId: '', currency: 'PKR', cardTerminalProvider: 'NONE', cardTerminalUrl: '' };
   const [form, setForm] = useState(EMPTY);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: () => apiGet<Warehouse[]>('/inventory/warehouses') });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
 
   const create = useMutation({
     mutationFn: () =>
@@ -46,6 +47,7 @@ export function NewRegisterDialog() {
         name: form.name,
         ...(form.code ? { code: form.code } : {}),
         ...(form.warehouseId ? { warehouseId: form.warehouseId } : {}),
+        ...(form.branchId ? { branchId: form.branchId } : {}),
         currency: form.currency || 'PKR',
         cardTerminalProvider: form.cardTerminalProvider,
         ...(form.cardTerminalProvider === 'BRIDGE' && form.cardTerminalUrl ? { cardTerminalUrl: form.cardTerminalUrl } : {}),
@@ -104,6 +106,17 @@ export function NewRegisterDialog() {
               <Input id="cur" value={form.currency} maxLength={3} onChange={(e) => set('currency')(e.target.value.toUpperCase())} />
             </div>
           </div>
+          {(branches.data ?? []).length > 0 ? (
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <Select value={form.branchId} onValueChange={set('branchId')}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {(branches.data ?? []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label>Card terminal</Label>
             <Select value={form.cardTerminalProvider} onValueChange={set('cardTerminalProvider')}>

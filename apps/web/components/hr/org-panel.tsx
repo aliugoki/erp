@@ -8,6 +8,7 @@ import type { Department, Designation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { BranchesManager } from '@/components/branches/branches-manager';
 
 interface Position { id: string; title: string; description: string | null }
 interface Row { id: string; label: string }
@@ -93,6 +94,7 @@ export function OrgPanel() {
         <span className="font-semibold">Organization</span>
       </PaneHeader>
       <PaneBody className="space-y-6 p-5">
+        <BranchesManager />
         <CrudList<Department>
           title="Departments"
           queryKey="departments"

@@ -53,9 +53,9 @@ export class InventoryService {
   async createWarehouse(dto: CreateWarehouseDto) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `INSERT INTO inventory_warehouse (tenant_id, name, code, location)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3) RETURNING id, name, code, location`,
-        [dto.name, dto.code ?? null, dto.location ?? null],
+        `INSERT INTO inventory_warehouse (tenant_id, name, code, location, branch_id)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4) RETURNING id, name, code, location, branch_id AS "branchId"`,
+        [dto.name, dto.code ?? null, dto.location ?? null, dto.branchId ?? null],
       )) as Array<Record<string, unknown>>;
       return rows[0];
     });
@@ -63,16 +63,16 @@ export class InventoryService {
 
   async listWarehouses() {
     return this.tenantTx.run((m) =>
-      m.query(`SELECT id, name, code, location FROM inventory_warehouse WHERE deleted_at IS NULL ORDER BY name`),
+      m.query(`SELECT id, name, code, location, branch_id AS "branchId" FROM inventory_warehouse WHERE deleted_at IS NULL ORDER BY name`),
     );
   }
 
   async updateWarehouse(id: string, dto: UpdateWarehouseDto) {
     return this.tenantTx.run(async (m) => {
       const rows = rowsOf<Record<string, unknown>>(await m.query(
-        `UPDATE inventory_warehouse SET name=COALESCE($2,name), code=COALESCE($3,code), location=COALESCE($4,location), updated_at=now()
-         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, code, location`,
-        [id, dto.name ?? null, dto.code ?? null, dto.location ?? null],
+        `UPDATE inventory_warehouse SET name=COALESCE($2,name), code=COALESCE($3,code), location=COALESCE($4,location), branch_id=COALESCE($5,branch_id), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, code, location, branch_id AS "branchId"`,
+        [id, dto.name ?? null, dto.code ?? null, dto.location ?? null, dto.branchId ?? null],
       ));
       if (!rows[0]) throw new NotFoundException('Warehouse not found');
       return rows[0];

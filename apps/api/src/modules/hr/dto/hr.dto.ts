@@ -43,6 +43,8 @@ export class EmployeeProfileFieldsDto {
   @IsOptional() @IsUUID() reportingTo?: string;
   @IsOptional() @IsISO8601() confirmationDate?: string;
   @IsOptional() @IsString() workLocation?: string;
+  /** Branch (site) the employee is mapped to — independent of department. */
+  @IsOptional() @IsUUID() branchId?: string;
   /** Attachment id of the employee photo; normally set via the photo-upload endpoint, not raw. */
   @IsOptional() @IsUUID() photoRef?: string;
 }
@@ -88,12 +90,14 @@ export class UpdateEmployeeDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsUUID() departmentId?: string;
   @IsOptional() @IsUUID() positionId?: string;
+  @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @ValidateNested() @Type(() => MoneyDto) salary?: MoneyDto;
   @IsOptional() @IsIn(['ACTIVE', 'ON_LEAVE', 'TERMINATED']) status?: string;
 }
 
 export class ListEmployeesQueryDto {
   @IsOptional() @IsUUID() department?: string;
+  @IsOptional() @IsUUID() branch?: string;
   @IsOptional() @IsIn(['ACTIVE', 'ON_LEAVE', 'TERMINATED']) status?: string;
   @IsOptional() @IsString() search?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
@@ -104,12 +108,14 @@ export class CreateDepartmentDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsUUID() managerId?: string;
   @IsOptional() @IsUUID() parentDepartmentId?: string;
+  @IsOptional() @IsUUID() branchId?: string;
 }
 
 export class UpdateDepartmentDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsUUID() managerId?: string;
   @IsOptional() @IsUUID() parentDepartmentId?: string;
+  @IsOptional() @IsUUID() branchId?: string;
 }
 
 export class CreatePositionDto {

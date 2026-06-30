@@ -75,10 +75,11 @@ export const DATASETS: Record<string, DatasetDef> = {
       designation: { label: 'Designation', sql: 'designation' },
       city: { label: 'City', sql: 'city' },
       employment_type: { label: 'Employment', sql: 'employment_type' },
+      branch: { label: 'Branch', sql: "COALESCE((SELECT b.name FROM branch b WHERE b.id = hr_employee.branch_id AND b.deleted_at IS NULL), 'Unassigned')" },
       salary_amount_minor: { label: 'Salary', sql: 'salary_amount_minor', money: true },
     },
     filterable: ['status', 'employment_type', 'city'],
-    groupable: ['status', 'designation', 'city', 'employment_type'],
+    groupable: ['status', 'designation', 'city', 'employment_type', 'branch'],
     aggregatable: ['salary_amount_minor'],
   },
   hr_leave_requests: {
@@ -159,11 +160,12 @@ export const DATASETS: Record<string, DatasetDef> = {
       sale_no: { label: 'Sale #', sql: 'sale_no' },
       status: { label: 'Status', sql: 'status' },
       total_minor: { label: 'Total', sql: 'total_minor', money: true },
+      branch: { label: 'Branch', sql: "COALESCE((SELECT b.name FROM branch b WHERE b.id = (SELECT r.branch_id FROM pos_register r WHERE r.id = pos_sale.register_id) AND b.deleted_at IS NULL), 'Unassigned')" },
       created: { label: 'Created', sql: "to_char(created_at,'YYYY-MM-DD')" },
       created_month: { label: 'Month', sql: "to_char(created_at,'YYYY-MM')" },
     },
     filterable: ['status'],
-    groupable: ['status', 'created_month'],
+    groupable: ['status', 'created_month', 'branch'],
     aggregatable: ['total_minor'],
   },
 };
@@ -361,9 +363,12 @@ export const PRESETS: PresetDef[] = [
   // ── Point of Sale ────────────────────────────────────────────────────────────
   { key: 'pos-sales-by-status', name: 'Sales by status', config: { source: 'pos_sales', columns: [], groupBy: 'status' } },
   { key: 'pos-sales-by-month', name: 'Sales by month', config: { source: 'pos_sales', columns: [], groupBy: 'created_month', agg: 'sum', measure: 'total_minor' } },
+  { key: 'pos-sales-by-branch', name: 'Sales by branch', config: { source: 'pos_sales', columns: [], groupBy: 'branch', agg: 'sum', measure: 'total_minor' } },
   // ── CRM ────────────────────────────────────────────────────────────────────
   { key: 'crm-pipeline-value', name: 'Pipeline value by stage', config: { source: 'crm_deals', columns: [], groupBy: 'stage', agg: 'sum', measure: 'value_minor' } },
   { key: 'crm-leads-by-status', name: 'Leads by status', config: { source: 'crm_leads', columns: [], groupBy: 'status' } },
   // ── HR ─────────────────────────────────────────────────────────────────────
   { key: 'hr-salary-by-designation', name: 'Salary cost by designation', config: { source: 'hr_employees', columns: [], groupBy: 'designation', agg: 'sum', measure: 'salary_amount_minor' } },
+  { key: 'hr-headcount-by-branch', name: 'Headcount by branch', config: { source: 'hr_employees', columns: [], groupBy: 'branch' } },
+  { key: 'hr-salary-by-branch', name: 'Salary cost by branch', config: { source: 'hr_employees', columns: [], groupBy: 'branch', agg: 'sum', measure: 'salary_amount_minor' } },
 ];

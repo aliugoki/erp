@@ -12,6 +12,7 @@ export interface Employee {
   phone: string | null;
   departmentId: string | null;
   positionId: string | null;
+  branchId: string | null;
   joinDate: string | null;
   salary: Money | null;
   status: 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED';
@@ -141,6 +142,7 @@ export interface EmployeeProfile {
   reportingTo: string | null;
   confirmationDate: string | null;
   workLocation: string | null;
+  branchId: string | null;
   education: EmployeeEducation[];
   experience: EmployeeExperience[];
 }
@@ -155,11 +157,28 @@ export interface AttendanceDayRow {
   checkOut: string | null;
 }
 
+export interface Branch {
+  id: string;
+  name: string;
+  code: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  managerId: string | null;
+  managerName: string | null;
+  costCenterId: string | null;
+  costCenterName: string | null;
+  isHeadOffice: boolean;
+  active: boolean;
+  employeeCount: number;
+}
+
 export interface Department {
   id: string;
   name: string;
   managerId: string | null;
   parentDepartmentId: string | null;
+  branchId: string | null;
 }
 export interface Designation {
   id: string;
@@ -597,6 +616,7 @@ export interface PosRegister {
   name: string;
   code: string | null;
   warehouseId: string | null;
+  branchId: string | null;
   location: string | null;
   status: string;
   currency: string;

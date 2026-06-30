@@ -153,6 +153,11 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
     label: 'Reporting',
     permissions: [{ key: 'report:write', label: 'Refresh report read-models (admin)' }],
   },
+  {
+    domain: 'branch',
+    label: 'Branches',
+    permissions: [{ key: 'branch:write', label: 'Manage company branches' }],
+  },
 ];
 
 /** Flat list of every catalog permission key. */

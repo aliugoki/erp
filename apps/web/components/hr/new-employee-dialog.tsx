@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { ApiError, apiGet, apiPost, apiUpload } from '@/lib/api';
-import type { Department, Designation } from '@/lib/types';
+import type { Branch, Department, Designation } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,13 +22,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function NewEmployeeDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const EMPTY = { firstName: '', lastName: '', email: '', phone: '', salary: '', status: 'ACTIVE', designation: '', departmentId: '', employmentType: '', joinDate: '', city: '' };
+  const EMPTY = { firstName: '', lastName: '', email: '', phone: '', salary: '', status: 'ACTIVE', designation: '', departmentId: '', branchId: '', employmentType: '', joinDate: '', city: '' };
   const [form, setForm] = useState(EMPTY);
   const [photo, setPhoto] = useState<File | null>(null);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const departments = useQuery({ queryKey: ['departments'], queryFn: () => apiGet<Department[]>('/hr/departments') });
   const designations = useQuery({ queryKey: ['designations'], queryFn: () => apiGet<Designation[]>('/hr/designations') });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
 
   const create = useMutation({
     mutationFn: async () => {
@@ -41,6 +42,7 @@ export function NewEmployeeDialog() {
         status: form.status,
         ...(form.designation ? { designation: form.designation } : {}),
         ...(form.departmentId ? { departmentId: form.departmentId } : {}),
+        ...(form.branchId ? { branchId: form.branchId } : {}),
         ...(form.employmentType ? { employmentType: form.employmentType } : {}),
         ...(form.joinDate ? { joinDate: form.joinDate } : {}),
         ...(form.city ? { city: form.city } : {}),
@@ -119,6 +121,15 @@ export function NewEmployeeDialog() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="br">Branch</Label>
+            <Select value={form.branchId} onValueChange={set('branchId')}>
+              <SelectTrigger id="br"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {(branches.data ?? []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="et">Employment type</Label>

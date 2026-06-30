@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'hr:document:write',
     'hr:policy:write',
     'hr:profile:write',
+    'branch:write',
     'project:write',
   ],
   [Role.FINANCE_MANAGER]: [

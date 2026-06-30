@@ -23,6 +23,7 @@ export class CreateRegisterDto {
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsUUID() warehouseId?: string;
+  @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsIn(TERMINAL_PROVIDERS as unknown as string[]) cardTerminalProvider?: string;
@@ -33,6 +34,7 @@ export class UpdateRegisterDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsUUID() warehouseId?: string;
+  @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsIn(['ACTIVE', 'INACTIVE']) status?: string;
   @IsOptional() @IsIn(TERMINAL_PROVIDERS as unknown as string[]) cardTerminalProvider?: string;

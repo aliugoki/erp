@@ -23,6 +23,23 @@ describe('report-builder', () => {
     expect(q.columns.map((c) => c.key)).toEqual(['status', 'count']);
   });
 
+  it('groups HR + POS by branch via a correlated subquery (no join needed)', () => {
+    const hr = buildReportQuery({ source: 'hr_employees', columns: [], groupBy: 'branch' });
+    expect(hr.sql).toContain('FROM hr_employee');
+    expect(hr.sql).toContain('FROM branch b WHERE b.id = hr_employee.branch_id');
+    expect(hr.sql).toContain('GROUP BY');
+    expect(hr.columns.map((c) => c.key)).toEqual(['branch', 'count']);
+
+    const pos = buildReportQuery({ source: 'pos_sales', columns: [], groupBy: 'branch', agg: 'sum', measure: 'total_minor' });
+    expect(pos.sql).toContain('FROM pos_register r WHERE r.id = pos_sale.register_id');
+    expect(pos.sql).toContain('SUM(total_minor)');
+    expect(pos.columns.find((c) => c.key === 'value')!.money).toBe(true);
+
+    // the new presets reference the branch dimension
+    expect(PRESETS.some((p) => p.key === 'hr-headcount-by-branch')).toBe(true);
+    expect(PRESETS.some((p) => p.key === 'pos-sales-by-branch')).toBe(true);
+  });
+
   it('rejects unknown dataset, non-whitelisted filter and non-groupable column', () => {
     expect(() => buildReportQuery({ source: 'evil_table', columns: ['x'] })).toThrow();
     expect(() => buildReportQuery({ source: 'crm_deals', columns: ['title'], filters: [{ column: 'value_minor', value: '1' }] })).toThrow();

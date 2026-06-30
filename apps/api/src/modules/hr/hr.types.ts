@@ -11,6 +11,7 @@ export interface EmployeeView {
   phone: string | null;
   departmentId: string | null;
   positionId: string | null;
+  branchId: string | null;
   joinDate: string | null;
   salary: Money | null;
   status: EmployeeStatus;
@@ -23,6 +24,7 @@ export interface DepartmentView {
   name: string;
   managerId: string | null;
   parentDepartmentId: string | null;
+  branchId: string | null;
 }
 
 export interface PositionView {
@@ -41,6 +43,7 @@ export interface EmployeeRow {
   phone: string | null;
   department_id: string | null;
   position_id: string | null;
+  branch_id: string | null;
   join_date: string | null;
   salary_amount_minor: string | number | null; // bigint comes back as string from pg
   salary_currency: string;

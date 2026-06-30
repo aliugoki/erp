@@ -172,6 +172,7 @@ export function mapRegister(r: Row) {
     name: r.name as string,
     code: (r.code as string) ?? null,
     warehouseId: (r.warehouse_id as string) ?? null,
+    branchId: (r.branch_id as string) ?? null,
     location: (r.location as string) ?? null,
     status: r.status as string,
     currency: r.currency as string,
