@@ -67,6 +67,8 @@ export interface PayrollRun {
   totalDeduction: Money;
   totalNet: Money;
   runAt: string | null;
+  journalId: string | null;
+  journalVoucherNo: string | null;
 }
 
 export interface Payslip {

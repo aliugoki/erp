@@ -9,6 +9,7 @@ import { formatMoney } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
+import { GlAccountsCard } from '@/components/finance/gl-accounts-card';
 import { NewSalaryComponentDialog } from './new-salary-component-dialog';
 import { RunPayrollDialog } from './run-payroll-dialog';
 import { HrStatusBadge, MONTHS } from './hr-ui';
@@ -76,6 +77,22 @@ export function PayrollPanel() {
       </PaneHeader>
       <PaneBody className="space-y-6 p-5">
         <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accounts integration</h3>
+          <GlAccountsCard
+            title="Payroll → General Ledger"
+            description="When set, approving a payroll run posts a journal voucher: Dr salary expense (gross), Cr deductions payable, Cr salaries payable (net). Expense + payable are required to post."
+            getPath="/hr/payroll/gl-config"
+            putPath="/hr/payroll/gl-config"
+            queryKey="hr-payroll-gl-config"
+            slots={[
+              { key: 'salaryExpenseAccountId', label: 'Salary expense', types: ['EXPENSE'], required: true },
+              { key: 'salaryPayableAccountId', label: 'Salaries payable', types: ['LIABILITY'], required: true },
+              { key: 'deductionsPayableAccountId', label: 'Deductions payable', types: ['LIABILITY'] },
+            ]}
+          />
+        </section>
+
+        <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Salary components</h3>
           <div className="overflow-hidden rounded-xl border">
             <table className="w-full text-sm">
@@ -136,7 +153,12 @@ export function PayrollPanel() {
                     <td className="px-3 py-2">{MONTHS[run.periodMonth - 1]} {run.periodYear}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{run.employeeCount}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatMoney(run.totalNet.amountMinor, run.totalNet.currency)}</td>
-                    <td className="px-3 py-2"><HrStatusBadge status={run.status} /></td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <HrStatusBadge status={run.status} />
+                        {run.journalVoucherNo ? <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400" title="Posted to the general ledger">GL · {run.journalVoucherNo}</span> : null}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       {run.status === 'DRAFT' ? <Button size="sm" variant="outline" disabled={advance.isPending} onClick={() => advance.mutate({ id: run.id, action: 'approve' })}>Approve</Button> : null}
                       {run.status === 'APPROVED' ? <Button size="sm" variant="outline" disabled={advance.isPending} onClick={() => advance.mutate({ id: run.id, action: 'pay' })}>Mark paid</Button> : null}

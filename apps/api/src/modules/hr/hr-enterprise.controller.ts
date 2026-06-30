@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { Permissions } from '../auth/decorators/permissions.decorator';
@@ -28,6 +29,7 @@ import {
   LifecycleEventDto,
   LogAttendanceDto,
   SetLeaveBalanceDto,
+  SetPayrollGlDto,
   UpdateGoalDto,
   UpdateLeaveTypeDto,
   UpdateSalaryComponentDto,
@@ -154,6 +156,18 @@ export class HrEnterpriseController {
   @Get('payslips/:id')
   getPayslip(@Param('id', ParseUUIDPipe) id: string) {
     return this.hr.getPayslip(id);
+  }
+
+  // ── Payroll → GL posting config ───────────────────────────────────────────────
+  @Get('payroll/gl-config')
+  getPayrollGlConfig() {
+    return this.hr.getPayrollGlConfig();
+  }
+
+  @Put('payroll/gl-config')
+  @Permissions('hr:payroll:write')
+  setPayrollGlConfig(@Body() dto: SetPayrollGlDto) {
+    return this.hr.setPayrollGlConfig(dto);
   }
 
   // ── Performance ─────────────────────────────────────────────────────────────────
