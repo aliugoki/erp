@@ -25,6 +25,8 @@ export interface TenantUserRow {
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  lockedUntil: string | null;
+  failedAttempts: number;
 }
 
 /** Add a user to the company with one or more roles, then reveal the login to hand over. */

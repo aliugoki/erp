@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, CheckCircle2, Copy, KeyRound, Plus, ShieldAlert, UserCog } from 'lucide-react';
+import { Ban, CheckCircle2, Copy, KeyRound, LockOpen, Plus, ShieldAlert, UserCog } from 'lucide-react';
 import { ApiError, apiGet, apiPatch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { randomSecret } from '@/lib/secret';
@@ -56,6 +56,15 @@ export default function UsersPage() {
     },
     onError: (e) => toast.error('Could not update', { description: e instanceof ApiError ? e.message : '' }),
   });
+  const unlock = useMutation({
+    mutationFn: (id: string) => apiPatch(`/users/${id}/unlock`),
+    onSuccess: () => {
+      toast.success('Account unlocked');
+      qc.invalidateQueries({ queryKey: ['tenant-users-self'] });
+    },
+    onError: (e) => toast.error('Could not unlock', { description: e instanceof ApiError ? e.message : '' }),
+  });
+  const isLocked = (u: TenantUserRow) => !!u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now();
 
   function doReset(id: string, email: string) {
     const pw = randomSecret();
@@ -120,7 +129,10 @@ export default function UsersPage() {
               ) : (
                 (users ?? []).map((u) => (
                   <TableRow key={u.id} className={u.isActive ? '' : 'opacity-50'}>
-                    <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {u.email}
+                      {isLocked(u) ? <Badge variant="secondary" className="ml-2 bg-destructive/10 text-destructive">Locked</Badge> : null}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {u.roles.map((r) => <Badge key={r} variant="secondary">{label.get(r) ?? r}</Badge>)}
@@ -137,6 +149,11 @@ export default function UsersPage() {
                         <Button size="sm" variant="ghost" title="Reset password" disabled={resetPw.isPending} onClick={() => doReset(u.id, u.email)}>
                           <KeyRound className="size-4" />
                         </Button>
+                        {isLocked(u) ? (
+                          <Button size="sm" variant="ghost" title="Unlock account" disabled={unlock.isPending} onClick={() => unlock.mutate(u.id)}>
+                            <LockOpen className="size-4 text-destructive" />
+                          </Button>
+                        ) : null}
                         <Button size="sm" variant="ghost" title={u.isActive ? 'Deactivate' : 'Activate'} disabled={setActive.isPending} onClick={() => setActive.mutate({ id: u.id, isActive: !u.isActive })}>
                           {u.isActive ? <Ban className="size-4" /> : <CheckCircle2 className="size-4" />}
                         </Button>

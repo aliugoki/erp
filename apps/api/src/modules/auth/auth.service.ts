@@ -5,9 +5,11 @@ import * as argon2 from 'argon2';
 import { DataSource } from 'typeorm';
 import type { AppConfig } from '@metaxperts/config';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { RequestContext } from '../../common/request-context/request-context';
 import { RbacService } from '../rbac/rbac.service';
 import { RefreshError, RefreshTokenService } from './refresh-token.service';
 import { TwoFactorService } from './two-factor.service';
+import { isLocked, nextFailedState } from './lockout';
 
 export interface TokenPair {
   accessToken: string;
@@ -56,9 +58,27 @@ export class AuthService {
     const hash = user?.password_hash ?? '$argon2id$v=19$m=65536,t=3,p=4$invalidinvalidinvalid$invalid';
     const passwordOk = await argon2.verify(hash, password).catch(() => false);
 
-    if (!user || !user.is_active || !passwordOk) {
+    if (!user || !user.is_active) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    // Account lockout: a real, active account that has accrued too many consecutive failures is
+    // locked for a cool-off window — reject regardless of the password during that window.
+    const now = new Date();
+    const lock = (await this.tenantTx.runFor(user.tenant_id, (m) =>
+      m.query('SELECT failed_login_attempts, locked_until FROM users WHERE id = $1', [user.id]),
+    )) as Array<{ failed_login_attempts: number; locked_until: string | null }>;
+    if (isLocked(lock[0]?.locked_until, now)) {
+      throw new UnauthorizedException('Account temporarily locked due to repeated failed sign-ins. Try again later.');
+    }
+    if (!passwordOk) {
+      await this.registerFailedLogin(user.id, user.tenant_id, lock[0]?.failed_login_attempts ?? 0, now);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    // Correct password → clear any accrued lockout state.
+    await this.tenantTx.runFor(user.tenant_id, (m) =>
+      m.query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1 AND (failed_login_attempts <> 0 OR locked_until IS NOT NULL)', [user.id]),
+    );
 
     await this.assertTenantActive(user.tenant_id);
 
@@ -103,6 +123,28 @@ export class AuthService {
       this.rbac.effectivePermissionsForUser(tenantId, assigned),
     ]);
     return this.issueTokens(userId, tenantId, roles, perms);
+  }
+
+  /** Record a failed sign-in: bump the consecutive-failure count and, on hitting the threshold, lock
+   * the account for the configured window (auditing the lockout so it appears in the audit log). */
+  private async registerFailedLogin(userId: string, tenantId: string, currentCount: number, now: Date): Promise<void> {
+    const max = this.config.get('AUTH_MAX_FAILED_ATTEMPTS', { infer: true });
+    const minutes = this.config.get('AUTH_LOCKOUT_MINUTES', { infer: true });
+    const next = nextFailedState(currentCount, max, minutes, now);
+    await this.tenantTx.runFor(tenantId, async (m) => {
+      await m.query('UPDATE users SET failed_login_attempts = $1, locked_until = $2 WHERE id = $3', [
+        next.attempts,
+        next.lockedUntil?.toISOString() ?? null,
+        userId,
+      ]);
+      if (next.lockedUntil) {
+        await m.query(
+          `INSERT INTO audit_log (tenant_id, user_id, action, resource, new_value, ip_address)
+           VALUES ($1, $2, 'auth.account_locked', 'auth', $3::jsonb, $4)`,
+          [tenantId, userId, JSON.stringify({ lockedUntil: next.lockedUntil.toISOString(), maxAttempts: max }), RequestContext.ip() ?? null],
+        );
+      }
+    });
   }
 
   /** Sign a short-lived (5m) challenge ticket that authorizes only the 2FA verify step. */

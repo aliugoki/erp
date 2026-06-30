@@ -42,6 +42,18 @@ export const envSchema = z.object({
     .transform((v) => (v === undefined || v === '' ? 60 * 60 * 24 * 7 : Number(v)))
     .pipe(z.number().int().positive()),
 
+  // Account lockout: after N consecutive failed sign-ins, lock the account for a cool-off window.
+  AUTH_MAX_FAILED_ATTEMPTS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 5 : Number(v)))
+    .pipe(z.number().int().positive()),
+  AUTH_LOCKOUT_MINUTES: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? 15 : Number(v)))
+    .pipe(z.number().int().positive()),
+
   // Service-to-service auth (API ↔ ML / worker): short-lived signed token on internal endpoints.
   SERVICE_AUTH_SECRET: z.string().min(16),
   SERVICE_AUTH_TTL: z.string().default('5m'),
