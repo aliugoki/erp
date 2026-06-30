@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Briefcase, Building2, CalendarCheck, FileText, Loader2, Plane, Search, Target, Users, Wallet } from 'lucide-react';
 import { apiGet } from '@/lib/api';
-import type { Department, Employee, HeadcountReport } from '@/lib/types';
+import type { Branch, Department, Employee, HeadcountReport } from '@/lib/types';
 import { EmptyDetail, ListRow, Pane, PaneBody, PaneHeader, RailItem, ThreePane } from '@/components/ui/three-pane';
 import { HrStatusBadge } from '@/components/hr/hr-ui';
 import { EmployeeDetail } from '@/components/hr/employee-detail';
@@ -26,18 +26,21 @@ export default function HrPage() {
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
+  const [branch, setBranch] = useState('');
 
   const employees = useQuery({ queryKey: ['employees'], queryFn: () => apiGet<Employee[]>('/hr/employees?pageSize=200'), enabled: section === 'employees' });
   const departments = useQuery({ queryKey: ['departments'], queryFn: () => apiGet<Department[]>('/hr/departments') });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
   const headcount = useQuery({ queryKey: ['headcount'], queryFn: () => apiGet<HeadcountReport>('/hr/reports/headcount') });
 
   const deptName = useMemo(() => new Map((departments.data ?? []).map((d) => [d.id, d.name])), [departments.data]);
+  const branchName = useMemo(() => new Map((branches.data ?? []).map((b) => [b.id, b.name])), [branches.data]);
   const empList = useMemo(() => (employees.data ?? []).filter((e) => {
     const name = `${e.firstName} ${e.lastName} ${e.employeeCode}`.toLowerCase();
-    return (!q || name.includes(q.toLowerCase())) && (!status || e.status === status);
-  }), [employees.data, q, status]);
+    return (!q || name.includes(q.toLowerCase())) && (!status || e.status === status) && (!branch || e.branchId === branch);
+  }), [employees.data, q, status, branch]);
 
-  const pick = (s: Section) => { setSection(s); setSel(null); setQ(''); };
+  const pick = (s: Section) => { setSection(s); setSel(null); setQ(''); setBranch(''); };
   const clear = () => setSel(null);
   const fullPane = section !== 'employees';
   const showDetail = !!sel || fullPane;
@@ -65,13 +68,16 @@ export default function HrPage() {
           <PaneHeader>
             <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff…" className="h-9 w-full pl-9" /></div>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm"><option value="">All</option>{STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select>
+            {(branches.data ?? []).length > 0 ? (
+              <select value={branch} onChange={(e) => setBranch(e.target.value)} className="h-9 rounded-md border bg-background px-2 text-sm" title="Filter by branch"><option value="">All branches</option>{(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+            ) : null}
             <NewEmployeeDialog />
           </PaneHeader>
           <PaneBody>
             {employees.isLoading ? <Spinner /> : empList.length === 0 ? <Hint>No employees.</Hint> : (
               <ul className="divide-y">{empList.map((e) => (
                 <li key={e.id}><ListRow active={sel === e.id} onClick={() => setSel(e.id)}>
-                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{e.firstName} {e.lastName}</div><div className="truncate text-xs text-muted-foreground">{e.employeeCode}{e.departmentId ? ` · ${deptName.get(e.departmentId) ?? ''}` : ''}</div></div>
+                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{e.firstName} {e.lastName}</div><div className="truncate text-xs text-muted-foreground">{e.employeeCode}{e.departmentId ? ` · ${deptName.get(e.departmentId) ?? ''}` : ''}{e.branchId ? ` · ${branchName.get(e.branchId) ?? ''}` : ''}</div></div>
                   <HrStatusBadge status={e.status} />
                 </ListRow></li>
               ))}</ul>

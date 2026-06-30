@@ -120,6 +120,10 @@ export class BranchesService {
     await this.tenantTx.run(async (m) => {
       const res = await m.query(`UPDATE branch SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING id`, [id]);
       if (rowsOf(res).length === 0) throw new NotFoundException('Branch not found');
+      // Branch removal is a soft delete, so the FK ON DELETE SET NULL never fires — clear the
+      // back-references ourselves so no employee/department points at a vanished branch.
+      await m.query(`UPDATE hr_employee SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
+      await m.query(`UPDATE hr_department SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
     });
   }
 }

@@ -13,7 +13,7 @@ const PROFILE_COLS =
   'id, employee_code, first_name, last_name, email, phone, department_id, position_id, join_date, ' +
   'salary_amount_minor, salary_currency, status, date_of_birth, gender, marital_status, national_id, ' +
   'blood_group, nationality, address, city, country, emergency_contact_name, emergency_contact_phone, ' +
-  'designation, employment_type, reporting_to, confirmation_date, work_location, photo_ref';
+  'designation, employment_type, reporting_to, confirmation_date, work_location, branch_id, photo_ref';
 
 /** Maps the profile UpdateEmployeeProfileDto camelCase keys to their snake_case columns. */
 const PROFILE_FIELD_MAP: Record<string, string> = {
@@ -21,7 +21,7 @@ const PROFILE_FIELD_MAP: Record<string, string> = {
   bloodGroup: 'blood_group', nationality: 'nationality', address: 'address', city: 'city', country: 'country',
   emergencyContactName: 'emergency_contact_name', emergencyContactPhone: 'emergency_contact_phone',
   designation: 'designation', employmentType: 'employment_type', reportingTo: 'reporting_to',
-  confirmationDate: 'confirmation_date', workLocation: 'work_location',
+  confirmationDate: 'confirmation_date', workLocation: 'work_location', branchId: 'branch_id',
 };
 
 /** The complete employee record: personal + contact + job profile plus academic history and prior
@@ -174,6 +174,7 @@ function mapProfile(r: Row) {
     reportingTo: str(r.reporting_to),
     confirmationDate: dateStr(r.confirmation_date),
     workLocation: str(r.work_location),
+    branchId: str(r.branch_id),
   };
 }
 function mapEducation(r: Row) {

@@ -1,9 +1,9 @@
 'use client';
 import { type FormEvent, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
-import { ApiError, apiPatch } from '@/lib/api';
-import type { EmployeeProfile } from '@/lib/types';
+import { ApiError, apiGet, apiPatch } from '@/lib/api';
+import type { Branch, EmployeeProfile } from '@/lib/types';
 import { toast } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,8 +34,10 @@ export function EditProfileDialog({ employee }: { employee: EmployeeProfile }) {
     emergencyContactName: employee.emergencyContactName ?? '',
     emergencyContactPhone: employee.emergencyContactPhone ?? '',
     workLocation: employee.workLocation ?? '',
+    branchId: employee.branchId ?? '',
   });
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
 
   const save = useMutation({
     mutationFn: () => apiPatch(`/hr/employees/${employee.id}/profile`, {
@@ -43,6 +45,7 @@ export function EditProfileDialog({ employee }: { employee: EmployeeProfile }) {
       gender: f.gender || undefined,
       employmentType: f.employmentType || undefined,
       dateOfBirth: f.dateOfBirth || undefined,
+      branchId: f.branchId || undefined,
     }),
     onSuccess: () => {
       toast.success('Profile updated');
@@ -96,7 +99,16 @@ export function EditProfileDialog({ employee }: { employee: EmployeeProfile }) {
           <div className="space-y-2"><Label htmlFor="address">Address</Label><Input id="address" value={f.address} onChange={(e) => set('address')(e.target.value)} /></div>
           <div className="grid grid-cols-2 gap-3">{field('city', 'City')}{field('country', 'Country')}</div>
           <div className="grid grid-cols-2 gap-3">{field('emergencyContactName', 'Emergency contact')}{field('emergencyContactPhone', 'Emergency phone')}</div>
-          {field('workLocation', 'Work location')}
+          <div className="grid grid-cols-2 gap-3">
+            {field('workLocation', 'Work location')}
+            <div className="space-y-2">
+              <Label htmlFor="br">Branch</Label>
+              <Select value={f.branchId} onValueChange={set('branchId')}>
+                <SelectTrigger id="br"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>{(branches.data ?? []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button>

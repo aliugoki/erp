@@ -102,6 +102,7 @@ export function computePayslip(basicMinor: number, components: PayComponent[]): 
 
 export interface EmployeeFilters {
   department?: string;
+  branch?: string;
   status?: string;
   search?: string;
 }
@@ -134,6 +135,10 @@ export function buildEmployeeWhere(
     conditions.push(`department_id = $${i++}`);
     params.push(filters.department);
   }
+  if (filters.branch) {
+    conditions.push(`branch_id = $${i++}`);
+    params.push(filters.branch);
+  }
   if (filters.status) {
     conditions.push(`status = $${i++}`);
     params.push(filters.status);
@@ -158,6 +163,7 @@ export function mapEmployeeRow(row: EmployeeRow): EmployeeView {
     phone: row.phone,
     departmentId: row.department_id,
     positionId: row.position_id,
+    branchId: row.branch_id ?? null,
     joinDate: row.join_date,
     salary:
       row.salary_amount_minor === null || row.salary_amount_minor === undefined

@@ -21,7 +21,7 @@ import { buildEmployeeWhere, mapEmployeeRow, normalizePagination, returningRows 
 // returningRows unwraps TypeORM's [rows, affectedCount] shape for UPDATE…RETURNING.
 
 const EMP_COLS =
-  'id, employee_code, first_name, last_name, email, phone, department_id, position_id, join_date, salary_amount_minor, salary_currency, status, photo_ref';
+  'id, employee_code, first_name, last_name, email, phone, department_id, position_id, branch_id, join_date, salary_amount_minor, salary_currency, status, photo_ref';
 
 /** Allowed image content types for an employee photo. */
 const PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -37,10 +37,10 @@ export class HrService {
   async createDepartment(dto: CreateDepartmentDto): Promise<DepartmentView> {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `INSERT INTO hr_department (tenant_id, name, manager_id, parent_department_id)
-         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
-         RETURNING id, name, manager_id, parent_department_id`,
-        [dto.name, dto.managerId ?? null, dto.parentDepartmentId ?? null],
+        `INSERT INTO hr_department (tenant_id, name, manager_id, parent_department_id, branch_id)
+         VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)
+         RETURNING id, name, manager_id, parent_department_id, branch_id`,
+        [dto.name, dto.managerId ?? null, dto.parentDepartmentId ?? null, dto.branchId ?? null],
       )) as Array<Record<string, string | null>>;
       return toDepartment(rows[0]!);
     });
@@ -49,7 +49,7 @@ export class HrService {
   async listDepartments(): Promise<DepartmentView[]> {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
-        `SELECT id, name, manager_id, parent_department_id FROM hr_department WHERE deleted_at IS NULL ORDER BY name`,
+        `SELECT id, name, manager_id, parent_department_id, branch_id FROM hr_department WHERE deleted_at IS NULL ORDER BY name`,
       )) as Array<Record<string, string | null>>;
       return rows.map(toDepartment);
     });
@@ -59,9 +59,9 @@ export class HrService {
     return this.tenantTx.run(async (m) => {
       const rows = returningRows<Record<string, string | null>>(await m.query(
         `UPDATE hr_department SET name=COALESCE($2,name), manager_id=COALESCE($3,manager_id),
-            parent_department_id=COALESCE($4,parent_department_id), updated_at=now()
-         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, manager_id, parent_department_id`,
-        [id, dto.name ?? null, dto.managerId ?? null, dto.parentDepartmentId ?? null],
+            parent_department_id=COALESCE($4,parent_department_id), branch_id=COALESCE($5,branch_id), updated_at=now()
+         WHERE id=$1 AND deleted_at IS NULL RETURNING id, name, manager_id, parent_department_id, branch_id`,
+        [id, dto.name ?? null, dto.managerId ?? null, dto.parentDepartmentId ?? null, dto.branchId ?? null],
       ));
       if (!rows[0]) throw new NotFoundException('Department not found');
       return toDepartment(rows[0]);
@@ -164,12 +164,12 @@ export class HrService {
       const rows = (await m.query(
         `INSERT INTO hr_employee
            (tenant_id, employee_code, first_name, last_name, email, phone, department_id, position_id,
-            join_date, salary_amount_minor, salary_currency, status,
+            branch_id, join_date, salary_amount_minor, salary_currency, status,
             date_of_birth, gender, marital_status, national_id, blood_group, nationality, address, city,
             country, emergency_contact_name, emergency_contact_phone, designation, employment_type,
             reporting_to, confirmation_date, work_location, photo_ref)
-         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
-                 $12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+         VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+                 $13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
          RETURNING ${EMP_COLS}`,
         [
           code,
@@ -179,6 +179,7 @@ export class HrService {
           dto.phone ?? null,
           dto.departmentId ?? null,
           dto.positionId ?? null,
+          dto.branchId ?? null,
           dto.joinDate ?? null,
           dto.salary?.amountMinor ?? null,
           dto.salary?.currency ?? 'PKR',
@@ -246,6 +247,7 @@ export class HrService {
     const { page, pageSize, limit, offset } = normalizePagination(query.page, query.pageSize);
     const { clause, params } = buildEmployeeWhere({
       department: query.department,
+      branch: query.branch,
       status: query.status,
       search: query.search,
     });
@@ -289,6 +291,7 @@ export class HrService {
     if (dto.phone !== undefined) set('phone', dto.phone);
     if (dto.departmentId !== undefined) set('department_id', dto.departmentId);
     if (dto.positionId !== undefined) set('position_id', dto.positionId);
+    if (dto.branchId !== undefined) set('branch_id', dto.branchId);
     if (dto.status !== undefined) set('status', dto.status);
     if (dto.salary !== undefined) {
       set('salary_amount_minor', dto.salary.amountMinor);
@@ -363,5 +366,6 @@ function toDepartment(r: Record<string, string | null>): DepartmentView {
     name: r.name!,
     managerId: r.manager_id ?? null,
     parentDepartmentId: r.parent_department_id ?? null,
+    branchId: r.branch_id ?? null,
   };
 }

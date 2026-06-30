@@ -70,6 +70,23 @@ check "update active=false" "$(curl -s "$B/branches/$KHI" -H "Authorization: Bea
 check "DELETE branch -> 204" "$(code -XDELETE "$B/branches/$KHI" -H "Authorization: Bearer $A1")" "204"
 check "list after delete -> 1" "$(curl -s "$B/branches" -H "Authorization: Bearer $A1" | jlen)" "1"
 
+echo "== HR mapping: employees + departments map to a branch, and the employee list filters by branch =="
+DEP=$(post "$A1" "hr/departments" "{\"name\":\"Sales\",\"branchId\":\"$LHR\"}" | jget data.id)
+check "department tagged to a branch" "$(curl -s "$B/hr/departments" -H "Authorization: Bearer $A1" | python3 -c "import sys,json;print(next((d['branchId'] for d in json.load(sys.stdin)['data'] if d['id']=='$DEP'),''))")" "$LHR"
+E1=$(post "$A1" "hr/employees" "{\"firstName\":\"Ali\",\"lastName\":\"Raza\",\"branchId\":\"$LHR\",\"departmentId\":\"$DEP\"}" | jget data.id)
+post "$A1" "hr/employees" '{"firstName":"Sara","lastName":"Khan"}' >/dev/null  # no branch
+check "employee created with branch" "$(curl -s "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
+check "all employees -> 2" "$(curl -s "$B/hr/employees" -H "Authorization: Bearer $A1" | jlen)" "2"
+check "filter ?branch=LHR -> 1" "$(curl -s "$B/hr/employees?branch=$LHR" -H "Authorization: Bearer $A1" | jlen)" "1"
+# reassign via the profile path (the edit dialog uses it), then clear back
+curl -s -XPATCH "$B/hr/employees/$E1/profile" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$LHR\"}" >/dev/null
+check "profile read returns branch" "$(curl -s "$B/hr/employees/$E1/profile" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
+# removing a branch clears it off any employee/department that referenced it (soft-delete → explicit clear)
+TMP=$(post "$A1" "branches" '{"name":"Temp","code":"TMP"}' | jget data.id)
+curl -s -XPATCH "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$TMP\"}" >/dev/null
+curl -s -XDELETE "$B/branches/$TMP" -H "Authorization: Bearer $A1" >/dev/null
+check "removing a branch clears employee.branchId" "$(curl -s "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" | jget data.branchId)" ""
+
 echo "== tenant isolation: T2 sees none of T1's branches =="
 check "T2 list -> 0" "$(curl -s "$B/branches" -H "Authorization: Bearer $A2" | jlen)" "0"
 check "T2 GET T1 branch -> 404" "$(code "$B/branches/$LHR" -H "Authorization: Bearer $A2")" "404"

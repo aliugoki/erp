@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Briefcase, CalendarRange, FileText, GraduationCap, History, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiDelete, apiGet, apiPost } from '@/lib/api';
-import type { EmployeeProfile } from '@/lib/types';
+import type { Branch, EmployeeProfile } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function EmployeeDetail({ id, onBack, onDeleted }: { id: string; onBack?: () => void; onDeleted?: () => void }) {
   const qc = useQueryClient();
   const profile = useQuery({ queryKey: ['profile', id], queryFn: () => apiGet<EmployeeProfile>(`/hr/employees/${id}/profile`) });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
   const balances = useQuery({ queryKey: ['leave-balances', id], queryFn: () => apiGet<LeaveBalance[]>(`/hr/leave-balances/${id}`) });
   const leaveTypes = useQuery({ queryKey: ['leave-types'], queryFn: () => apiGet<LeaveType[]>('/hr/leave-types') });
   const history = useQuery({ queryKey: ['hr-history', id], queryFn: () => apiGet<HistoryRow[]>(`/hr/employees/${id}/history`) });
@@ -95,6 +96,7 @@ export function EmployeeDetail({ id, onBack, onDeleted }: { id: string; onBack?:
             <Field label="Status" value={p.status.replace('_', ' ').toLowerCase()} />
             <Field label="Joined" value={fmtDate(p.joinDate)} />
             <Field label="Confirmed" value={fmtDate(p.confirmationDate)} />
+            <Field label="Branch" value={p.branchId ? ((branches.data ?? []).find((b) => b.id === p.branchId)?.name ?? null) : null} />
             <Field label="Work location" value={p.workLocation} />
             <Field label="Salary" value={p.salary ? formatMoney(p.salary.amountMinor, p.salary.currency) : null} />
           </Card>
