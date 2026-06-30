@@ -1,5 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TenantTransactionService } from '../../common/tenant/tenant-transaction.service';
+import { TenantContext } from '../../common/tenant/tenant-context';
+import { FeatureService } from '../features/feature.service';
 import { type FbrEnv, FbrClient } from './fbr.client';
 import type { SaveFbrConfigDto } from './dto/fbr.dto';
 
@@ -24,9 +26,12 @@ const DEFAULT_CONFIG: FbrConfigView = { sellerNtn: '', sellerName: '', posId: ''
  */
 @Injectable()
 export class FbrService {
+  private readonly logger = new Logger(FbrService.name);
+
   constructor(
     private readonly tenantTx: TenantTransactionService,
     private readonly fbr: FbrClient,
+    private readonly features: FeatureService,
   ) {}
 
   async getConfig(): Promise<FbrConfigView> {
@@ -73,10 +78,41 @@ export class FbrService {
     });
   }
 
-  /** Render + report a POS sale to FBR. Idempotent: a sale already reported returns its record. */
-  async reportSale(saleId: string): Promise<Row> {
-    const cfg = await this.loadRawConfig();
+  /** The FBR record for a POS sale (for the receipt QR), or null. */
+  async getForSale(saleId: string): Promise<Row | null> {
     return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, source_type, source_id, invoice_ref, fbr_invoice_number, qr, status, environment, amount_minor, error, reported_at, created_at
+         FROM fbr_invoice WHERE source_type = 'pos_sale' AND source_id = $1 AND deleted_at IS NULL
+         ORDER BY (status = 'REPORTED') DESC, created_at DESC LIMIT 1`,
+        [saleId],
+      )) as Row[];
+      return rows[0] ? mapInvoice(rows[0]) : null;
+    });
+  }
+
+  /** Auto-report a completed sale (event-driven). No-op unless the tenant has the `tax` feature on and
+   * FBR is enabled. Best-effort: failures are recorded as a FAILED row, never thrown to the consumer. */
+  async autoReportSaleFor(tenantId: string, saleId: string): Promise<void> {
+    try {
+      if (!(await this.features.isEnabled(tenantId, 'tax'))) return;
+      const cfg = await this.loadRawConfig(tenantId);
+      if (!cfg.enabled) return;
+      await this.reportInTenant(tenantId, saleId);
+      this.logger.log(`auto-reported POS sale ${saleId} to FBR (${cfg.environment})`);
+    } catch (err) {
+      this.logger.warn(`auto FBR report for sale ${saleId} failed: ${(err as Error).message}`);
+    }
+  }
+
+  /** Render + report a POS sale to FBR. Idempotent: a sale already reported returns its record. */
+  reportSale(saleId: string): Promise<Row> {
+    return this.reportInTenant(TenantContext.require(), saleId);
+  }
+
+  private async reportInTenant(tenantId: string, saleId: string): Promise<Row> {
+    const cfg = await this.loadRawConfig(tenantId);
+    return this.tenantTx.runFor(tenantId, async (m) => {
       const existing = (await m.query(
         `SELECT * FROM fbr_invoice WHERE source_type = 'pos_sale' AND source_id = $1 AND status = 'REPORTED' AND deleted_at IS NULL LIMIT 1`,
         [saleId],
@@ -142,9 +178,9 @@ export class FbrService {
     });
   }
 
-  private loadRawConfig() {
-    return this.tenantTx.run(async (m) => {
-      const rows = (await m.query(`SELECT seller_ntn, seller_name, pos_id, environment, api_token FROM fbr_config LIMIT 1`)) as Row[];
+  private loadRawConfig(tenantId: string) {
+    return this.tenantTx.runFor(tenantId, async (m) => {
+      const rows = (await m.query(`SELECT seller_ntn, seller_name, pos_id, environment, enabled, api_token FROM fbr_config LIMIT 1`)) as Row[];
       const r = rows[0];
       const cred = (r?.api_token as string | null) ?? null;
       return {
@@ -152,6 +188,7 @@ export class FbrService {
         sellerName: (r?.seller_name as string) ?? '',
         posId: (r?.pos_id as string) ?? '',
         environment: ((r?.environment as FbrEnv) ?? 'sandbox') as FbrEnv,
+        enabled: !!r?.enabled,
         apiToken: cred,
       };
     });

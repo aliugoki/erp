@@ -1,6 +1,10 @@
 'use client';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import QRCode from 'qrcode';
 import { Printer } from 'lucide-react';
-import type { PosBranding, PosSale } from '@/lib/types';
+import { apiGet } from '@/lib/api';
+import type { FbrInvoice, PosBranding, PosSale } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { AuthImage } from '@/components/auth-image';
 import { Button } from '@/components/ui/button';
@@ -20,6 +24,21 @@ export function ReceiptDialog({
   registerName: string;
   branding?: PosBranding | null;
 }) {
+  // FBR digital invoice for this sale (auto-reported async after completion). Polls briefly until the
+  // FBR number lands; silently absent when the tax feature is off, offline, or not yet reported.
+  const fbrQuery = useQuery({
+    queryKey: ['fbr-sale', sale?.id],
+    queryFn: () => apiGet<FbrInvoice | null>(`/tax/fbr/sale/${sale!.id}`).catch(() => null),
+    enabled: !!sale && open && sale.type !== 'RETURN',
+    refetchInterval: (q) => (q.state.data?.status === 'REPORTED' ? false : q.state.dataUpdateCount < 6 ? 2000 : false),
+  });
+  const fbr = fbrQuery.data && fbrQuery.data.status === 'REPORTED' ? fbrQuery.data : null;
+  const [qrSrc, setQrSrc] = useState('');
+  useEffect(() => {
+    if (fbr?.qr) QRCode.toDataURL(fbr.qr, { width: 120, margin: 1 }).then(setQrSrc).catch(() => setQrSrc(''));
+    else setQrSrc('');
+  }, [fbr?.qr]);
+
   if (!sale) return null;
   const currency = sale.total.currency;
   const when = sale.soldAt ? new Date(sale.soldAt).toLocaleString() : '';
@@ -71,6 +90,17 @@ export function ReceiptDialog({
             />
           ))}
           {sale.change.amountMinor > 0 ? <Row label="Change" value={formatMoney(sale.change.amountMinor, currency)} /> : null}
+          {fbr ? (
+            <>
+              <div className="my-2 border-t border-dashed" />
+              <div className="flex flex-col items-center gap-1 text-center">
+                {qrSrc ? <img src={qrSrc} alt="FBR QR" width={96} height={96} className="rounded bg-white p-1" /> : null}
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">FBR Invoice</p>
+                <p className="font-semibold">{fbr.fbrInvoiceNumber}</p>
+                <p className="text-[10px] text-muted-foreground">Verify at fbr.gov.pk</p>
+              </div>
+            </>
+          ) : null}
           <div className="my-2 border-t border-dashed" />
           <p className="whitespace-pre-line text-center text-muted-foreground">{footer}</p>
         </div>
