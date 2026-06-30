@@ -78,6 +78,10 @@ post "$A1" "hr/employees" '{"firstName":"Sara","lastName":"Khan"}' >/dev/null  #
 check "employee created with branch" "$(curl -s "$B/hr/employees/$E1" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
 check "all employees -> 2" "$(curl -s "$B/hr/employees" -H "Authorization: Bearer $A1" | jlen)" "2"
 check "filter ?branch=LHR -> 1" "$(curl -s "$B/hr/employees?branch=$LHR" -H "Authorization: Bearer $A1" | jlen)" "1"
+# Reporting: branch is a groupBy dimension (correlated subquery, no join)
+RPT=$(curl -s -XPOST "$B/reports/builder/run" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d '{"source":"hr_employees","groupBy":"branch"}')
+check "headcount-by-branch report shows Lahore HQ" "$(echo "$RPT" | grep -c 'Lahore HQ')" "1"
+check "headcount-by-branch report shows Unassigned (no-branch employee)" "$(echo "$RPT" | grep -c 'Unassigned')" "1"
 # reassign via the profile path (the edit dialog uses it), then clear back
 curl -s -XPATCH "$B/hr/employees/$E1/profile" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$LHR\"}" >/dev/null
 check "profile read returns branch" "$(curl -s "$B/hr/employees/$E1/profile" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"

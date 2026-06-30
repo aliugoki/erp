@@ -124,6 +124,8 @@ export class BranchesService {
       // back-references ourselves so no employee/department points at a vanished branch.
       await m.query(`UPDATE hr_employee SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
       await m.query(`UPDATE hr_department SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
+      await m.query(`UPDATE inventory_warehouse SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
+      await m.query(`UPDATE pos_register SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
     });
   }
 }
