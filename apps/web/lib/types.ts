@@ -155,6 +155,22 @@ export interface AttendanceDayRow {
   checkOut: string | null;
 }
 
+export interface Branch {
+  id: string;
+  name: string;
+  code: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  managerId: string | null;
+  managerName: string | null;
+  costCenterId: string | null;
+  costCenterName: string | null;
+  isHeadOffice: boolean;
+  active: boolean;
+  employeeCount: number;
+}
+
 export interface Department {
   id: string;
   name: string;
