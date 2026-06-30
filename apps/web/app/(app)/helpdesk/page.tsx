@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Inbox, LifeBuoy, Loader2, Plus, Search, Star, Tag, Users2, UserX, Wand2 } from 'lucide-react';
@@ -106,7 +107,7 @@ export default function HelpdeskPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Help Desk</h1>
+        <ModuleTitle>Help Desk</ModuleTitle>
         <p className="text-sm text-muted-foreground">Support tickets with SLA tracking, assignment, teams, and a customer portal.</p>
       </div>
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">

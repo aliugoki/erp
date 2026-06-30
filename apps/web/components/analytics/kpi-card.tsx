@@ -43,7 +43,7 @@ export function KpiCard({ kpi, delayMs = 0 }: { kpi: AnalyticsKpi; delayMs?: num
       <div className="relative flex flex-col gap-1 p-5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{kpi.label}</p>
-          <span className={cn('flex size-8 items-center justify-center rounded-lg', meta.chip, meta.tint)}>
+          <span className={cn('sheen flex size-8 items-center justify-center rounded-lg', meta.chip, meta.tint)}>
             <Icon className="size-4" />
           </span>
         </div>

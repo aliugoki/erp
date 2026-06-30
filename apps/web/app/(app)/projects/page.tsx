@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, BarChart3, CheckCircle2, FolderKanban, Loader2, PauseCircle, Search } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function ProjectsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+        <ModuleTitle>Projects</ModuleTitle>
         <p className="text-sm text-muted-foreground">Projects, tasks, timesheets, expenses, and costing.</p>
       </div>
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">

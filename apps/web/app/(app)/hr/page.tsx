@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Briefcase, Building2, CalendarCheck, FileText, Loader2, Plane, Search, Target, Users, Wallet } from 'lucide-react';
@@ -99,7 +100,7 @@ export default function HrPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Human Resources</h1>
+        <ModuleTitle>Human Resources</ModuleTitle>
         <p className="text-sm text-muted-foreground">People, attendance, leave, payroll, performance, and HR analytics.</p>
       </div>
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">

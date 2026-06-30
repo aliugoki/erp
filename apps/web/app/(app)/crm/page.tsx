@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Building2, CalendarCheck, Gauge, Loader2, Search, Sparkles, Target, Trophy } from 'lucide-react';
@@ -155,7 +156,7 @@ export default function CrmPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">CRM</h1>
+        <ModuleTitle>CRM</ModuleTitle>
         <p className="text-sm text-muted-foreground">Accounts, leads, pipeline, activities, and sales analytics.</p>
       </div>
 

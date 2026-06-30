@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -129,7 +130,7 @@ export default function PosManagePage() {
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">POS Back-office</h1>
+          <ModuleTitle>POS Back-office</ModuleTitle>
           <p className="text-sm text-muted-foreground">Registers, shift reconciliation, sales history, and reports.</p>
         </div>
         <Link href="/pos" className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Back to till</Link>

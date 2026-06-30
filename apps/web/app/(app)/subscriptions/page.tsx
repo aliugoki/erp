@@ -1,4 +1,5 @@
 'use client';
+import { ModuleTitle } from '@/components/module-title';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, CreditCard, Layers, Loader2, Play, Plus, Repeat, Search, TrendingUp, Wallet, XCircle, CheckCircle2 } from 'lucide-react';
@@ -212,7 +213,7 @@ export default function SubscriptionsPage() {
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Subscriptions</h1>
+          <ModuleTitle>Subscriptions</ModuleTitle>
           <p className="text-sm text-muted-foreground">Recurring billing — plans, automatic invoicing, dunning, and MRR.</p>
         </div>
       </div>
