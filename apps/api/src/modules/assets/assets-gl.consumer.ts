@@ -4,6 +4,7 @@ import type { EntityManager } from 'typeorm';
 import { type AssetDepreciationPostedV1, type BaseEvent, EVENT_TYPES } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { AssetsService } from './assets.service';
@@ -26,6 +27,7 @@ export class AssetGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly assets: AssetsService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -43,6 +45,8 @@ export class AssetGlConsumer implements OnApplicationBootstrap {
 
   async onDepreciationPosted(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as AssetDepreciationPostedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = await this.assets.glConfigInTx(m);
     const voucher = depreciationVoucher(accounts, { runNo: p.runNo, period: p.period, totalMinor: p.totalMinor });
     if (!voucher) {

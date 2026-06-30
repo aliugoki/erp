@@ -4,6 +4,7 @@ import type { EntityManager } from 'typeorm';
 import { type BaseEvent, EVENT_TYPES, type PosSaleCompletedV1 } from '@metaxperts/shared';
 import type { AppConfig } from '@metaxperts/config';
 import { IdempotentConsumer } from '../consumers/idempotent-consumer.service';
+import { FeatureService } from '../features/feature.service';
 import type { CreateTransactionDto } from '../finance/dto/finance.dto';
 import { FinanceService } from '../finance/finance.service';
 import { PosService } from './pos.service';
@@ -25,6 +26,7 @@ export class PosGlConsumer implements OnApplicationBootstrap {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly pos: PosService,
     private readonly finance: FinanceService,
+    private readonly features: FeatureService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -42,6 +44,8 @@ export class PosGlConsumer implements OnApplicationBootstrap {
 
   async onSaleCompleted(event: BaseEvent, m: EntityManager): Promise<void> {
     const p = event.payload as PosSaleCompletedV1;
+    // Accounts integration is opt-in per tenant: only post when Finance is entitled (ADR-009).
+    if (!(await this.features.isEnabled(event.tenantId, 'finance'))) return;
     const accounts = await this.pos.glConfigInTx(m);
     const sale = await this.pos.saleForGlInTx(m, p.saleId);
     if (!sale) return; // sale not found (shouldn't happen) — nothing to post

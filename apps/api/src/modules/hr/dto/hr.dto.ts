@@ -302,3 +302,18 @@ export class LifecycleEventDto {
   @IsOptional() @IsIn(['ACTIVE', 'ON_LEAVE', 'TERMINATED']) status?: string;
   @IsOptional() @IsString() note?: string;
 }
+
+// ── Payroll → GL posting ────────────────────────────────────────────────────────────
+/** Maps the GL accounts an approved payroll run posts to. Each is optional; expense + payable are the
+ * minimum to post. Pass an empty string / omit to clear an account. */
+export class SetPayrollGlDto {
+  @IsOptional() @IsUUID() salaryExpenseAccountId?: string;
+  @IsOptional() @IsUUID() salaryPayableAccountId?: string;
+  @IsOptional() @IsUUID() deductionsPayableAccountId?: string;
+}
+
+/** Set or clear a department's per-department salary-expense account override (null = clear → fall
+ * back to the tenant-level default). `@IsOptional` permits an explicit `null` to clear it. */
+export class SetDepartmentSalaryAccountDto {
+  @IsOptional() @IsUUID() salaryExpenseAccountId?: string | null;
+}

@@ -32,6 +32,7 @@ import {
   proratedBasicMinor,
   returningRows,
 } from './hr.util';
+import type { ExpenseGroup, HrPayrollGlAccounts, PayrollRunFigures } from './hr-payroll-gl.util';
 
 type Row = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -483,6 +484,118 @@ export class HrEnterpriseService {
     });
   }
 
+  // ── Payroll → GL posting config ───────────────────────────────────────────────
+  async getPayrollGlConfig(): Promise<HrPayrollGlAccounts> {
+    return this.tenantTx.run((m) => this.payrollGlConfigInTx(m));
+  }
+
+  async setPayrollGlConfig(dto: Partial<Record<keyof HrPayrollGlAccounts, string>>): Promise<HrPayrollGlAccounts> {
+    return this.tenantTx.run(async (m) => {
+      try {
+        await m.query(
+          `INSERT INTO hr_payroll_gl_config (tenant_id, salary_expense_account_id, salary_payable_account_id, deductions_payable_account_id)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3)
+           ON CONFLICT (tenant_id) DO UPDATE SET salary_expense_account_id=EXCLUDED.salary_expense_account_id,
+             salary_payable_account_id=EXCLUDED.salary_payable_account_id,
+             deductions_payable_account_id=EXCLUDED.deductions_payable_account_id, updated_at=now()`,
+          [dto.salaryExpenseAccountId ?? null, dto.salaryPayableAccountId ?? null, dto.deductionsPayableAccountId ?? null],
+        );
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown finance account for this tenant');
+        throw err;
+      }
+      return this.payrollGlConfigInTx(m);
+    });
+  }
+
+  /** Read the payroll GL config inside an existing tenant transaction (used by the GL consumer). */
+  async payrollGlConfigInTx(m: EntityManager): Promise<HrPayrollGlAccounts> {
+    const rows = (await m.query(
+      `SELECT salary_expense_account_id, salary_payable_account_id, deductions_payable_account_id
+       FROM hr_payroll_gl_config WHERE deleted_at IS NULL LIMIT 1`,
+    )) as Row[];
+    const r = rows[0] ?? {};
+    return {
+      salaryExpenseAccountId: (r.salary_expense_account_id as string) ?? null,
+      salaryPayableAccountId: (r.salary_payable_account_id as string) ?? null,
+      deductionsPayableAccountId: (r.deductions_payable_account_id as string) ?? null,
+    };
+  }
+
+  /** An approved run's GL-relevant figures (incl. per-department expense split), read inside the
+   * consumer's tenant transaction. */
+  async runForGlInTx(m: EntityManager, runId: string): Promise<(PayrollRunFigures & { journalId: string | null; journalVoucherNo: string | null }) | null> {
+    const rows = (await m.query(
+      `SELECT run_no, total_deduction_minor, total_net_minor, run_at, journal_id, journal_voucher_no
+       FROM hr_payroll_run WHERE id=$1 AND deleted_at IS NULL`,
+      [runId],
+    )) as Row[];
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      runNo: r.run_no as string,
+      expenseGroups: await this.payrollExpenseGroupsInTx(m, runId),
+      deductionMinor: num(r.total_deduction_minor),
+      netMinor: num(r.total_net_minor),
+      occurredOn: toDateStr(r.run_at),
+      journalId: (r.journal_id as string) ?? null,
+      journalVoucherNo: (r.journal_voucher_no as string) ?? null,
+    };
+  }
+
+  /** A run's gross pay grouped by each employee's department salary-expense account (null = the
+   * department has no per-department account, or the employee has no department → use the default). */
+  async payrollExpenseGroupsInTx(m: EntityManager, runId: string): Promise<ExpenseGroup[]> {
+    const rows = (await m.query(
+      `SELECT d.salary_expense_account_id AS account_id, SUM(p.gross_minor)::bigint AS gross
+       FROM hr_payslip p
+       JOIN hr_employee e ON e.id = p.employee_id
+       LEFT JOIN hr_department d ON d.id = e.department_id AND d.deleted_at IS NULL
+       WHERE p.run_id = $1 AND p.deleted_at IS NULL
+       GROUP BY d.salary_expense_account_id`,
+      [runId],
+    )) as Row[];
+    return rows.map((r) => ({ accountId: (r.account_id as string) ?? null, grossMinor: num(r.gross) }));
+  }
+
+  /** List departments with their (optional) per-department salary-expense account override. */
+  async listDepartmentSalaryAccounts(): Promise<Array<{ departmentId: string; departmentName: string; salaryExpenseAccountId: string | null }>> {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, name, salary_expense_account_id FROM hr_department WHERE deleted_at IS NULL ORDER BY name`,
+      )) as Row[];
+      return rows.map((r) => ({
+        departmentId: r.id as string,
+        departmentName: r.name as string,
+        salaryExpenseAccountId: (r.salary_expense_account_id as string) ?? null,
+      }));
+    });
+  }
+
+  /** Set or clear (null) a department's salary-expense account override. */
+  async setDepartmentSalaryAccount(departmentId: string, salaryExpenseAccountId: string | null): Promise<{ departmentId: string; salaryExpenseAccountId: string | null }> {
+    return this.tenantTx.run(async (m) => {
+      let rows: Row[];
+      try {
+        rows = returningRows<Row>(await m.query(
+          `UPDATE hr_department SET salary_expense_account_id=$2, updated_at=now()
+           WHERE id=$1 AND deleted_at IS NULL RETURNING id, salary_expense_account_id`,
+          [departmentId, salaryExpenseAccountId],
+        ));
+      } catch (err) {
+        if (isFk(err)) throw new BadRequestException('Unknown finance account for this tenant');
+        throw err;
+      }
+      if (!rows[0]) throw new NotFoundException('Department not found');
+      return { departmentId: rows[0].id as string, salaryExpenseAccountId: (rows[0].salary_expense_account_id as string) ?? null };
+    });
+  }
+
+  /** Link a run to the voucher it posted (inside the consumer's tenant transaction). */
+  async linkRunJournalInTx(m: EntityManager, runId: string, journalId: string, voucherNo: string): Promise<void> {
+    await m.query(`UPDATE hr_payroll_run SET journal_id=$2, journal_voucher_no=$3, updated_at=now() WHERE id=$1`, [runId, journalId, voucherNo]);
+  }
+
   async listPayslips(runId: string) {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
@@ -794,7 +907,7 @@ const LEAVE_REQ_COLS =
 const LEAVE_REQ_COLS_R =
   'r.id, r.leave_no, r.employee_id, r.leave_type_id, r.start_date, r.end_date, r.days, r.reason, r.status, r.approver_id, r.decided_at, r.decision_note';
 const RUN_COLS =
-  'id, run_no, period_year, period_month, status, currency, total_gross_minor, total_deduction_minor, total_net_minor, employee_count, working_days, run_at';
+  'id, run_no, period_year, period_month, status, currency, total_gross_minor, total_deduction_minor, total_net_minor, employee_count, working_days, run_at, journal_id, journal_voucher_no';
 const REVIEW_COLS =
   'id, review_no, employee_id, period, reviewer_id, rating, strengths, improvements, status, submitted_at';
 const REVIEW_COLS_R =
@@ -836,6 +949,8 @@ function mapRun(r: Row) {
     totalDeduction: { amountMinor: num(r.total_deduction_minor), currency },
     totalNet: { amountMinor: num(r.total_net_minor), currency },
     runAt: (r.run_at as string) ?? null,
+    journalId: (r.journal_id as string) ?? null,
+    journalVoucherNo: (r.journal_voucher_no as string) ?? null,
   };
 }
 function mapPayslip(r: Row) {

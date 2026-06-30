@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
 import type { Account } from '@/lib/types';
+import type { FeatureModule } from '@/lib/nav';
 import { type PharmacyConfig, type PharmacyGlConfig } from '@/components/pharmacy/pharm-ui';
 
 const MODES = ['RETAIL', 'HOSPITAL', 'WHOLESALE'] as const;
@@ -57,6 +58,9 @@ export function PharmacySettings() {
   const configQuery = useQuery({ queryKey: ['pharm-config'], queryFn: () => apiGet<PharmacyConfig>('/pharmacy/config') });
   const accountsQuery = useQuery({ queryKey: ['accounts'], queryFn: () => apiGet<Account[]>('/finance/accounts') });
   const glQuery = useQuery({ queryKey: ['pharm-gl-config'], queryFn: () => apiGet<PharmacyGlConfig>('/pharmacy/gl-config') });
+  // Accounts integration is optional per company — only show the GL section when Finance is enabled.
+  const features = useQuery({ queryKey: ['features'], queryFn: () => apiGet<FeatureModule[]>('/tenant/features') });
+  const financeOn = (features.data ?? []).some((m) => m.key === 'finance' && m.enabled);
 
   const [cfg, setCfg] = useState<ConfigForm>({
     mode: 'RETAIL',
@@ -202,7 +206,8 @@ export function PharmacySettings() {
               </div>
             </section>
 
-            {/* ── GL accounts ───────────────────────────────────────────── */}
+            {/* ── GL accounts (optional — only when the Finance module is on) ── */}
+            {financeOn ? (
             <section className="rounded-xl border">
               <div className="flex items-center gap-2 border-b px-4 py-3">
                 <Wallet className="h-4 w-4 text-emerald-600" />
@@ -233,6 +238,7 @@ export function PharmacySettings() {
                 </div>
               </div>
             </section>
+            ) : null}
           </div>
         )}
       </PaneBody>
