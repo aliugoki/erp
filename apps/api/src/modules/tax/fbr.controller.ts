@@ -31,6 +31,13 @@ export class FbrController {
     return this.fbr.listInvoices();
   }
 
+  /** The FBR record for a sale — powers the POS receipt QR. Broadened to cashiers (SALES_REP). */
+  @Get('sale/:saleId')
+  @Roles(Role.SUPER_ADMIN, Role.TENANT_ADMIN, Role.SALES_REP)
+  forSale(@Param('saleId', ParseUUIDPipe) saleId: string) {
+    return this.fbr.getForSale(saleId);
+  }
+
   @Post('report/:saleId')
   @HttpCode(HttpStatus.OK)
   report(@Param('saleId', ParseUUIDPipe) saleId: string) {
