@@ -14,6 +14,7 @@ import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { HrModule } from './modules/hr/hr.module';
+import { ExpenseClaimsModule } from './modules/expense-claims/expense-claims.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
 import { EventBusModule } from './modules/eventbus/event-bus.module';
 import { ConsumersModule } from './modules/consumers/consumers.module';
@@ -73,6 +74,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     TenantsModule,
     BranchesModule,
     HrModule,
+    ExpenseClaimsModule,
     FinanceModule,
     InventoryModule,
     CrmModule,
