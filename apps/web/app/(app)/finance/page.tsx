@@ -28,11 +28,12 @@ import { NewVendorDialog } from '@/components/finance/new-vendor-dialog';
 import { NewAccountDialog } from '@/components/finance/new-account-dialog';
 import { NewJournalDialog } from '@/components/finance/new-journal-dialog';
 import { QuickTransaction } from '@/components/finance/quick-transaction';
+import { FundTransfer } from '@/components/finance/fund-transfer';
 import { NewRecurringDialog } from '@/components/finance/new-recurring-dialog';
 import { NewCostCenterDialog } from '@/components/finance/new-cost-center-dialog';
 import { YearEndCloseDialog } from '@/components/finance/year-end-close-dialog';
 
-type Section = 'invoices' | 'customers' | 'bills' | 'vendors' | 'accounts' | 'journal' | 'income' | 'expense' | 'ledger' | 'reconciliation' | 'reports' | 'periods' | 'currencies' | 'recurring' | 'costcenters';
+type Section = 'invoices' | 'customers' | 'bills' | 'vendors' | 'accounts' | 'journal' | 'income' | 'expense' | 'transfer' | 'ledger' | 'reconciliation' | 'reports' | 'periods' | 'currencies' | 'recurring' | 'costcenters';
 
 export default function FinancePage() {
   const [section, setSection] = useState<Section>('invoices');
@@ -51,7 +52,7 @@ export default function FinancePage() {
 
   const pick = (s: Section) => { setSection(s); setSel(null); setQ(''); };
   const clear = () => setSel(null);
-  const fullPane = section === 'ledger' || section === 'reconciliation' || section === 'reports' || section === 'currencies' || section === 'income' || section === 'expense';
+  const fullPane = section === 'ledger' || section === 'reconciliation' || section === 'reports' || section === 'currencies' || section === 'income' || section === 'expense' || section === 'transfer';
   const showDetail = !!sel || fullPane;
 
   const invList = useMemo(() => (invoices.data ?? []).filter((i) => !q || `${i.number} ${i.customerName ?? ''}`.toLowerCase().includes(q.toLowerCase())), [invoices.data, q]);
@@ -69,6 +70,7 @@ export default function FinancePage() {
       <RailItem icon={ScrollText} label="Journal" active={section === 'journal'} onClick={() => pick('journal')} tone="sky" />
       <RailItem icon={ArrowDownCircle} label="Income" active={section === 'income'} onClick={() => pick('income')} tone="emerald" />
       <RailItem icon={ArrowUpCircle} label="Expense" active={section === 'expense'} onClick={() => pick('expense')} tone="amber" />
+      <RailItem icon={Repeat} label="Transfer" active={section === 'transfer'} onClick={() => pick('transfer')} tone="sky" />
       <div className="my-1 border-t" />
       <RailItem icon={Layers} label="Chart of Accounts" active={section === 'accounts'} onClick={() => pick('accounts')} tone="violet" />
       <RailItem icon={BookOpen} label="General Ledger" active={section === 'ledger'} onClick={() => pick('ledger')} />
@@ -191,6 +193,7 @@ export default function FinancePage() {
         : section === 'costcenters' ? <EmptyDetail icon={Target} title="Cost centers" hint="Analytical dimensions for postings. Add them on the left." />
         : section === 'income' ? <QuickTransaction kind="income" />
         : section === 'expense' ? <QuickTransaction kind="expense" />
+        : section === 'transfer' ? <FundTransfer />
         : section === 'ledger' ? <GeneralLedger />
         : section === 'reconciliation' ? <Reconciliation />
         : section === 'currencies' ? <CurrencyPanel />
