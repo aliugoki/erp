@@ -1307,6 +1307,8 @@ export interface Asset {
   accumulatedDepreciation: Money;
   bookValue: Money;
   location: string | null;
+  branchId: string | null;
+  branchName: string | null;
   custodianEmployeeId: string | null;
   custodianName: string | null;
   serialNo: string | null;

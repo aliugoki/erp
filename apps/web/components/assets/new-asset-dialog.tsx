@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPost } from '@/lib/api';
-import type { AssetCategory, Employee } from '@/lib/types';
+import type { AssetCategory, Branch, Employee } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,12 +22,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function NewAssetDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const EMPTY = { name: '', categoryId: '', acquisitionDate: '', cost: '', salvage: '', custodianEmployeeId: '', location: '', serialNo: '', supplier: '' };
+  const EMPTY = { name: '', categoryId: '', acquisitionDate: '', cost: '', salvage: '', custodianEmployeeId: '', location: '', branchId: '', serialNo: '', supplier: '' };
   const [form, setForm] = useState(EMPTY);
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const categories = useQuery({ queryKey: ['asset-categories'], queryFn: () => apiGet<AssetCategory[]>('/assets/categories'), enabled: open });
   const employees = useQuery({ queryKey: ['employees'], queryFn: () => apiGet<Employee[]>('/hr/employees'), enabled: open, retry: false });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches'), enabled: open });
 
   const create = useMutation({
     mutationFn: () =>
@@ -39,6 +40,7 @@ export function NewAssetDialog() {
         ...(form.salvage ? { salvageValueMinor: Math.round(Number(form.salvage) * 100) } : {}),
         ...(form.custodianEmployeeId ? { custodianEmployeeId: form.custodianEmployeeId } : {}),
         ...(form.location ? { location: form.location } : {}),
+        ...(form.branchId ? { branchId: form.branchId } : {}),
         ...(form.serialNo ? { serialNo: form.serialNo } : {}),
         ...(form.supplier ? { supplier: form.supplier } : {}),
       }),
@@ -112,6 +114,17 @@ export function NewAssetDialog() {
               <Input id="loc" value={form.location} onChange={(e) => set('location')(e.target.value)} />
             </div>
           </div>
+          {(branches.data ?? []).length > 0 ? (
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <Select value={form.branchId} onValueChange={set('branchId')}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {(branches.data ?? []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}{b.city ? ` · ${b.city}` : ''}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="sn">Serial no.</Label>

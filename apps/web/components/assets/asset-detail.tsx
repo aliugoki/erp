@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, Loader2, Save, TrendingDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError, apiGet, apiPatch, apiPost } from '@/lib/api';
-import type { Asset, AssetScheduleRow } from '@/lib/types';
+import type { Asset, AssetScheduleRow, Branch } from '@/lib/types';
 import { formatMoney } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
 import { AssetBadge, fmtDate, methodLabel } from './asset-ui';
 
@@ -16,13 +17,15 @@ export function AssetDetail({ id, onBack }: { id: string; onBack?: () => void })
   const asset = useQuery({ queryKey: ['asset', id], queryFn: () => apiGet<Asset>(`/assets/${id}`) });
   const [proceeds, setProceeds] = useState('');
   const [showSchedule, setShowSchedule] = useState(false);
-  const [f, setF] = useState({ name: '', description: '', location: '', serialNo: '', supplier: '', notes: '' });
+  const [f, setF] = useState({ name: '', description: '', location: '', branchId: '', serialNo: '', supplier: '', notes: '' });
+  const NONE = '__none__';
 
   const schedule = useQuery({ queryKey: ['asset-schedule', id], queryFn: () => apiGet<AssetScheduleRow[]>(`/assets/${id}/schedule`), enabled: showSchedule });
+  const branches = useQuery({ queryKey: ['branches'], queryFn: () => apiGet<Branch[]>('/branches') });
 
   useEffect(() => {
     const a = asset.data;
-    if (a) setF({ name: a.name, description: a.description ?? '', location: a.location ?? '', serialNo: a.serialNo ?? '', supplier: a.supplier ?? '', notes: a.notes ?? '' });
+    if (a) setF({ name: a.name, description: a.description ?? '', location: a.location ?? '', branchId: a.branchId ?? NONE, serialNo: a.serialNo ?? '', supplier: a.supplier ?? '', notes: a.notes ?? '' });
   }, [asset.data]);
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : 'Failed');
@@ -38,6 +41,7 @@ export function AssetDetail({ id, onBack }: { id: string; onBack?: () => void })
       name: f.name,
       description: f.description || undefined,
       location: f.location || undefined,
+      branchId: f.branchId === NONE ? undefined : f.branchId,
       serialNo: f.serialNo || undefined,
       supplier: f.supplier || undefined,
       notes: f.notes || undefined,
@@ -88,6 +92,7 @@ export function AssetDetail({ id, onBack }: { id: string; onBack?: () => void })
           <Meta label="Acquired" value={fmtDate(a.acquisitionDate)} />
           <Meta label="Dep. start" value={fmtDate(a.depreciationStart)} />
           <Meta label="Custodian" value={a.custodianName ?? '—'} />
+          <Meta label="Branch" value={a.branchName ?? '—'} />
           <Meta label="Location" value={a.location ?? '—'} />
           <Meta label="Serial" value={a.serialNo ?? '—'} />
           <Meta label="Supplier" value={a.supplier ?? '—'} />
@@ -112,6 +117,14 @@ export function AssetDetail({ id, onBack }: { id: string; onBack?: () => void })
             <Field label="Name" className="col-span-2"><Input value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></Field>
             <Field label="Description" className="col-span-2"><textarea value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} rows={2} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" /></Field>
             <Field label="Location"><Input value={f.location} onChange={(e) => setF((s) => ({ ...s, location: e.target.value }))} /></Field>
+            {(branches.data ?? []).length > 0 ? (
+              <Field label="Branch">
+                <Select value={f.branchId} onValueChange={(v) => setF((s) => ({ ...s, branchId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent><SelectItem value={NONE}>—</SelectItem>{(branches.data ?? []).map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+            ) : null}
             <Field label="Serial no"><Input value={f.serialNo} onChange={(e) => setF((s) => ({ ...s, serialNo: e.target.value }))} /></Field>
             <Field label="Supplier" className="col-span-2"><Input value={f.supplier} onChange={(e) => setF((s) => ({ ...s, supplier: e.target.value }))} /></Field>
             <Field label="Notes" className="col-span-2"><textarea value={f.notes} onChange={(e) => setF((s) => ({ ...s, notes: e.target.value }))} rows={2} className="w-full rounded-md border bg-background px-2 py-1.5 text-sm" /></Field>

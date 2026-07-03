@@ -149,6 +149,8 @@ export function mapAsset(r: Row) {
     accumulatedDepreciation: money(accumulated, currency),
     bookValue: money(cost - accumulated, currency),
     location: (r.location as string) ?? null,
+    branchId: (r.branch_id as string) ?? null,
+    branchName: (r.branch_name as string) ?? null,
     custodianEmployeeId: (r.custodian_employee_id as string) ?? null,
     custodianName: (r.custodian_name as string) ?? null,
     serialNo: (r.serial_no as string) ?? null,
