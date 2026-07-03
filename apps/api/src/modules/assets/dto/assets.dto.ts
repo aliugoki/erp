@@ -43,6 +43,7 @@ export class CreateAssetDto {
   @IsOptional() @IsISO8601() depreciationStart?: string;
   @IsOptional() @IsString() @Length(3, 3) currency?: string;
   @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @IsUUID() custodianEmployeeId?: string;
   @IsOptional() @IsString() serialNo?: string;
   @IsOptional() @IsString() supplier?: string;
@@ -52,6 +53,7 @@ export class UpdateAssetDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @IsUUID() custodianEmployeeId?: string;
   @IsOptional() @IsString() serialNo?: string;
   @IsOptional() @IsString() supplier?: string;

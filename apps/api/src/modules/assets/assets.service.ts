@@ -36,7 +36,7 @@ type Mgr = EntityManager;
 
 const CAT_COLS = 'id, name, code, method, useful_life_months, salvage_pct, status';
 const ASSET_COLS =
-  'id, asset_no, name, category_id, description, status, acquisition_date, acquisition_cost_minor, salvage_value_minor, useful_life_months, method, depreciation_start, accumulated_depreciation_minor, currency, location, custodian_employee_id, serial_no, supplier, disposal_date, disposal_proceeds_minor, disposal_gain_minor, notes';
+  'id, asset_no, name, category_id, description, status, acquisition_date, acquisition_cost_minor, salvage_value_minor, useful_life_months, method, depreciation_start, accumulated_depreciation_minor, currency, location, branch_id, custodian_employee_id, serial_no, supplier, disposal_date, disposal_proceeds_minor, disposal_gain_minor, notes';
 const RUN_COLS = 'id, run_no, period, status, asset_count, total_amount_minor, currency, notes';
 
 /**
@@ -114,10 +114,10 @@ export class AssetsService {
       try {
         const rows = (await m.query(
           `INSERT INTO asset (tenant_id, asset_no, name, category_id, description, acquisition_date, acquisition_cost_minor,
-             salvage_value_minor, useful_life_months, method, depreciation_start, currency, location, custodian_employee_id, serial_no, supplier, notes)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11,'PKR'),$12,$13,$14,$15,$16) RETURNING ${ASSET_COLS}`,
+             salvage_value_minor, useful_life_months, method, depreciation_start, currency, location, branch_id, custodian_employee_id, serial_no, supplier, notes)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11,'PKR'),$12,$13,$14,$15,$16,$17) RETURNING ${ASSET_COLS}`,
           [assetNo, dto.name, dto.categoryId ?? null, dto.description ?? null, dto.acquisitionDate ?? null, dto.acquisitionCostMinor,
-            salvage, usefulLife, method, depStart, dto.currency ?? null, dto.location ?? null, dto.custodianEmployeeId ?? null,
+            salvage, usefulLife, method, depStart, dto.currency ?? null, dto.location ?? null, dto.branchId ?? null, dto.custodianEmployeeId ?? null,
             dto.serialNo ?? null, dto.supplier ?? null, dto.notes ?? null],
         )) as Row[];
         return mapAsset(rows[0]!);
@@ -132,10 +132,11 @@ export class AssetsService {
     return this.tenantTx.run(async (m) => {
       const rows = (await m.query(
         `SELECT a.${ASSET_COLS.split(', ').join(', a.')}, c.name AS category_name,
-           (e.first_name || ' ' || e.last_name) AS custodian_name
+           (e.first_name || ' ' || e.last_name) AS custodian_name, b.name AS branch_name
          FROM asset a
          LEFT JOIN asset_category c ON c.id = a.category_id
          LEFT JOIN hr_employee e ON e.id = a.custodian_employee_id
+         LEFT JOIN branch b ON b.id = a.branch_id
          WHERE a.deleted_at IS NULL ${status ? 'AND a.status=$1' : ''} ORDER BY a.created_at DESC`,
         status ? [status] : [],
       )) as Row[];
@@ -155,6 +156,7 @@ export class AssetsService {
       if (dto.name !== undefined) set('name', dto.name);
       if (dto.description !== undefined) set('description', dto.description);
       if (dto.location !== undefined) set('location', dto.location);
+      if (dto.branchId !== undefined) set('branch_id', dto.branchId);
       if (dto.custodianEmployeeId !== undefined) set('custodian_employee_id', dto.custodianEmployeeId);
       if (dto.serialNo !== undefined) set('serial_no', dto.serialNo);
       if (dto.supplier !== undefined) set('supplier', dto.supplier);
@@ -407,8 +409,9 @@ export class AssetsService {
   private async getAssetWith(m: Mgr, id: string) {
     const rows = (await m.query(
       `SELECT a.${ASSET_COLS.split(', ').join(', a.')}, c.name AS category_name,
-         (e.first_name || ' ' || e.last_name) AS custodian_name
+         (e.first_name || ' ' || e.last_name) AS custodian_name, b.name AS branch_name
        FROM asset a LEFT JOIN asset_category c ON c.id = a.category_id LEFT JOIN hr_employee e ON e.id = a.custodian_employee_id
+         LEFT JOIN branch b ON b.id = a.branch_id
        WHERE a.id=$1 AND a.deleted_at IS NULL`,
       [id],
     )) as Row[];

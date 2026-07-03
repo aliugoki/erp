@@ -126,6 +126,7 @@ export class BranchesService {
       await m.query(`UPDATE hr_department SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
       await m.query(`UPDATE inventory_warehouse SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
       await m.query(`UPDATE pos_register SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
+      await m.query(`UPDATE asset SET branch_id = NULL, updated_at = now() WHERE branch_id = $1`, [id]);
     });
   }
 }

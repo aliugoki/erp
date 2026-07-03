@@ -100,6 +100,16 @@ check "register created with branch" "$(curl -s "$B/pos/registers/$REG" -H "Auth
 curl -s -XPATCH "$B/pos/registers/$REG" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$LHR\"}" >/dev/null
 check "register branch persists after PATCH" "$(curl -s "$B/pos/registers/$REG" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
 
+echo "== Fixed assets map to a branch =="
+AST=$(post "$A1" "assets" "{\"name\":\"Forklift\",\"acquisitionCostMinor\":50000000,\"branchId\":\"$LHR\"}" | jget data.id)
+check "asset created with branch" "$(curl -s "$B/assets/$AST" -H "Authorization: Bearer $A1" | jget data.branchId)" "$LHR"
+check "asset detail resolves branch name" "$(curl -s "$B/assets/$AST" -H "Authorization: Bearer $A1" | jget data.branchName)" "Lahore HQ"
+# removing the branch clears it off the asset too
+ATMP=$(post "$A1" "branches" '{"name":"Temp2","code":"TMP2"}' | jget data.id)
+curl -s -XPATCH "$B/assets/$AST" -H "Authorization: Bearer $A1" -H 'Content-Type: application/json' -d "{\"branchId\":\"$ATMP\"}" >/dev/null
+curl -s -XDELETE "$B/branches/$ATMP" -H "Authorization: Bearer $A1" >/dev/null
+check "removing a branch clears asset.branchId" "$(curl -s "$B/assets/$AST" -H "Authorization: Bearer $A1" | jget data.branchId)" ""
+
 echo "== tenant isolation: T2 sees none of T1's branches =="
 check "T2 list -> 0" "$(curl -s "$B/branches" -H "Authorization: Bearer $A2" | jlen)" "0"
 check "T2 GET T1 branch -> 404" "$(code "$B/branches/$LHR" -H "Authorization: Bearer $A2")" "404"
