@@ -60,9 +60,9 @@ check "finance disabled" "$(echo "$FEATS" | modEnabled finance)" "false"
 echo "== feature-gated route blocked when disabled =="
 check "probe/reporting -> 403 (disabled)" "$(code "$B/tenant/features/probe/reporting" -H "Authorization: Bearer $FT")" "403"
 
-echo "== enable reporting, then route allowed =="
+echo "== enable reporting (platform SUPER_ADMIN manages a company's modules), then route allowed =="
 check "PATCH reporting enabled -> 200" \
-  "$(code -X PATCH "$B/tenant/features/reporting" -H "Authorization: Bearer $FT" -H 'Content-Type: application/json' -d '{"enabled":true}')" "200"
+  "$(code -X PATCH "$B/tenants/$FT_TENANT/features/reporting" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d '{"enabled":true}')" "200"
 check "probe/reporting -> 200 (enabled)" "$(code "$B/tenant/features/probe/reporting" -H "Authorization: Bearer $FT")" "200"
 check "catalog now shows reporting enabled" "$(curl -s "$B/tenant/features" -H "Authorization: Bearer $FT" | modEnabled reporting)" "true"
 
@@ -71,12 +71,14 @@ AUD=$(ownerq "SELECT (new_value->>'enabled') FROM audit_log WHERE tenant_id='$FT
 check "FEATURE_TOGGLE audit row" "$AUD" "true"
 
 echo "== disable again =="
-code -X PATCH "$B/tenant/features/reporting" -H "Authorization: Bearer $FT" -H 'Content-Type: application/json' -d '{"enabled":false}' >/dev/null
+code -X PATCH "$B/tenants/$FT_TENANT/features/reporting" -H "Authorization: Bearer $SA" -H 'Content-Type: application/json' -d '{"enabled":false}' >/dev/null
 check "probe/reporting -> 403 after disable" "$(code "$B/tenant/features/probe/reporting" -H "Authorization: Bearer $FT")" "403"
 
-echo "== only admins can toggle =="
+echo "== only the platform SUPER_ADMIN can toggle a company's features =="
+check "TENANT_ADMIN PATCH -> 403" \
+  "$(code -X PATCH "$B/tenants/$FT_TENANT/features/reporting" -H "Authorization: Bearer $FT" -H 'Content-Type: application/json' -d '{"enabled":true}')" "403"
 check "VIEWER PATCH -> 403" \
-  "$(code -X PATCH "$B/tenant/features/reporting" -H "Authorization: Bearer $VW" -H 'Content-Type: application/json' -d '{"enabled":true}')" "403"
+  "$(code -X PATCH "$B/tenants/$FT_TENANT/features/reporting" -H "Authorization: Bearer $VW" -H 'Content-Type: application/json' -d '{"enabled":true}')" "403"
 
 echo
 echo "RESULT: $pass passed, $fail failed"

@@ -13,7 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Static analysis + unit tests (fast, no services) ────────────────────────
+  # ── Static analysis (fast, no services) ─────────────────────────────────────
+  # Unit/integration specs (`pnpm -w test`) run in the e2e job below — several touch
+  # Postgres/RabbitMQ/Redis directly, so they need the live infra stack, not this job.
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -26,7 +28,6 @@ jobs:
       - run: pnpm --filter @metaxperts/shared --filter @metaxperts/config build
       - run: pnpm -w typecheck
       - run: pnpm -w lint
-      - run: pnpm -w test
 
   # ── Full e2e against the real infra (Postgres+RLS, PgBouncer, Redis, RabbitMQ) ─
   e2e:
@@ -73,6 +74,11 @@ jobs:
         run: |
           pnpm --filter @metaxperts/shared --filter @metaxperts/config --filter @app/api build
           pnpm --filter @app/api migration:run
+
+      # Unit + integration specs — several connect to Postgres/RabbitMQ/Redis, so they run here
+      # (against the live infra + migrated schema), not in the service-less `verify` job.
+      - name: Unit + integration tests
+        run: pnpm -w test
 
       - name: e2e (api suite)
         run: pnpm --filter @app/api test:e2e
