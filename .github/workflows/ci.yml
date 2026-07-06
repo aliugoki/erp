@@ -42,7 +42,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Start infra
-        run: docker compose -f infra/docker-compose.yml up -d postgres pgbouncer redis rabbitmq
+        # otel-collector is needed by tracing-e2e (it greps the collector's logs for spans).
+        run: docker compose -f infra/docker-compose.yml up -d postgres pgbouncer redis rabbitmq otel-collector
 
       - name: Write CI .env (non-secret test values)
         run: |
@@ -64,7 +65,7 @@ jobs:
             docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U metaxperts -d metaxperts && break
             sleep 2
           done
-          for port in 6432 6380 5672; do
+          for port in 6432 6380 5672 4318; do
             for i in $(seq 1 45); do nc -z 127.0.0.1 $port && break || sleep 2; done
           done
           # RabbitMQ accepts TCP before it's ready for AMQP — give it a moment to finish booting.
