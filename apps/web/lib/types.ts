@@ -186,6 +186,32 @@ export interface Designation {
   description: string | null;
 }
 
+export interface ExpenseClaimLine {
+  description: string;
+  amountMinor: number;
+  expenseAccountId: string | null;
+}
+export interface ExpenseClaim {
+  id: string;
+  claimNo: string;
+  employeeId: string;
+  employeeName: string | null;
+  employeeCode: string | null;
+  claimDate: string | null;
+  title: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PAID';
+  total: Money;
+  branchId: string | null;
+  branchName: string | null;
+  costCenterId: string | null;
+  costCenterName: string | null;
+  lines: ExpenseClaimLine[];
+  decisionNote: string | null;
+  journalId: string | null;
+  journalVoucherNo: string | null;
+  paidOn: string | null;
+}
+
 // ── AI Insights ───────────────────────────────────────────────────────────────
 export interface AiSummary {
   nextMonthSales: Money;

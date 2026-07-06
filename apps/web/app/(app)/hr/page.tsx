@@ -2,7 +2,7 @@
 import { ModuleTitle } from '@/components/module-title';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Briefcase, Building2, CalendarCheck, FileText, Loader2, Plane, Search, Target, Users, Wallet } from 'lucide-react';
+import { BarChart3, Briefcase, Building2, CalendarCheck, FileText, Loader2, Plane, Receipt, Search, Target, Users, Wallet } from 'lucide-react';
 import { apiGet } from '@/lib/api';
 import type { Branch, Department, Employee, HeadcountReport } from '@/lib/types';
 import { EmptyDetail, ListRow, Pane, PaneBody, PaneHeader, RailItem, ThreePane } from '@/components/ui/three-pane';
@@ -14,11 +14,12 @@ import { PayrollPanel } from '@/components/hr/payroll-panel';
 import { PerformancePanel } from '@/components/hr/performance-panel';
 import { PoliciesPanel } from '@/components/hr/policies-panel';
 import { OrgPanel } from '@/components/hr/org-panel';
+import { ExpensesPanel } from '@/components/hr/expenses-panel';
 import { HrReports } from '@/components/hr/hr-reports';
 import { NewEmployeeDialog } from '@/components/hr/new-employee-dialog';
 import { Input } from '@/components/ui/input';
 
-type Section = 'employees' | 'attendance' | 'leave' | 'payroll' | 'performance' | 'policies' | 'org' | 'reports';
+type Section = 'employees' | 'attendance' | 'leave' | 'payroll' | 'expenses' | 'performance' | 'policies' | 'org' | 'reports';
 const STATUSES = ['ACTIVE', 'ON_LEAVE', 'TERMINATED'];
 
 export default function HrPage() {
@@ -53,6 +54,7 @@ export default function HrPage() {
       <RailItem icon={CalendarCheck} label="Attendance" active={section === 'attendance'} onClick={() => pick('attendance')} tone="sky" />
       <RailItem icon={Plane} label="Leave" active={section === 'leave'} onClick={() => pick('leave')} tone="amber" />
       <RailItem icon={Wallet} label="Payroll" active={section === 'payroll'} onClick={() => pick('payroll')} tone="emerald" />
+      <RailItem icon={Receipt} label="Expenses" active={section === 'expenses'} onClick={() => pick('expenses')} tone="amber" />
       <RailItem icon={Target} label="Performance" active={section === 'performance'} onClick={() => pick('performance')} tone="violet" />
       <RailItem icon={FileText} label="Policies" active={section === 'policies'} onClick={() => pick('policies')} />
       <RailItem icon={Building2} label="Organization" active={section === 'org'} onClick={() => pick('org')} />
@@ -96,6 +98,7 @@ export default function HrPage() {
         : section === 'attendance' ? <AttendancePanel />
         : section === 'leave' ? <LeavePanel />
         : section === 'payroll' ? <PayrollPanel />
+        : section === 'expenses' ? <ExpensesPanel />
         : section === 'performance' ? <PerformancePanel />
         : section === 'policies' ? <PoliciesPanel />
         : section === 'org' ? <OrgPanel />

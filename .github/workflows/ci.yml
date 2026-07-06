@@ -13,13 +13,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Static analysis + unit tests (fast, no services) ────────────────────────
+  # ── Static analysis (fast, no services) ─────────────────────────────────────
+  # Unit/integration specs (`pnpm -w test`) run in the e2e job below — several touch
+  # Postgres/RabbitMQ/Redis directly, so they need the live infra stack, not this job.
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 11 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
@@ -27,7 +28,6 @@ jobs:
       - run: pnpm --filter @metaxperts/shared --filter @metaxperts/config build
       - run: pnpm -w typecheck
       - run: pnpm -w lint
-      - run: pnpm -w test
 
   # ── Full e2e against the real infra (Postgres+RLS, PgBouncer, Redis, RabbitMQ) ─
   e2e:
@@ -35,7 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 11 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - name: Install psql client (e2e scripts seed via psql)
@@ -43,7 +42,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Start infra
-        run: docker compose -f infra/docker-compose.yml up -d postgres pgbouncer redis rabbitmq
+        # otel-collector is needed by tracing-e2e (it greps the collector's logs for spans).
+        run: docker compose -f infra/docker-compose.yml up -d postgres pgbouncer redis rabbitmq otel-collector
 
       - name: Write CI .env (non-secret test values)
         run: |
@@ -65,7 +65,7 @@ jobs:
             docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U metaxperts -d metaxperts && break
             sleep 2
           done
-          for port in 6432 6380 5672; do
+          for port in 6432 6380 5672 4318; do
             for i in $(seq 1 45); do nc -z 127.0.0.1 $port && break || sleep 2; done
           done
           # RabbitMQ accepts TCP before it's ready for AMQP — give it a moment to finish booting.
@@ -75,6 +75,11 @@ jobs:
         run: |
           pnpm --filter @metaxperts/shared --filter @metaxperts/config --filter @app/api build
           pnpm --filter @app/api migration:run
+
+      # Unit + integration specs — several connect to Postgres/RabbitMQ/Redis, so they run here
+      # (against the live infra + migrated schema), not in the service-less `verify` job.
+      - name: Unit + integration tests
+        run: pnpm -w test
 
       - name: e2e (api suite)
         run: pnpm --filter @app/api test:e2e

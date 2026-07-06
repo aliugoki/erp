@@ -36,6 +36,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'hr:document:write', label: 'Manage HR documents' },
       { key: 'hr:policy:write', label: 'Manage HR policies & custom fields' },
       { key: 'hr:profile:write', label: 'Edit employee profiles (education, experience)' },
+      { key: 'hr:expense:write', label: 'Manage employee expense claims' },
     ],
   },
   {

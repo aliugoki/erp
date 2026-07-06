@@ -1,9 +1,12 @@
 /**
  * Route guard audit (Chunk 8.3 gate). Enumerates every registered route and asserts that each one
- * NOT on the public allowlist (`/health*`, `/auth/*`, `/metrics`) rejects an unauthenticated request
- * with 401 — i.e. the global JwtAuthGuard is in effect and nothing was accidentally left open.
- * `/internal/*` is `@Public()` for the user JWT but guarded by the service-token guard, so it also
- * returns 401 without credentials and passes the same assertion.
+ * NOT on the public allowlist (`/health*`, `/auth/*`, `/metrics`, `/shop/*`) rejects an
+ * unauthenticated request with 401 — i.e. the global JwtAuthGuard is in effect and nothing was
+ * accidentally left open. `/internal/*` is `@Public()` for the user JWT but guarded by the
+ * service-token guard, so it also returns 401 without credentials and passes the same assertion.
+ * `/shop/:slug/*` is the customer-facing storefront: deliberately `@Public()` at the platform-JWT
+ * layer (StorefrontController) and enforcing its own storefront-account token internally, so it is
+ * expected to be reachable without a platform JWT.
  *
  * Usage: API_BASE=http://localhost:PORT node test/route-audit.cjs   (the API must be running)
  */
@@ -11,7 +14,7 @@ const { NestFactory } = require('@nestjs/core');
 const { AppModule } = require('../dist/app.module');
 
 const API_BASE = process.env.API_BASE;
-const PUBLIC = /^\/(health|auth|metrics)(\/|$)/;
+const PUBLIC = /^\/(health|auth|metrics|shop)(\/|$)/;
 
 async function main() {
   // A throwaway app instance, only to enumerate the route table (no HTTP listener).
