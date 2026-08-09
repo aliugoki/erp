@@ -49,3 +49,6 @@ venv/
 
 # DB backups (Chunk 9.2)
 backups/
+
+# Vendored python deps for running apps/ml on a host without a venv (pip --target).
+apps/ml/.pydeps/
