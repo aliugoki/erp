@@ -31,6 +31,10 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Build output directory. Overridable so a production build can be verified WITHOUT clobbering the
+  // `.next` a running `next dev` is serving from — otherwise the dev server keeps running while every
+  // chunk it points at has been replaced, and the app 500s or renders a blank shell.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   poweredByHeader: false, // don't advertise the framework (X-Powered-By)
   // Self-contained production server bundle for the Docker image (Chunk 9.1): Next traces the exact
   // runtime deps into `.next/standalone`, so the image needs no install step and no full node_modules.
