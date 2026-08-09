@@ -293,3 +293,52 @@
     opacity: 1;
   }
 }
+
+/*
+ * Printing a sheet of labels or a receipt.
+ *
+ * `window.print()` prints the whole document, so a dialog would come out wrapped in the app shell —
+ * nav rail, headers, buttons and all. When a printable region is on screen, everything else is
+ * hidden and the region is promoted to fill the page. Marking a container `data-print-root` (or
+ * using one of the known ids) is enough to opt in.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #barcode-sheet,
+  #barcode-sheet *,
+  #rest-qr-sheet,
+  #rest-qr-sheet *,
+  #rest-receipt,
+  #rest-receipt *,
+  #pos-receipt,
+  #pos-receipt * {
+    visibility: visible;
+  }
+
+  #barcode-sheet,
+  #rest-qr-sheet,
+  #rest-receipt,
+  #pos-receipt {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  /* A label must never be split across a page boundary — half a barcode does not scan. */
+  #barcode-sheet > *,
+  #rest-qr-sheet > * {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}

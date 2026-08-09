@@ -24,7 +24,7 @@ const NO_CATEGORY = '__none__';
 export function NewProductDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ sku: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
+  const [f, setF] = useState({ sku: '', barcode: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
   const [categoryId, setCategoryId] = useState(NO_CATEGORY);
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
 
@@ -37,6 +37,8 @@ export function NewProductDialog() {
     mutationFn: () =>
       apiPost('/inventory/products', {
         sku: f.sku,
+        // Blank means "no barcode yet" — one can be minted later from the product's detail pane.
+        barcode: f.barcode.trim() || undefined,
         name: f.name,
         categoryId: categoryId === NO_CATEGORY ? undefined : categoryId,
         minStock: Number(f.minStock) || 0,
@@ -47,7 +49,7 @@ export function NewProductDialog() {
       toast.success('Product added', { description: f.name });
       qc.invalidateQueries({ queryKey: ['products'] });
       setOpen(false);
-      setF({ sku: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
+      setF({ sku: '', barcode: '', name: '', minStock: '0', costPrice: '', sellPrice: '' });
       setCategoryId(NO_CATEGORY);
     },
     onError: (e) => toast.error('Could not add product', { description: e instanceof ApiError ? e.message : '' }),
@@ -75,6 +77,10 @@ export function NewProductDialog() {
             <div className="space-y-2">
               <Label htmlFor="sku">SKU</Label>
               <Input id="sku" value={f.sku} onChange={(e) => set('sku')(e.target.value)} placeholder="WIDGET-1" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="barcode">Barcode <span className="text-muted-foreground">(optional)</span></Label>
+              <Input id="barcode" value={f.barcode} onChange={(e) => set('barcode')(e.target.value)} placeholder="Scan or type — leave blank to generate later" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="ms">Min stock</Label>

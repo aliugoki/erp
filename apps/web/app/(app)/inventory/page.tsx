@@ -22,6 +22,8 @@ import { GatePassDetail } from '@/components/inventory/gate-pass-detail';
 import { InventoryReports } from '@/components/inventory/inventory-reports';
 import { CategoryTreeNode } from '@/components/inventory/category-tree-node';
 import { NewProductDialog } from '@/components/inventory/new-product-dialog';
+import { BarcodeSheetDialog } from '@/components/codes/barcode-sheet';
+import { GenerateMissingProductBarcodes } from '@/components/inventory/product-barcode';
 import { NewCategoryDialog } from '@/components/inventory/new-category-dialog';
 import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog';
 import { NewRequisitionDialog } from '@/components/inventory/new-requisition-dialog';
@@ -83,9 +85,22 @@ export default function InventoryPage() {
         <>
           <PaneHeader>
             <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="h-9 w-full pl-9" /></div>
+            <GenerateMissingProductBarcodes missing={(products.data ?? []).filter((p) => !p.barcode).length} />
             <AdjustStockDialog />
             <NewProductDialog />
           </PaneHeader>
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <BarcodeSheetDialog
+              rows={prodList.map((p) => ({
+                id: p.id, code: p.barcode, name: p.name, sub: p.sku,
+                price: formatMoney(p.sellPrice.amountMinor, p.sellPrice.currency),
+              }))}
+              title="Print product barcodes"
+              triggerLabel={`Print barcodes (${prodList.filter((p) => p.barcode).length})`}
+              emptyHint="No product here has a barcode yet — generate them first."
+            />
+            <span className="text-xs text-muted-foreground">Sticker sheet for the products listed</span>
+          </div>
           <PaneBody>
             {products.isLoading ? <Spinner /> : prodList.length === 0 ? <Hint>No products.</Hint> : (
               <ul className="divide-y">{prodList.map((p) => {

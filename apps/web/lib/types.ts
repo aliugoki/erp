@@ -1144,6 +1144,8 @@ export interface CashFlow {
 export interface Product {
   id: string;
   sku: string;
+  /** Scannable code on the packaging — null until recorded or minted. */
+  barcode: string | null;
   name: string;
   category: string | null;
   unit: string;

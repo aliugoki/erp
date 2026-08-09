@@ -11,6 +11,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   StreamableFile,
   UnsupportedMediaTypeException,
   UploadedFile,
@@ -25,6 +26,7 @@ import {
   CreateMovementDto,
   CreateProductDto,
   CreateWarehouseDto,
+  GenerateProductBarcodeDto,
   SetProductCategoryDto,
   UpdateCategoryDto,
   UpdateProductDto,
@@ -102,6 +104,20 @@ export class InventoryController {
     return this.inventory.listLowStock();
   }
 
+  /** Look a scanned code up: barcode first, then SKU. Declared before `products/:id`. */
+  @Get('products/by-code')
+  findByCode(@Query('code') codeValue: string) {
+    return this.inventory.findByCode(codeValue);
+  }
+
+  /** Bulk-mint a barcode for every product without one. Declared before `products/:id`. */
+  @Post('products/barcodes/generate-missing')
+  @Permissions('inventory:product:write')
+  @HttpCode(HttpStatus.OK)
+  generateMissingBarcodes(@Body() dto: GenerateProductBarcodeDto) {
+    return this.inventory.generateMissingProductBarcodes(dto.prefix);
+  }
+
   @Post('products')
   @Permissions('inventory:product:write')
   @HttpCode(HttpStatus.CREATED)
@@ -124,6 +140,14 @@ export class InventoryController {
   @Permissions('inventory:product:write')
   updateProduct(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProductDto) {
     return this.inventory.updateProduct(id, dto);
+  }
+
+  /** Mint (or record) one product's barcode — internal EAN-13 by default. */
+  @Post('products/:id/barcode')
+  @Permissions('inventory:product:write')
+  @HttpCode(HttpStatus.OK)
+  generateBarcode(@Param('id', ParseUUIDPipe) id: string, @Body() dto: GenerateProductBarcodeDto) {
+    return this.inventory.generateProductBarcode(id, dto);
   }
 
   @Delete('products/:id')

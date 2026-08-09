@@ -12,6 +12,7 @@ import { AuthImage } from '@/components/auth-image';
 import { PaneBody, PaneHeader } from '@/components/ui/three-pane';
 import { MovementDialog } from './movement-dialog';
 import { ProductImagesDialog } from './product-images-dialog';
+import { ProductBarcodePanel } from '@/components/inventory/product-barcode';
 import { fmtDateTime } from './inv-ui';
 
 interface Movement { id: string; type: string; quantity: number; reference: string | null; created_at: string | null }
@@ -59,6 +60,7 @@ export function ProductDetail({ id, onBack, onDeleted }: { id: string; onBack?: 
         <Button variant="ghost" size="sm" onClick={() => { if (confirm('Delete this product? (only if it holds no stock)')) remove.mutate(); }} disabled={remove.isPending} title="Delete"><Trash2 className="h-4 w-4 text-rose-600" /></Button>
       </PaneHeader>
       <PaneBody className="space-y-6 p-5">
+        <ProductBarcodePanel productId={id} productName={p.name} barcode={p.barcode ?? null} />
         <div className="flex gap-4">
           {p.primaryImageId ? <AuthImage path={`/inventory/products/${id}/images/${p.primaryImageId}`} alt={p.name} className="h-24 w-24 shrink-0 rounded-xl border object-cover" /> : null}
           <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">

@@ -19,14 +19,16 @@ import {
   mapProductRow,
   rowsOf,
 } from './inventory.util';
+import { isValidEan13, symbologyFor } from '../codes/barcode.util';
+import { InternalCodeService } from '../codes/internal-code.service';
 
 const PRODUCT_COLS =
-  'id, sku, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock, on_hand';
+  'id, sku, barcode, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock, on_hand';
 
 /** Product SELECT that walks up to three category levels so each row carries its full top→leaf
  * category path (c1 = the product's own category, c2 = its parent, c3 = its grandparent). */
 const PRODUCT_SELECT = `
-  SELECT p.id, p.sku, p.name, p.category, p.category_id, p.unit, p.cost_price_minor, p.sell_price_minor,
+  SELECT p.id, p.sku, p.barcode, p.name, p.category, p.category_id, p.unit, p.cost_price_minor, p.sell_price_minor,
          p.currency, p.min_stock, p.on_hand,
          c1.name AS category_name, c2.name AS parent_name, c3.name AS grandparent_name,
          (SELECT i.id FROM inventory_product_image i WHERE i.product_id = p.id AND i.deleted_at IS NULL
@@ -47,6 +49,7 @@ export class InventoryService {
     private readonly outbox: OutboxService,
     private readonly storage: StorageService,
     private readonly policy: PolicyService,
+    private readonly minter: InternalCodeService,
   ) {}
 
   // ── Warehouses ──────────────────────────────────────────────────────────────
@@ -81,15 +84,17 @@ export class InventoryService {
 
   // ── Products ────────────────────────────────────────────────────────────────
   async createProduct(dto: CreateProductDto) {
+    assertBarcode(dto.barcode);
     return this.tenantTx.run(async (m) => {
       try {
         const rows = (await m.query(
           `INSERT INTO inventory_product
-             (tenant_id, sku, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock)
-           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9)
+             (tenant_id, sku, barcode, name, category, category_id, unit, cost_price_minor, sell_price_minor, currency, min_stock)
+           VALUES (current_setting('app.tenant_id')::uuid, $1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            RETURNING ${PRODUCT_COLS}`,
           [
             dto.sku,
+            dto.barcode?.trim() || null,
             dto.name,
             dto.category ?? null,
             dto.categoryId ?? null,
@@ -102,7 +107,8 @@ export class InventoryService {
         )) as ProductRow[];
         return mapProductRow(rows[0]!);
       } catch (err) {
-        if (isUnique(err)) throw new BadRequestException(`SKU "${dto.sku}" already exists`);
+        // Two unique indexes can fire here; name the one the user actually collided with.
+        if (isUnique(err)) throw new BadRequestException(uniqueMessage(err, dto.sku, dto.barcode));
         if (isForeignKey(err)) throw new BadRequestException('Unknown category for this tenant');
         throw err;
       }
@@ -141,23 +147,118 @@ export class InventoryService {
 
   /** Edit a product's master data (SKU is immutable — it keys the valued ledger). */
   async updateProduct(id: string, dto: UpdateProductDto) {
+    assertBarcode(dto.barcode);
     return this.tenantTx.run(async (m) => {
       try {
+        // An empty-string barcode means "clear it"; undefined means "leave it alone" — so the
+        // barcode cannot use COALESCE like the other columns.
+        const clearBarcode = dto.barcode !== undefined && dto.barcode.trim() === '';
         const updated = rowsOf<{ id: string }>(await m.query(
           `UPDATE inventory_product SET name=COALESCE($2,name), category=COALESCE($3,category), category_id=COALESCE($4,category_id),
               unit=COALESCE($5,unit), cost_price_minor=COALESCE($6,cost_price_minor), sell_price_minor=COALESCE($7,sell_price_minor),
-              min_stock=COALESCE($8,min_stock), updated_at=now()
+              min_stock=COALESCE($8,min_stock),
+              barcode = CASE WHEN $10::boolean THEN NULL ELSE COALESCE($9, barcode) END,
+              updated_at=now()
            WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
           [id, dto.name ?? null, dto.category ?? null, dto.categoryId ?? null, dto.unit ?? null,
-            dto.costPriceMinor ?? null, dto.sellPriceMinor ?? null, dto.minStock ?? null],
+            dto.costPriceMinor ?? null, dto.sellPriceMinor ?? null, dto.minStock ?? null,
+            dto.barcode?.trim() || null, clearBarcode],
         ));
         if (!updated[0]) throw new NotFoundException('Product not found');
       } catch (err) {
+        if (isUnique(err)) throw new BadRequestException(uniqueMessage(err, undefined, dto.barcode));
         if (isForeignKey(err)) throw new BadRequestException('Unknown category for this tenant');
         throw err;
       }
       const rows = (await m.query(`${PRODUCT_SELECT} WHERE p.id=$1 AND p.deleted_at IS NULL`, [id])) as ProductRow[];
       return mapProductRow(rows[0]!);
+    });
+  }
+
+
+  // ── Barcodes ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Give a product a scannable barcode. With no value supplied we mint an internal EAN-13 from a
+   * per-tenant counter in the GS1 **in-store range (20–29)**, which is reserved for codes meaningful
+   * only inside one business — minting under a real GS1 prefix would collide with someone else's
+   * product the moment the goods leave the building. Existing codes are left alone unless the caller
+   * asks to regenerate, because changing one orphans every label already stuck on a shelf.
+   */
+  async generateProductBarcode(id: string, opts: { value?: string; prefix?: string; regenerate?: boolean } = {}) {
+    assertBarcode(opts.value);
+    return this.tenantTx.run(async (m) => {
+      const cur = (await m.query(
+        `SELECT id, sku, name, barcode FROM inventory_product WHERE id=$1 AND deleted_at IS NULL`,
+        [id],
+      )) as Array<{ id: string; sku: string; name: string; barcode: string | null }>;
+      const product = cur[0];
+      if (!product) throw new NotFoundException('Product not found');
+
+      if (product.barcode && !opts.regenerate && !opts.value) {
+        return { productId: id, sku: product.sku, name: product.name, barcode: product.barcode, symbology: symbologyFor(product.barcode), generated: false };
+      }
+      const barcode = opts.value?.trim() || (await this.mintBarcode(m, opts.prefix));
+      try {
+        const upd = rowsOf<{ id: string }>(await m.query(
+          `UPDATE inventory_product SET barcode=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
+          [id, barcode],
+        ));
+        if (!upd[0]) throw new NotFoundException('Product not found');
+      } catch (err) {
+        if (isUnique(err)) throw new BadRequestException(`Barcode "${barcode}" is already used by another product`);
+        throw err;
+      }
+      return { productId: id, sku: product.sku, name: product.name, barcode, symbology: symbologyFor(barcode), generated: true };
+    });
+  }
+
+  /** Bulk mint for every product without a barcode — the path after importing a supplier catalogue. */
+  async generateMissingProductBarcodes(prefix?: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT id, sku, name FROM inventory_product WHERE deleted_at IS NULL AND barcode IS NULL ORDER BY name`,
+      )) as Array<{ id: string; sku: string; name: string }>;
+      const items: Array<{ productId: string; sku: string; name: string; barcode: string }> = [];
+      for (const r of rows) {
+        const barcode = await this.mintBarcode(m, prefix);
+        await m.query(`UPDATE inventory_product SET barcode=$2, updated_at=now() WHERE id=$1`, [r.id, barcode]);
+        items.push({ productId: r.id, sku: r.sku, name: r.name, barcode });
+      }
+      return { issued: items.length, items };
+    });
+  }
+
+  /**
+   * Draw the next internal code from the **tenant-wide** counter, checking both catalogues: a product
+   * barcode must be unique across modules, or scanning a carton in the store would resolve to a
+   * restaurant menu item instead.
+   */
+  private async mintBarcode(m: { query: (sql: string, params?: unknown[]) => Promise<unknown> }, prefix?: string): Promise<string> {
+    return this.minter.mintProductBarcode(m, {
+      prefix,
+      taken: async (candidate) => {
+        const clash = (await m.query(
+          `SELECT 1 FROM inventory_product WHERE barcode=$1 AND deleted_at IS NULL
+           UNION ALL
+           SELECT 1 FROM restaurant_menu_item WHERE barcode=$1 AND deleted_at IS NULL
+           LIMIT 1`,
+          [candidate],
+        )) as Array<unknown>;
+        return Boolean(clash[0]);
+      },
+    });
+  }
+
+  /** Resolve a scanned code to a product (barcode first, then SKU) — the receiving-desk lookup. */
+  async findByCode(codeValue: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `${PRODUCT_SELECT} WHERE p.deleted_at IS NULL AND (lower(p.barcode) = lower($1) OR lower(p.sku) = lower($1)) LIMIT 1`,
+        [String(codeValue ?? '').trim()],
+      )) as ProductRow[];
+      if (!rows[0]) throw new NotFoundException(`No product matches the code "${codeValue}"`);
+      return mapProductRow(rows[0]);
     });
   }
 
@@ -364,5 +465,25 @@ export class InventoryService {
 
 const code = (err: unknown): string | undefined => (err as { code?: string })?.code;
 const isUnique = (e: unknown) => code(e) === '23505';
+
+/**
+ * A 13-digit code claims to be an EAN, so a wrong check digit is a label that will fail at the
+ * scanner — rejected at entry rather than at the receiving desk. Any other shape (a UPC-A, an EAN-8,
+ * a supplier's alphanumeric code) is stored as given.
+ */
+function assertBarcode(barcode: string | undefined) {
+  const v = barcode?.trim();
+  if (v && /^\d{13}$/.test(v) && !isValidEan13(v)) {
+    throw new BadRequestException(`"${v}" has an invalid EAN-13 check digit`);
+  }
+}
+
+/** Both SKU and barcode are unique per tenant; report whichever one the write actually collided on. */
+function uniqueMessage(err: unknown, sku?: string, barcode?: string): string {
+  const detail = String((err as { constraint?: string; detail?: string })?.constraint ?? (err as { detail?: string })?.detail ?? '');
+  if (detail.includes('barcode')) return `Barcode "${barcode ?? ''}" is already used by another product`;
+  return `SKU "${sku ?? ''}" already exists`;
+}
+
 const isForeignKey = (e: unknown) => code(e) === '23503';
 const isCheck = (e: unknown) => code(e) === '23514';

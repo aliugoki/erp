@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min, MinLength } from 'class-validator';
 
 export class CreateWarehouseDto {
   @IsString() @MinLength(1) name!: string;
@@ -17,6 +17,8 @@ export class UpdateWarehouseDto {
 /** Edit a product's master data — every field optional. SKU is immutable (it keys the ledger). */
 export class UpdateProductDto {
   @IsOptional() @IsString() @MinLength(1) name?: string;
+  /** Scannable code on the packaging. Pass an empty string to clear it. */
+  @IsOptional() @IsString() barcode?: string;
   @IsOptional() @IsString() category?: string;
   @IsOptional() @IsUUID() categoryId?: string;
   @IsOptional() @IsString() unit?: string;
@@ -27,6 +29,8 @@ export class UpdateProductDto {
 
 export class CreateProductDto {
   @IsString() @MinLength(1) sku!: string;
+  /** Scannable code printed on the packaging; omit and mint one later with POST products/:id/barcode. */
+  @IsOptional() @IsString() barcode?: string;
   @IsString() @MinLength(1) name!: string;
   @IsOptional() @IsString() category?: string;
   @IsOptional() @IsUUID() categoryId?: string;
@@ -62,4 +66,14 @@ export class CreateMovementDto {
   @IsOptional() @IsUUID() warehouseId?: string;
   @IsOptional() @IsUUID() toWarehouseId?: string;
   @IsOptional() @IsString() reference?: string;
+}
+
+/** Mint or record a product's barcode. */
+export class GenerateProductBarcodeDto {
+  /** A real supplier EAN to record; omit to mint an internal one. */
+  @IsOptional() @IsString() value?: string;
+  /** GS1 in-store prefix (20–29) for minted codes. */
+  @IsOptional() @IsString() prefix?: string;
+  /** Replace an existing barcode (invalidates labels already printed). */
+  @IsOptional() @IsBoolean() regenerate?: boolean;
 }

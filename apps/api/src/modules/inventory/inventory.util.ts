@@ -25,6 +25,7 @@ export function isLowStockTransition(current: number, next: number, minStock: nu
 export interface ProductRow {
   id: string;
   sku: string;
+  barcode?: string | null;
   name: string;
   category: string | null;
   unit: string;
@@ -45,6 +46,8 @@ export interface ProductRow {
 export interface ProductView {
   id: string;
   sku: string;
+  /** Scannable code on the packaging — null until recorded or minted. */
+  barcode: string | null;
   name: string;
   category: string | null;
   unit: string;
@@ -76,6 +79,7 @@ export function mapProductRow(r: ProductRow): ProductView {
   return {
     id: r.id,
     sku: r.sku,
+    barcode: r.barcode ?? null,
     name: r.name,
     category: r.category,
     unit: r.unit,
