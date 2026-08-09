@@ -137,6 +137,21 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
     ],
   },
   {
+    domain: 'restaurant',
+    label: 'Restaurant Management',
+    permissions: [
+      { key: 'restaurant:menu:write', label: 'Manage menu (categories, items, modifiers, combos)' },
+      { key: 'restaurant:floor:write', label: 'Design floor plan & tables' },
+      { key: 'restaurant:operate', label: 'Operate floor (table status, merge/split, seating)' },
+      { key: 'restaurant:order:write', label: 'Take & settle orders (POS)' },
+      { key: 'restaurant:kds:operate', label: 'Operate the Kitchen Display System' },
+      { key: 'restaurant:delivery:dispatch', label: 'Assign & track deliveries' },
+      { key: 'restaurant:print', label: 'Print bills & kitchen tickets (also used by the print agent)' },
+      { key: 'restaurant:report:read', label: 'View restaurant analytics' },
+      { key: 'restaurant:config:write', label: 'Restaurant administration & GL/fiscal config (admin)' },
+    ],
+  },
+  {
     domain: 'ecommerce',
     label: 'Online Store',
     permissions: [

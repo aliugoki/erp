@@ -20,12 +20,14 @@ import { EventBusModule } from './modules/eventbus/event-bus.module';
 import { ConsumersModule } from './modules/consumers/consumers.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
 import { FinanceModule } from './modules/finance/finance.module';
+import { CodesModule } from './modules/codes/codes.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProductionModule } from './modules/production/production.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
+import { RestaurantModule } from './modules/restaurant/restaurant.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { EcommerceModule } from './modules/ecommerce/ecommerce.module';
@@ -76,6 +78,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     HrModule,
     ExpenseClaimsModule,
     FinanceModule,
+    CodesModule,
     InventoryModule,
     CrmModule,
     SalesModule,
@@ -83,6 +86,7 @@ import { RequestContextMiddleware } from './common/request-context/request-conte
     PosModule,
     ProductionModule,
     PharmacyModule,
+    RestaurantModule,
     AssetsModule,
     ProjectsModule,
     EcommerceModule,

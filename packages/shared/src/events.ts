@@ -233,6 +233,102 @@ export interface SubscriptionCanceledV1 {
 }
 
 /** Canonical event type strings. */
+export interface RestaurantOrderPlacedV1 {
+  orderId: string;
+  orderNo: string;
+  branchId: string | null;
+  channel: string;
+  tableId: string | null;
+  guestCount: number;
+  totalMinor: number;
+  currency: string;
+  itemCount: number;
+}
+
+export interface RestaurantOrderConfirmedV1 {
+  orderId: string;
+  orderNo: string;
+  branchId: string | null;
+  ticketCount: number;
+  stations: string[];
+}
+
+export interface RestaurantKdsTicketReadyV1 {
+  orderId: string;
+  ticketId: string;
+  ticketNo: string;
+  stationKey: string;
+  branchId: string | null;
+}
+
+export interface RestaurantOrderServedV1 {
+  orderId: string;
+  orderNo: string;
+  branchId: string | null;
+}
+
+export interface RestaurantBillSettledPaymentV1 {
+  method: string;
+  amountMinor: number;
+  tipMinor: number;
+}
+
+/** The rich settlement event consumed by GL posting, inventory deduction, fiscalization and loyalty. */
+export interface RestaurantBillSettledV1 {
+  orderId: string;
+  orderNo: string;
+  branchId: string | null;
+  channel: string;
+  customerId: string | null;
+  subtotalMinor: number;
+  discountMinor: number;
+  serviceChargeMinor: number;
+  taxMinor: number;
+  tipMinor: number;
+  roundingMinor: number;
+  totalMinor: number;
+  cogsMinor: number;
+  currency: string;
+  payments: RestaurantBillSettledPaymentV1[];
+}
+
+export interface RestaurantOrderVoidedV1 {
+  orderId: string;
+  orderNo: string;
+  branchId: string | null;
+  reason: string | null;
+}
+
+export interface RestaurantDeliveryAssignedV1 {
+  orderId: string;
+  deliveryId: string;
+  deliveryNo: string;
+  branchId: string | null;
+  provider: string;
+  driverEmployeeId: string | null;
+  customerId: string | null;
+  etaMinutes: number | null;
+}
+
+export interface RestaurantDeliveryCompletedV1 {
+  orderId: string;
+  deliveryId: string;
+  deliveryNo: string;
+  branchId: string | null;
+  provider: string;
+}
+
+export interface RestaurantReservationCreatedV1 {
+  reservationId: string;
+  reservationNo: string;
+  branchId: string | null;
+  customerId: string | null;
+  guestName: string | null;
+  guestPhone: string | null;
+  partySize: number;
+  reservedFor: string;
+}
+
 export const EVENT_TYPES = {
   INVENTORY_LOW_STOCK: 'inventory.low_stock.v1',
   FINANCE_INVOICE_PAID: 'finance.invoice_paid.v1',
@@ -257,6 +353,15 @@ export const EVENT_TYPES = {
   SUBSCRIPTION_INVOICE_PAID: 'subscription.invoice_paid.v1',
   SUBSCRIPTION_PAYMENT_FAILED: 'subscription.payment_failed.v1',
   SUBSCRIPTION_CANCELED: 'subscription.canceled.v1',
+  RESTAURANT_ORDER_PLACED: 'restaurant.order_placed.v1',
+  RESTAURANT_ORDER_CONFIRMED: 'restaurant.order_confirmed.v1',
+  RESTAURANT_KDS_TICKET_READY: 'restaurant.kds_ticket_ready.v1',
+  RESTAURANT_ORDER_SERVED: 'restaurant.order_served.v1',
+  RESTAURANT_BILL_SETTLED: 'restaurant.bill_settled.v1',
+  RESTAURANT_ORDER_VOIDED: 'restaurant.order_voided.v1',
+  RESTAURANT_DELIVERY_ASSIGNED: 'restaurant.delivery_assigned.v1',
+  RESTAURANT_DELIVERY_COMPLETED: 'restaurant.delivery_completed.v1',
+  RESTAURANT_RESERVATION_CREATED: 'restaurant.reservation_created.v1',
 } as const;
 
 /** Type → payload binding. The source of truth for typed publish/subscribe. */
@@ -284,6 +389,15 @@ export interface EventPayloads {
   'subscription.invoice_paid.v1': SubscriptionInvoicePaidV1;
   'subscription.payment_failed.v1': SubscriptionPaymentFailedV1;
   'subscription.canceled.v1': SubscriptionCanceledV1;
+  'restaurant.order_placed.v1': RestaurantOrderPlacedV1;
+  'restaurant.order_confirmed.v1': RestaurantOrderConfirmedV1;
+  'restaurant.kds_ticket_ready.v1': RestaurantKdsTicketReadyV1;
+  'restaurant.order_served.v1': RestaurantOrderServedV1;
+  'restaurant.bill_settled.v1': RestaurantBillSettledV1;
+  'restaurant.order_voided.v1': RestaurantOrderVoidedV1;
+  'restaurant.delivery_assigned.v1': RestaurantDeliveryAssignedV1;
+  'restaurant.delivery_completed.v1': RestaurantDeliveryCompletedV1;
+  'restaurant.reservation_created.v1': RestaurantReservationCreatedV1;
 }
 
 export type EventType = keyof EventPayloads;
@@ -296,4 +410,4 @@ export function domainOf(type: string): string {
   return type.split('.')[0] ?? 'unknown';
 }
 
-export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'helpdesk', 'subscription', 'notifications', 'orders'] as const;
+export const EVENT_DOMAINS = ['hr', 'finance', 'inventory', 'crm', 'pos', 'production', 'asset', 'ecommerce', 'helpdesk', 'subscription', 'notifications', 'orders', 'restaurant'] as const;

@@ -72,6 +72,11 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     'pos:sale:write',
     'pos:report:read',
     'pharmacy:operate',
+    'restaurant:order:write',
+    'restaurant:operate',
+    'restaurant:kds:operate',
+    'restaurant:print',
+    'restaurant:report:read',
   ],
   // SUPPORT_AGENT works tickets but does NOT configure teams/SLA (helpdesk:config:write is admin-only).
   [Role.SUPPORT_AGENT]: ['helpdesk:ticket:read', 'helpdesk:ticket:write'],
