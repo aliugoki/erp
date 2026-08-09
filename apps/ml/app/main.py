@@ -7,10 +7,10 @@ search) arrive in Chunks 6.2–6.4.
 """
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 
 from . import __version__
-from . import db, embedding, forecast_service, ocr
+from . import db, embedding, forecast_service, ocr, restaurant
 from .anomaly import detect_anomalies
 from .auth import require_service_token
 from .config import get_settings
@@ -24,6 +24,13 @@ from .contracts import (
     IndexRequest,
     IndexResponse,
     InvoiceExtractResponse,
+    PrepTimeRequest,
+    PrepTimeResponse,
+    RestaurantDemandRequest,
+    RestaurantDemandResponse,
+    UpsellItem,
+    UpsellRequest,
+    UpsellResponse,
     InvoiceLineItem,
     PingResponse,
     RefreshResponse,
@@ -151,6 +158,35 @@ def create_app() -> FastAPI:
             module=req.module,
             hits=[SearchHit(refId=r, content=c, score=round(s, 4)) for r, c, s in rows],
         )
+
+    # ── Restaurant AI (Phase 10) ─────────────────────────────────────────────
+    @app.post("/ml/restaurant/demand", response_model=RestaurantDemandResponse)
+    def restaurant_demand(
+        req: RestaurantDemandRequest, _claims: dict = Depends(require_service_token)
+    ) -> RestaurantDemandResponse:
+        horizon = req.horizon or settings.forecast_default_horizon
+        r = restaurant.demand_forecast(req.tenantId, req.itemId, horizon)
+        log.info("ml_rest_demand", item=req.itemId, model=r["model"], points=r["historyPoints"])
+        return RestaurantDemandResponse(itemId=req.itemId, **r)
+
+    @app.post("/ml/restaurant/prep-time", response_model=PrepTimeResponse)
+    def restaurant_prep_time(
+        req: PrepTimeRequest, _claims: dict = Depends(require_service_token)
+    ) -> PrepTimeResponse:
+        try:
+            r = restaurant.predict_prep_time(req.tenantId, req.itemId)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        log.info("ml_rest_prep", item=req.itemId, eta=r["etaSeconds"], queue=r["queueAhead"])
+        return PrepTimeResponse(**r)
+
+    @app.post("/ml/restaurant/upsell", response_model=UpsellResponse)
+    def restaurant_upsell(
+        req: UpsellRequest, _claims: dict = Depends(require_service_token)
+    ) -> UpsellResponse:
+        suggestions = restaurant.upsell(req.tenantId, req.basket, req.top or 3)
+        log.info("ml_rest_upsell", basket=len(req.basket), suggestions=len(suggestions))
+        return UpsellResponse(suggestions=[UpsellItem(**s) for s in suggestions])
 
     log.info("ml_started", version=__version__, env=settings.env)
     return app

@@ -110,3 +110,51 @@ class SearchResponse(BaseModel):
     query: str
     module: str
     hits: list[SearchHit]
+
+
+# ── Restaurant AI (Phase 10) ─────────────────────────────────────────────────
+class RestaurantDemandRequest(BaseModel):
+    tenantId: str
+    itemId: str
+    horizon: int | None = None
+
+
+class RestaurantDemandResponse(BaseModel):
+    itemId: str
+    horizon: int
+    model: str
+    historyPoints: int
+    forecast: list[float]
+    expectedTotal: float
+
+
+class PrepTimeRequest(BaseModel):
+    tenantId: str
+    itemId: str
+
+
+class PrepTimeResponse(BaseModel):
+    item: str
+    station: str | None = None
+    source: str
+    samples: int
+    queueAhead: int
+    baseSeconds: int
+    etaSeconds: int
+    etaMinutes: float
+
+
+class UpsellRequest(BaseModel):
+    tenantId: str
+    basket: list[str]
+    top: int | None = None
+
+
+class UpsellItem(BaseModel):
+    item: str
+    confidence: float
+    coOccurrences: int
+
+
+class UpsellResponse(BaseModel):
+    suggestions: list[UpsellItem]
