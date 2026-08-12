@@ -159,6 +159,24 @@ check "orders?branchId=BR1 includes it" "$(get "$A" "restaurant/orders?branchId=
 check "orders?branchId=BR2 excludes it" "$(get "$A" "restaurant/orders?branchId=$BR2" | python3 -c "import sys,json;print('$BO' in [o['id'] for o in json.load(sys.stdin)['data']])")" "False"
 check "unknown branch on order → 400" "$(code POST "$A" restaurant/orders "{\"channel\":\"DINE_IN\",\"branchId\":\"$(ownerq 'select gen_random_uuid()')\"}")" "400"
 
+echo "== uniqueness with a NULL branch (the tenant-wide row) =="
+# A tenant-wide table/station carries branch_id NULL, and Postgres counts NULLs as DISTINCT — so
+# (tenant_id, branch_id, code) accepted duplicates for exactly those rows until NULLS NOT DISTINCT.
+check "table code index is NULLS NOT DISTINCT" "$(ownerq "SELECT indexdef ILIKE '%nulls not distinct%' FROM pg_indexes WHERE indexname='uq_restaurant_table_code'")" "t"
+check "station key index is NULLS NOT DISTINCT" "$(ownerq "SELECT indexdef ILIKE '%nulls not distinct%' FROM pg_indexes WHERE indexname='uq_restaurant_station_key'")" "t"
+check "duplicate tenant-wide table code → 400" "$(code POST "$A" restaurant/tables "{\"areaId\":\"$AREA\",\"code\":\"E1\"}")" "400"
+# The same code on a DIFFERENT outlet stays legal: T2 at Gulberg and T2 at DHA are two tables.
+BTB=$(post "$A" restaurant/tables "{\"code\":\"E1\",\"branchId\":\"$BR1\"}" | jget data.id)
+check "same code on another branch allowed" "$([ -n "$BTB" ] && echo yes || echo no)" "yes"
+check "duplicate code within that branch → 400" "$(code POST "$A" restaurant/tables "{\"code\":\"E1\",\"branchId\":\"$BR1\"}")" "400"
+# Stations are reference rows with no create endpoint (seeded/administered), so drive the index itself:
+# the second insert must be rejected, leaving exactly one row.
+ownerq "INSERT INTO restaurant_station (tenant_id, branch_id, key, name) VALUES ('$T1', NULL, 'E2E_GRILL', 'E2E Grill')" >/dev/null
+ownerq "INSERT INTO restaurant_station (tenant_id, branch_id, key, name) VALUES ('$T1', NULL, 'E2E_GRILL', 'E2E Grill Two')" >/dev/null
+check "duplicate tenant-wide station key rejected" "$(ownerq "SELECT count(*) FROM restaurant_station WHERE tenant_id='$T1' AND key='E2E_GRILL' AND deleted_at IS NULL")" "1"
+ownerq "INSERT INTO restaurant_station (tenant_id, branch_id, key, name) VALUES ('$T1', '$BR1', 'E2E_GRILL', 'E2E Grill BR1')" >/dev/null
+check "same station key on another branch allowed" "$(ownerq "SELECT count(*) FROM restaurant_station WHERE tenant_id='$T1' AND key='E2E_GRILL' AND deleted_at IS NULL")" "2"
+
 echo "== printing: registry, routing, spool =="
 # A kitchen printer bound to the station the seeded item routes to, plus the till's receipt printer.
 STATION=$(ownerq "SELECT COALESCE(station_key,'MAIN') FROM restaurant_menu_item WHERE id='$ITEM'")
