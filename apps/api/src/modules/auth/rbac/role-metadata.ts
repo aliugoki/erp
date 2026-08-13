@@ -10,6 +10,7 @@ export const ROLE_METADATA: Record<Role, { name: string; description: string }> 
   [Role.INVENTORY_MANAGER]: { name: 'Inventory', description: 'Manage products and stock.' },
   [Role.SALES_REP]: { name: 'Sales (CRM)', description: 'Manage deals and contacts.' },
   [Role.SUPPORT_AGENT]: { name: 'Support', description: 'Handle help-desk tickets.' },
+  [Role.DRIVER]: { name: 'Delivery Rider', description: 'The rider app: their own delivery runs, nothing else.' },
   [Role.VIEWER]: { name: 'Viewer', description: 'Read-only access across modules.' },
 };
 
@@ -20,6 +21,11 @@ export const CAPABILITY_ROLES: Role[] = [
   Role.INVENTORY_MANAGER,
   Role.SALES_REP,
   Role.SUPPORT_AGENT,
+  // Listed so a company admin can actually create rider logins from the console. It grants exactly
+  // one permission, over the rider's own runs, so it is safe to hand out freely — but note that
+  // blending it into a custom role alongside a broader capability defeats the point of it being
+  // narrow, since the rider's phone then carries whatever else was mixed in.
+  Role.DRIVER,
   Role.VIEWER,
 ];
 

@@ -3,7 +3,7 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, use
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Barcode, Bike, Building2, CalendarClock, Check, ChefHat, ClipboardList, LayoutGrid, ListPlus, Move, Printer, Receipt, ScanLine,
-  Search, Settings2, SlidersHorizontal, Timer, Trash2, UtensilsCrossed, Users,
+  Search, Settings2, SlidersHorizontal, Timer, Trash2, UserRound, UtensilsCrossed, Users,
 } from 'lucide-react';
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { formatMoney } from '@/lib/utils';
@@ -28,8 +28,11 @@ import {
   ReceiptDialog, ReprintKotButton, ScanBox, TableQrPanel, TableQrSheetDialog,
 } from '@/components/restaurant/printing';
 import { RecipeCard } from '@/components/restaurant/recipe';
+import {
+  AssignPicker, CustomerDetail, CustomerList, DriverDetail, DriverList,
+} from '@/components/restaurant/dispatch';
 
-type Section = 'dashboard' | 'pos' | 'scan' | 'menu' | 'modifiers' | 'floor' | 'kds' | 'orders' | 'deliveries' | 'reservations' | 'branches' | 'printers';
+type Section = 'dashboard' | 'pos' | 'scan' | 'menu' | 'modifiers' | 'floor' | 'kds' | 'orders' | 'deliveries' | 'drivers' | 'customers' | 'reservations' | 'branches' | 'printers';
 
 // Poll operational data on a short interval so the whole workspace reads as live.
 const LIVE = 6000;
@@ -141,6 +144,8 @@ export default function RestaurantPage() {
       <div className="my-1 border-t" />
       <RailItem icon={Receipt} label="Orders" count={openOrders.length} active={section === 'orders'} onClick={() => pick('orders')} tone="emerald" />
       <RailItem icon={Bike} label="Deliveries" count={activeDeliveries.length} active={section === 'deliveries'} onClick={() => pick('deliveries')} tone="sky" />
+      <RailItem icon={Users} label="Riders" active={section === 'drivers'} onClick={() => pick('drivers')} tone="sky" />
+      <RailItem icon={UserRound} label="Customers" active={section === 'customers'} onClick={() => pick('customers')} tone="emerald" />
       <RailItem icon={CalendarClock} label="Reservations" count={upcomingReservations.length} active={section === 'reservations'} onClick={() => pick('reservations')} tone="rose" />
       <div className="my-1 border-t" />
       <RailItem icon={Building2} label="Branches" count={branches.data?.length} active={section === 'branches'} onClick={() => pick('branches')} tone="violet" />
@@ -229,6 +234,10 @@ export default function RestaurantPage() {
             )}
           </PaneBody>
         </>
+      ) : section === 'drivers' ? (
+        <DriverList branchId={branchId} sel={sel} onSelect={setSel} />
+      ) : section === 'customers' ? (
+        <CustomerList sel={sel} onSelect={setSel} search={q} />
       ) : section === 'deliveries' ? (
         <>
           <PaneHeader><span className="flex-1 text-sm font-medium">Deliveries</span><LiveDot /></PaneHeader>
@@ -236,7 +245,7 @@ export default function RestaurantPage() {
             {deliveries.isLoading ? <Spinner /> : (deliveries.data ?? []).length === 0 ? <Hint>No deliveries yet.</Hint> : (
               <ul className="divide-y">{(deliveries.data ?? []).map((d) => (
                 <li key={d.id}><ListRow active={sel === d.id} onClick={() => setSel(d.id)}>
-                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{d.deliveryNo}</div><div className="truncate text-xs text-muted-foreground">{d.provider} · {d.orderNo}{d.etaMinutes != null ? ` · ETA ${d.etaMinutes}m` : ''}</div></div>
+                  <div className="min-w-0 flex-1"><div className="truncate font-medium">{d.deliveryNo}</div><div className="truncate text-xs text-muted-foreground">{d.provider} · {d.orderNo}{d.driver ? ` · ${d.driver.name}` : ''}{d.etaMinutes != null ? ` · ETA ${d.etaMinutes}m` : ''}</div></div>
                   <StatusBadge status={d.status} />
                 </ListRow></li>
               ))}</ul>
@@ -297,7 +306,9 @@ export default function RestaurantPage() {
         : section === 'modifiers' ? (sel ? <ModifierGroupDetailView group={groupDetail.data} loading={groupDetail.isLoading} onBack={clear} /> : <EmptyDetail icon={SlidersHorizontal} title="Select a group" hint="Add options with price deltas (e.g. Extra cheese +1.00), then attach the group to menu items." />)
         : section === 'menu' ? (sel ? <ItemDetail item={itemDetail.data} loading={itemDetail.isLoading} categories={categories.data ?? []} groups={modGroups.data ?? []} products={products.data ?? []} recipe={recipe.data} recipeLoading={recipe.isLoading} onBack={clear} onDeleted={clear} /> : <EmptyDetail icon={UtensilsCrossed} title="Select an item" hint="View the photo, pricing, station routing and prep time." />)
         : section === 'orders' ? (sel ? <OrderDetail order={(orders.data ?? []).find((o) => o.id === sel)} onBack={clear} /> : <EmptyDetail icon={Receipt} title="Select an order" hint="Open a bill to see its channel, table and total." />)
-        : section === 'deliveries' ? (sel ? <DeliveryDetail row={(deliveries.data ?? []).find((d) => d.id === sel)} onBack={clear} /> : <EmptyDetail icon={Bike} title="Select a delivery" hint="Track a job from dispatch to doorstep." />)
+        : section === 'deliveries' ? (sel ? <DeliveryDetail row={(deliveries.data ?? []).find((d) => d.id === sel)} branchId={branchId} onBack={clear} /> : <EmptyDetail icon={Bike} title="Select a delivery" hint="Track a job from dispatch to doorstep." />)
+        : section === 'drivers' ? (sel ? <DriverDetail driverId={sel} onBack={clear} /> : <EmptyDetail icon={Users} title="Select a rider" hint="Start or end a shift, see who is carrying what, and link the login they sign into the rider app with." />)
+        : section === 'customers' ? (sel ? <CustomerDetail customerId={sel} onBack={clear} /> : <EmptyDetail icon={UserRound} title="Select a customer" hint="Their saved addresses, order history, and the block switch for a nuisance caller." />)
         : (sel ? <ReservationDetail row={(reservations.data ?? []).find((r) => r.id === sel)} onBack={clear} /> : <EmptyDetail icon={CalendarClock} title="Select a reservation" hint="See the booking, party size and held table." />)}
     </Pane>
   );
@@ -743,9 +754,8 @@ function DeliveryOtpPanel({ deliveryId }: { deliveryId: string }) {
   );
 }
 
-function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void }) {
+function DeliveryDetail({ row, branchId, onBack }: { row?: DeliveryRow; branchId?: string | null; onBack: () => void }) {
   const act = useRestAction();
-  const [driver, setDriver] = useState('');
   const [otp, setOtp] = useState('');
   if (!row) return <EmptyDetail icon={Bike} title="Delivery" hint="Select a delivery." />;
   const post = (verb: string, ok: string, body?: unknown) => act.mutate({ run: () => apiPost(`/restaurant/deliveries/${row.id}/${verb}`, body), ok, keys: ['rest-deliveries', 'rest-orders'] });
@@ -757,7 +767,7 @@ function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void
       <dl className="grid max-w-md grid-cols-2 gap-4 text-sm">
         <Field label="Provider" value={row.provider} />
         <Field label="Order" value={row.orderNo} />
-        <Field label="Driver" value={row.driverEmployeeId ?? 'Unassigned'} />
+        <Field label="Rider" value={row.driver ? `${row.driver.name}${row.driver.phone ? ` · ${row.driver.phone}` : ''}` : 'Unassigned'} />
         <Field label="ETA" value={row.etaMinutes == null ? '—' : `${row.etaMinutes} min`} />
         <Field label="Assigned" value={fmtDateTime(row.assignedAt)} />
         <Field label="Delivered" value={fmtDateTime(row.deliveredAt)} />
@@ -767,9 +777,11 @@ function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void
         <div className="mt-6 max-w-md space-y-3 rounded-xl border p-4">
           <p className="text-sm font-semibold">Dispatch</p>
           {canAssign ? (
-            <div className="flex gap-2">
-              <Input value={driver} onChange={(e) => setDriver(e.target.value)} placeholder="Driver employee UUID" className="h-9" />
-              <Button size="sm" className="h-9" disabled={!driver.trim() || act.isPending} onClick={() => post('assign', 'Driver assigned', { driverEmployeeId: driver.trim() })}>Assign</Button>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {row.driver ? 'Reassign to another rider:' : 'Pick a rider:'}
+              </p>
+              <AssignPicker deliveryId={row.id} branchId={branchId} />
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">

@@ -6,7 +6,9 @@ import {
   computeMenuLine,
   formatDocNo,
   money,
+  normalisePhone,
   opensDeliveryJob,
+  phoneSearchKey,
   recipeConsumedMilli,
   resolveMenuPrice,
   rowsOf,
@@ -113,6 +115,53 @@ describe('restaurant.util', () => {
     it('treats DELIVERED/FAILED/CANCELLED as terminal', () => {
       expect(canTransitionDelivery('DELIVERED', 'EN_ROUTE')).toBe(false);
       expect(canTransitionDelivery('CANCELLED', 'ASSIGNED')).toBe(false);
+    });
+  });
+
+  describe('normalisePhone', () => {
+    it('collapses every spelling of one Lahore mobile to a single key', () => {
+      // The whole point: these are one customer, not four.
+      const forms = ['0300 123 4567', '+92 300 1234567', '92-300-1234567', '(0300) 1234567'];
+      const keys = new Set(forms.map((f) => normalisePhone(f)));
+      expect(keys.size).toBe(1);
+      expect([...keys][0]).toBe('+923001234567');
+    });
+    it('treats a leading 00 as the international prefix', () => {
+      expect(normalisePhone('0092 300 1234567')).toBe('+923001234567');
+    });
+    it('adds the country code to a bare local number', () => {
+      expect(normalisePhone('3001234567')).toBe('+923001234567');
+    });
+    it('leaves a foreign number alone rather than forcing +92 onto it', () => {
+      expect(normalisePhone('+442071234567')).toBe('+442071234567');
+    });
+    it('rejects what cannot be dialled, instead of storing an unmatchable record', () => {
+      expect(normalisePhone('12345')).toBeNull();
+      expect(normalisePhone('9999999999999999999')).toBeNull();
+      expect(normalisePhone('not a phone')).toBeNull();
+      expect(normalisePhone('')).toBeNull();
+      expect(normalisePhone(null)).toBeNull();
+    });
+  });
+
+  describe('phoneSearchKey', () => {
+    // The bug this exists for: staff type the number the way the customer says it, and the naive
+    // digit match found nothing because the stored form has already turned the leading 0 into 92.
+    const STORED = '+923001234567'.replace('+', '');
+    it('matches the stored number from the local spelling staff actually type', () => {
+      const key = phoneSearchKey('0300 123');
+      expect(key).toBe('300123');
+      expect(STORED.includes(key!)).toBe(true);
+    });
+    it('matches from the international spelling too', () => {
+      for (const term of ['+92 300 123', '0092300123', '92300123', '300123']) {
+        expect(STORED.includes(phoneSearchKey(term)!)).toBe(true);
+      }
+    });
+    it('returns null for a name search, so it is not turned into a phone search', () => {
+      expect(phoneSearchKey('Ayesha')).toBeNull();
+      expect(phoneSearchKey('')).toBeNull();
+      expect(phoneSearchKey(null)).toBeNull();
     });
   });
 

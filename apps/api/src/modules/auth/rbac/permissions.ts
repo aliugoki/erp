@@ -80,6 +80,12 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   // SUPPORT_AGENT works tickets but does NOT configure teams/SLA (helpdesk:config:write is admin-only).
   [Role.SUPPORT_AGENT]: ['helpdesk:ticket:read', 'helpdesk:ticket:write'],
+  // Exactly one permission, and it only opens the /restaurant/driver/* surface, every route of which
+  // is filtered to the runs assigned to this rider. Note what is NOT here: `delivery:dispatch` (which
+  // would expose the whole branch board and let a rider assign work to themselves) and
+  // `order:write` — the pair that gates the door code. A rider cannot read the code they are about
+  // to be quoted, which is the entire point of the check.
+  [Role.DRIVER]: ['restaurant:delivery:run'],
   [Role.VIEWER]: [
     'hr:employee:read',
     'finance:invoice:read',

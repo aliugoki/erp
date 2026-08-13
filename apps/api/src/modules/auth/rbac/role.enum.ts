@@ -7,6 +7,12 @@ export enum Role {
   INVENTORY_MANAGER = 'INVENTORY_MANAGER',
   SALES_REP = 'SALES_REP',
   SUPPORT_AGENT = 'SUPPORT_AGENT', // handles help-desk tickets
+  // A delivery rider. Deliberately the narrowest role in the system: it carries exactly one
+  // permission, and every route it reaches is scoped to that rider's OWN runs. A rider signs in on a
+  // phone that lives in a jacket pocket and gets left on counters, so the blast radius of that device
+  // in the wrong hands is one rider's job list — not the branch's order book, and not the door codes,
+  // which the rider must still be told by the customer at the step.
+  DRIVER = 'DRIVER',
   VIEWER = 'VIEWER', // read-only
 }
 

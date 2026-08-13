@@ -25,6 +25,15 @@ import {
   GenerateBarcodeDto,
   AssignChefDto,
   AssignDriverDto,
+  BlockCustomerDto,
+  CreateCustomerAddressDto,
+  CreateCustomerDto,
+  CreateDriverDto,
+  ListCustomersQueryDto,
+  ListDriversQueryDto,
+  SetDutyStatusDto,
+  UpdateCustomerDto,
+  UpdateDriverDto,
   AttachModifierGroupDto,
   CompleteDeliveryDto,
   CreateDeliveryDto,
@@ -78,6 +87,8 @@ import { RestaurantOrderService } from './order.service';
 import { RestaurantRecipeService } from './recipe.service';
 import { RestaurantGlService } from './restaurant-gl.service';
 import { RestaurantDeliveryService } from './delivery.service';
+import { RestaurantDriverService } from './driver.service';
+import { RestaurantCustomerService } from './customer.service';
 import { RestaurantReservationService } from './reservation.service';
 import { RestaurantFiscalConfigService } from './fiscal/fiscal-config.service';
 import { RestaurantPrinterService } from './printing/printer.service';
@@ -104,6 +115,8 @@ export class RestaurantController {
     private readonly recipes: RestaurantRecipeService,
     private readonly glConfig: RestaurantGlService,
     private readonly delivery: RestaurantDeliveryService,
+    private readonly drivers: RestaurantDriverService,
+    private readonly customers: RestaurantCustomerService,
     private readonly reservations: RestaurantReservationService,
     private readonly fiscalConfig: RestaurantFiscalConfigService,
     private readonly printers: RestaurantPrinterService,
@@ -541,6 +554,94 @@ export class RestaurantController {
   @Permissions('restaurant:delivery:dispatch')
   failDelivery(@Param('id', ParseUUIDPipe) id: string, @Body() dto: FailDeliveryDto) {
     return this.delivery.fail(id, dto);
+  }
+
+  // ── Rider roster ────────────────────────────────────────────────────────────────
+  /**
+   * The roster a dispatcher assigns from — who is on duty, how many runs each holds, and which one
+   * the system would pick. This is what replaces typing an employee UUID into a text box.
+   */
+  @Get('drivers')
+  @Permissions('restaurant:delivery:dispatch')
+  listDrivers(@Query() query: ListDriversQueryDto) {
+    return this.drivers.roster(query);
+  }
+
+  @Post('drivers')
+  @Permissions('restaurant:driver:manage')
+  createDriver(@Body() dto: CreateDriverDto) {
+    return this.drivers.create(dto);
+  }
+
+  @Get('drivers/:id')
+  @Permissions('restaurant:delivery:dispatch')
+  getDriver(@Param('id', ParseUUIDPipe) id: string) {
+    return this.drivers.get(id);
+  }
+
+  @Patch('drivers/:id')
+  @Permissions('restaurant:driver:manage')
+  updateDriver(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDriverDto) {
+    return this.drivers.update(id, dto);
+  }
+
+  /** A manager clocking a rider on or off; the rider does the same for themselves at /driver/duty. */
+  @Post('drivers/:id/duty')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('restaurant:delivery:dispatch')
+  setDriverDuty(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetDutyStatusDto) {
+    return this.drivers.setDuty(id, dto);
+  }
+
+  @Delete('drivers/:id')
+  @Permissions('restaurant:driver:manage')
+  removeDriver(@Param('id', ParseUUIDPipe) id: string) {
+    return this.drivers.remove(id);
+  }
+
+  // ── Customers ───────────────────────────────────────────────────────────────────
+  @Get('customers')
+  @Permissions('restaurant:customer:manage')
+  listCustomers(@Query() query: ListCustomersQueryDto) {
+    return this.customers.list(query);
+  }
+
+  @Post('customers')
+  @Permissions('restaurant:customer:manage')
+  createCustomer(@Body() dto: CreateCustomerDto) {
+    return this.customers.create(dto);
+  }
+
+  @Get('customers/:id')
+  @Permissions('restaurant:customer:manage')
+  getCustomer(@Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.get(id);
+  }
+
+  @Patch('customers/:id')
+  @Permissions('restaurant:customer:manage')
+  updateCustomer(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCustomerDto) {
+    return this.customers.update(id, dto);
+  }
+
+  @Get('customers/:id/orders')
+  @Permissions('restaurant:customer:manage')
+  customerOrders(@Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.orders(id);
+  }
+
+  /** Blocking stops new orders. It never hides history — a dispute needs the record intact. */
+  @Post('customers/:id/block')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('restaurant:customer:manage')
+  blockCustomer(@Param('id', ParseUUIDPipe) id: string, @Body() dto: BlockCustomerDto) {
+    return this.customers.setBlocked(id, dto);
+  }
+
+  @Post('customers/:id/addresses')
+  @Permissions('restaurant:customer:manage')
+  addCustomerAddress(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateCustomerAddressDto) {
+    return this.customers.addAddress(id, dto);
   }
 
   @Post('deliveries/aggregator/:provider')

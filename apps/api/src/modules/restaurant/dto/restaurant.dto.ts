@@ -313,7 +313,14 @@ export class CreateDeliveryDto {
 }
 
 export class AssignDriverDto {
-  @IsUUID() driverEmployeeId!: string;
+  /** A rider on the roster. The way dispatch names someone now. */
+  @IsOptional() @IsUUID() driverId?: string;
+  /**
+   * Legacy: dispatch used to name a bare employee UUID typed in by hand. Still accepted so existing
+   * callers keep working — it is resolved through the roster, and an employee with no rider record is
+   * now a clear error rather than a delivery pointing at a UUID that means nothing.
+   */
+  @IsOptional() @IsUUID() driverEmployeeId?: string;
   @IsOptional() @IsInt() @Min(0) etaMinutes?: number;
 }
 
@@ -538,4 +545,141 @@ export class GenerateBarcodeDto {
 export class PrintLabelDto {
   @IsOptional() @IsInt() @Min(1) copies?: number;
   @IsOptional() @IsString() caption?: string;
+}
+
+// ── Riders ───────────────────────────────────────────────────────────────────────
+export const VEHICLE_TYPES = ['BIKE', 'SCOOTER', 'BICYCLE', 'CAR', 'VAN', 'ON_FOOT'] as const;
+export const DUTY_STATUSES = ['OFF_DUTY', 'AVAILABLE', 'ON_RUN'] as const;
+/** What a rider may set for themselves. `ON_RUN` is derived from held work, never asked for. */
+export const SETTABLE_DUTY_STATUSES = ['OFF_DUTY', 'AVAILABLE'] as const;
+
+export class CreateDriverDto {
+  @IsString() @MinLength(1) @MaxLength(40) driverCode!: string;
+  @IsString() @MinLength(1) @MaxLength(120) displayName!: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsUUID() branchId?: string;
+  /** Optional: contractor riders have no HR record, and must still be dispatchable. */
+  @IsOptional() @IsUUID() employeeId?: string;
+  /** The login the rider signs into the driver app with. */
+  @IsOptional() @IsUUID() userId?: string;
+  @IsOptional() @IsIn(VEHICLE_TYPES) vehicleType?: (typeof VEHICLE_TYPES)[number];
+  @IsOptional() @IsString() @MaxLength(20) vehiclePlate?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(10) maxConcurrentRuns?: number;
+}
+
+export class UpdateDriverDto {
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(120) displayName?: string;
+  /**
+   * Link (or move) the login this rider signs into the app with.
+   *
+   * Updatable, not create-only: a rider is almost always rostered before IT issues their account, so
+   * the roster deliberately accepts a rider with no login and shows "no login" until this is set.
+   */
+  @IsOptional() @IsUUID() userId?: string;
+  /** Link an HR record to a rider who started as a contractor and has since been taken on. */
+  @IsOptional() @IsUUID() employeeId?: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsUUID() branchId?: string;
+  @IsOptional() @IsIn(VEHICLE_TYPES) vehicleType?: (typeof VEHICLE_TYPES)[number];
+  @IsOptional() @IsString() @MaxLength(20) vehiclePlate?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(10) maxConcurrentRuns?: number;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
+export class SetDutyStatusDto {
+  @IsIn(SETTABLE_DUTY_STATUSES) dutyStatus!: (typeof SETTABLE_DUTY_STATUSES)[number];
+}
+
+export class ListDriversQueryDto {
+  @IsOptional() @IsUUID() branchId?: string;
+  @IsOptional() @IsIn(DUTY_STATUSES) dutyStatus?: (typeof DUTY_STATUSES)[number];
+  @IsOptional() @IsBoolean() @Type(() => Boolean) active?: boolean;
+}
+
+// ── Customers ────────────────────────────────────────────────────────────────────
+export const ADDRESS_LABELS = ['HOME', 'WORK', 'OTHER'] as const;
+
+export class CreateCustomerDto {
+  @IsString() @MinLength(6) @MaxLength(40) phone!: string;
+  @IsOptional() @IsString() @MaxLength(120) name?: string;
+  @IsOptional() @IsString() @MaxLength(160) email?: string;
+  @IsOptional() @IsBoolean() marketingOptIn?: boolean;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
+export class UpdateCustomerDto {
+  @IsOptional() @IsString() @MinLength(6) @MaxLength(40) phone?: string;
+  @IsOptional() @IsString() @MaxLength(120) name?: string;
+  @IsOptional() @IsString() @MaxLength(160) email?: string;
+  @IsOptional() @IsBoolean() marketingOptIn?: boolean;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
+export class BlockCustomerDto {
+  @IsBoolean() blocked!: boolean;
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+export class ListCustomersQueryDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsBoolean() @Type(() => Boolean) blocked?: boolean;
+  @IsOptional() @IsInt() @Min(1) @Type(() => Number) limit?: number;
+}
+
+export class CreateCustomerAddressDto {
+  @IsString() @MinLength(5) @MaxLength(500) address!: string;
+  @IsOptional() @IsIn(ADDRESS_LABELS) label?: (typeof ADDRESS_LABELS)[number];
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) geoLat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) geoLng?: number;
+  @IsOptional() @IsString() @MaxLength(300) directions?: string;
+  @IsOptional() @IsBoolean() isDefault?: boolean;
+}
+
+export class UpdateCustomerAddressDto {
+  @IsOptional() @IsString() @MinLength(5) @MaxLength(500) address?: string;
+  @IsOptional() @IsIn(ADDRESS_LABELS) label?: (typeof ADDRESS_LABELS)[number];
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) geoLat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) geoLng?: number;
+  @IsOptional() @IsString() @MaxLength(300) directions?: string;
+  @IsOptional() @IsBoolean() isDefault?: boolean;
+}
+
+// ── Customer sign-in ─────────────────────────────────────────────────────────────
+export class RequestOtpDto {
+  /**
+   * Which restaurant, by tenant slug (e.g. `karahi-point-demo`).
+   *
+   * Required because these two routes are the only customer endpoints reached without a token, so
+   * there is no tenant on the request yet and RLS would otherwise see none. Same mechanism the public
+   * storefront uses. Every later call carries the tenant inside the customer token instead.
+   */
+  @IsString() @MinLength(1) @MaxLength(120) restaurant!: string;
+  @IsString() @MinLength(6) @MaxLength(40) phone!: string;
+}
+
+export class VerifyOtpDto {
+  @IsString() @MinLength(1) @MaxLength(120) restaurant!: string;
+  @IsString() @MinLength(6) @MaxLength(40) phone!: string;
+  @IsString() @MinLength(4) @MaxLength(10) otp!: string;
+  /** Offered on first sign-in so the very first order already carries a name. */
+  @IsOptional() @IsString() @MaxLength(120) name?: string;
+}
+
+// ── Customer ordering ────────────────────────────────────────────────────────────
+/** The channels a customer may pick for themselves. Dine-in and drive-thru are taken at the outlet. */
+export const CUSTOMER_CHANNELS = ['DELIVERY', 'TAKEAWAY'] as const;
+
+export class PlaceCustomerOrderDto {
+  @IsOptional() @IsUUID() branchId?: string;
+  @IsIn(CUSTOMER_CHANNELS) channel!: (typeof CUSTOMER_CHANNELS)[number];
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => OrderItemInputDto) items!: OrderItemInputDto[];
+  /** Deliver to a saved address. Preferred over `address` — it is already geocoded and proven. */
+  @IsOptional() @IsUUID() addressId?: string;
+  /** A one-off address typed at checkout, when nothing suitable is saved. */
+  @IsOptional() @IsString() @MaxLength(500) address?: string;
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) geoLat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) geoLng?: number;
+  /** Saves a one-off address to the book, so the next order is one tap. */
+  @IsOptional() @IsBoolean() saveAddress?: boolean;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }

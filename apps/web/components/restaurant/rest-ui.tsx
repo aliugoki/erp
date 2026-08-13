@@ -149,6 +149,9 @@ export interface DeliveryRow {
   branchId: string | null;
   provider: string;
   driverEmployeeId: string | null;
+  driverId: string | null;
+  /** The rider as a person — a board should print a name, never a UUID. */
+  driver: { id: string; name: string; phone: string | null; vehicleType: string } | null;
   status: string;
   address: string | null;
   etaMinutes: number | null;

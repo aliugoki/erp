@@ -101,6 +101,59 @@ export function opensDeliveryJob(channel: string): boolean {
   return channel === 'DELIVERY';
 }
 
+/** Pakistan's country code — the default for a bare local number. */
+const DEFAULT_COUNTRY_CODE = '92';
+
+/**
+ * Reduce a typed phone number to the single form a customer is keyed on.
+ *
+ * A customer is identified by phone, so every spelling of one number must collapse to one value or
+ * the same person becomes three records and loses their history and saved addresses between orders.
+ * Real inputs for a single Lahore mobile: `0300 123 4567`, `+92 300 1234567`, `92-300-1234567`,
+ * `(0300) 1234567`.
+ *
+ * Rules: drop everything that is not a digit; a leading `00` is the international prefix and goes; a
+ * leading `0` is the national trunk prefix and is replaced by the country code; a number already
+ * carrying the country code is left alone. Stored as `+<digits>`.
+ *
+ * Returns null for anything too short or too long to dial, so a typo is a clean rejection rather than
+ * a customer record nobody can match again.
+ */
+export function normalisePhone(input: string | null | undefined, countryCode = DEFAULT_COUNTRY_CODE): string | null {
+  if (!input) return null;
+  let digits = input.replace(/\D+/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  else if (digits.startsWith('0')) digits = countryCode + digits.replace(/^0+/, '');
+  else if (!digits.startsWith(countryCode) && digits.length <= 10) digits = countryCode + digits;
+  // E.164 caps a number at 15 digits; under 8 cannot be dialable once a country code is included.
+  if (digits.length < 8 || digits.length > 15) return null;
+  return `+${digits}`;
+}
+
+/**
+ * Reduce a typed search term to digits that will actually match a stored phone.
+ *
+ * Staff search for the number the way the customer says it on the phone — "0300 123" — but the stored
+ * form is `+923001234567`, where that leading `0` has already become `92`. The literal digits
+ * `0300123` therefore appear nowhere in the stored value and a substring search finds nothing, which
+ * is exactly what a counter would report as "the system can't find my customer".
+ *
+ * Stripping the international prefix, the country code and the trunk `0` leaves the national
+ * significant number (`300123`), which IS a substring of the stored digits — so a partial search
+ * works from either spelling. Returns null when the term has no digits, so a name search is not
+ * silently turned into a phone search for nothing.
+ */
+export function phoneSearchKey(input: string | null | undefined, countryCode = DEFAULT_COUNTRY_CODE): string | null {
+  if (!input) return null;
+  let digits = input.replace(/\D+/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith(countryCode)) digits = digits.slice(countryCode.length);
+  digits = digits.replace(/^0+/, '');
+  return digits || null;
+}
+
 export type ReservationStatus =
   | 'BOOKED'
   | 'WAITLIST'

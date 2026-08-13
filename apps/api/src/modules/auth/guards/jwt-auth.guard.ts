@@ -18,6 +18,8 @@ interface AccessTokenPayload {
   tenantId: string;
   roles?: string[];
   perms?: string[];
+  /** Principal kind. Absent on staff tokens, which predate any other kind existing. */
+  typ?: string;
 }
 
 /**
@@ -59,6 +61,17 @@ export class JwtAuthGuard implements CanActivate {
     // Every principal is bound to exactly one tenant; reject tokens that carry none (ADR-002).
     if (!payload.tenantId) {
       throw new UnauthorizedException('Token is not bound to a tenant');
+    }
+
+    // A non-staff principal must never authenticate here, even holding a signature this guard can
+    // verify. A restaurant customer token carries a tenant and no roles, so without this check it was
+    // admitted as a staff user with an empty role set — which satisfies every route that requires
+    // authentication but no specific permission, including reading the branch's orders and the
+    // tenant's HR directory. Customer tokens are also signed with a derived secret this guard cannot
+    // verify; this check is the belt to that pair of braces, and must survive any future change that
+    // unifies the secrets again.
+    if (payload.typ && payload.typ !== 'staff') {
+      throw new UnauthorizedException('Not a staff token');
     }
 
     const user: AuthenticatedUser = {

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { randomInt } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import {
@@ -24,6 +24,7 @@ import {
   canTransitionDelivery,
   formatDocNo,
 } from './restaurant.util';
+import { RestaurantDriverService } from './driver.service';
 
 type Mgr = EntityManager;
 const isFk = (e: unknown) => (e as { code?: string })?.code === '23503';
@@ -46,6 +47,7 @@ export class RestaurantDeliveryService {
   constructor(
     private readonly tenantTx: TenantTransactionService,
     private readonly outbox: OutboxService,
+    private readonly drivers: RestaurantDriverService,
   ) {}
 
   private async nextDocNo(m: Mgr): Promise<string> {
@@ -112,34 +114,64 @@ export class RestaurantDeliveryService {
     }
   }
 
+  /**
+   * Put a rider's name against a job.
+   *
+   * Takes `driverId` — a row on the rider roster — rather than the bare employee UUID dispatch used
+   * to ask a human to type. `driverEmployeeId` is still accepted so existing callers keep working,
+   * and is resolved through the roster; an employee with no rider record is now a clear error instead
+   * of a delivery assigned to a UUID that means nothing.
+   *
+   * Capacity and duty are checked before the write (a rider who went home cannot be handed a run),
+   * and duty is re-derived after it, which is what flips them to `ON_RUN` without anyone remembering
+   * to.
+   */
   async assign(deliveryId: string, dto: AssignDriverDto) {
     return this.tenantTx.run(async (m) => {
       const d = await this.loadHeader(m, deliveryId);
       if (!canTransitionDelivery(d.status as DeliveryStatus, 'ASSIGNED')) throw new UnprocessableEntityException(`Cannot assign a ${d.status} delivery`);
+
+      const driverId = dto.driverId ?? (dto.driverEmployeeId ? await this.drivers.driverIdForEmployee(m, dto.driverEmployeeId) : null);
+      if (!driverId) throw new BadRequestException('Name a rider to assign (driverId)');
+      const driver = await this.drivers.assertCanTake(m, driverId);
+
+      const previousDriverId = d.driverId;
       await m.query(
-        `UPDATE restaurant_delivery SET driver_employee_id=$2, eta_minutes=COALESCE($3, eta_minutes), status='ASSIGNED', assigned_at=now(), updated_at=now() WHERE id=$1`,
-        [deliveryId, dto.driverEmployeeId, dto.etaMinutes ?? null],
+        `UPDATE restaurant_delivery
+            SET driver_id=$2, driver_employee_id=$3, eta_minutes=COALESCE($4, eta_minutes),
+                status='ASSIGNED', assigned_at=now(), updated_at=now()
+          WHERE id=$1`,
+        [deliveryId, driverId, driver.employeeId, dto.etaMinutes ?? null],
       );
+      // A reassignment frees the rider who was holding it, or they stay ON_RUN forever.
+      if (previousDriverId && previousDriverId !== driverId) await this.drivers.syncDuty(m, previousDriverId);
+      await this.drivers.syncDuty(m, driverId);
+
       const payload: RestaurantDeliveryAssignedV1 = {
         orderId: d.orderId, deliveryId, deliveryNo: d.deliveryNo, branchId: d.branchId, provider: d.provider,
-        driverEmployeeId: dto.driverEmployeeId, customerId: d.customerId, etaMinutes: dto.etaMinutes ?? d.etaMinutes,
+        driverEmployeeId: driver.employeeId ?? driverId, customerId: d.customerId, etaMinutes: dto.etaMinutes ?? d.etaMinutes,
       };
       await this.outbox.write(m, EVENT_TYPES.RESTAURANT_DELIVERY_ASSIGNED, payload);
       return this.getInTx(m, deliveryId);
     });
   }
 
-  async pickup(deliveryId: string) {
-    return this.advance(deliveryId, 'PICKED_UP', 'picked_up_at');
+  async pickup(deliveryId: string, actingDriverId?: string) {
+    return this.advance(deliveryId, 'PICKED_UP', 'picked_up_at', actingDriverId);
   }
 
-  async enroute(deliveryId: string) {
-    return this.advance(deliveryId, 'EN_ROUTE', null);
+  async enroute(deliveryId: string, actingDriverId?: string) {
+    return this.advance(deliveryId, 'EN_ROUTE', null, actingDriverId);
   }
 
-  private async advance(deliveryId: string, to: DeliveryStatus, stampCol: string | null) {
+  /**
+   * @param actingDriverId when present, the job must belong to that rider — the rider app's guarantee
+   * that one rider cannot advance another's run.
+   */
+  private async advance(deliveryId: string, to: DeliveryStatus, stampCol: string | null, actingDriverId?: string) {
     return this.tenantTx.run(async (m) => {
       const d = await this.loadHeader(m, deliveryId);
+      if (actingDriverId && d.driverId !== actingDriverId) throw new ForbiddenException('That run is not assigned to you');
       if (!canTransitionDelivery(d.status as DeliveryStatus, to)) throw new UnprocessableEntityException(`Cannot move a ${d.status} delivery to ${to}`);
       const stamp = stampCol ? `, ${stampCol}=now()` : '';
       await m.query(`UPDATE restaurant_delivery SET status=$2${stamp}, updated_at=now() WHERE id=$1`, [deliveryId, to]);
@@ -147,9 +179,10 @@ export class RestaurantDeliveryService {
     });
   }
 
-  async track(deliveryId: string, dto: TrackLocationDto) {
+  async track(deliveryId: string, dto: TrackLocationDto, actingDriverId?: string) {
     return this.tenantTx.run(async (m) => {
       const d = await this.loadHeader(m, deliveryId);
+      if (actingDriverId && d.driverId !== actingDriverId) throw new ForbiddenException('That run is not assigned to you');
       if (!ACTIVE.includes(d.status)) throw new UnprocessableEntityException(`Cannot track a ${d.status} delivery`);
       await m.query(
         `INSERT INTO restaurant_delivery_track (tenant_id, delivery_id, geo_lat, geo_lng, speed_kph)
@@ -157,29 +190,73 @@ export class RestaurantDeliveryService {
         [deliveryId, dto.geoLat, dto.geoLng, dto.speedKph ?? null],
       );
       await m.query(`UPDATE restaurant_delivery SET geo_lat=$2, geo_lng=$3, updated_at=now() WHERE id=$1`, [deliveryId, dto.geoLat, dto.geoLng]);
+      // The rider's own position is the same fact as the job's, and the roster reads it to show who
+      // is actually out there — so one ping updates both.
+      if (d.driverId) await this.drivers.touch(m, d.driverId, { lat: dto.geoLat, lng: dto.geoLng });
       return { deliveryId, recorded: true, geo: { lat: dto.geoLat, lng: dto.geoLng } };
     });
   }
 
-  async complete(deliveryId: string, dto: CompleteDeliveryDto) {
+  async complete(deliveryId: string, dto: CompleteDeliveryDto, actingDriverId?: string) {
     return this.tenantTx.run(async (m) => {
       const d = await this.loadHeader(m, deliveryId);
+      if (actingDriverId && d.driverId !== actingDriverId) throw new ForbiddenException('That run is not assigned to you');
       if (!canTransitionDelivery(d.status as DeliveryStatus, 'DELIVERED')) throw new UnprocessableEntityException(`Cannot complete a ${d.status} delivery`);
       if (d.provider === 'OWN') {
         if (!d.otpCode || d.otpCode !== dto.otp) throw new UnprocessableEntityException('Invalid delivery OTP');
       }
       await m.query(`UPDATE restaurant_delivery SET status='DELIVERED', delivered_at=now(), updated_at=now() WHERE id=$1`, [deliveryId]);
+      // Free the rider for the next drop the moment this one closes.
+      await this.drivers.syncDuty(m, d.driverId);
       const payload: RestaurantDeliveryCompletedV1 = { orderId: d.orderId, deliveryId, deliveryNo: d.deliveryNo, branchId: d.branchId, provider: d.provider };
       await this.outbox.write(m, EVENT_TYPES.RESTAURANT_DELIVERY_COMPLETED, payload);
       return this.getInTx(m, deliveryId);
     });
   }
 
-  async fail(deliveryId: string, dto: FailDeliveryDto) {
+  /** The signed-in rider's own runs — the driver app's board, and nothing beyond it. */
+  async runsForDriver(driverId: string) {
+    return this.tenantTx.run(async (m) => {
+      const rows = (await m.query(
+        `SELECT d.id, d.delivery_no, d.order_id, o.order_no, d.branch_id, d.provider, d.driver_employee_id,
+                d.driver_id, d.status, d.address, d.geo_lat, d.geo_lng, d.eta_minutes,
+                d.assigned_at, d.picked_up_at, d.delivered_at,
+                c.name AS customer_name, c.phone AS customer_phone, o.delivery_address
+           FROM restaurant_delivery d
+           JOIN restaurant_order o ON o.id = d.order_id
+           LEFT JOIN restaurant_customer c ON c.id = d.customer_id
+          WHERE d.driver_id = $1 AND d.deleted_at IS NULL
+            AND (d.status IN ('ASSIGNED','PICKED_UP','EN_ROUTE')
+                 OR d.delivered_at > now() - interval '12 hours')
+          ORDER BY CASE d.status WHEN 'EN_ROUTE' THEN 0 WHEN 'PICKED_UP' THEN 1 WHEN 'ASSIGNED' THEN 2 ELSE 3 END,
+                   d.assigned_at`,
+        [driverId],
+      )) as Row[];
+      return rows.map((r) => ({
+        id: r.id, deliveryNo: r.delivery_no, orderId: r.order_id, orderNo: r.order_no,
+        branchId: r.branch_id ?? null, provider: r.provider, status: r.status,
+        driverId: r.driver_id ?? null, driverEmployeeId: r.driver_employee_id ?? null,
+        address: r.address ?? r.delivery_address ?? null,
+        location: r.geo_lat == null ? null : { lat: Number(r.geo_lat), lng: Number(r.geo_lng) },
+        etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes),
+        // The rider needs a name to ask for and a number to call from the gate. No OTP: the customer
+        // says that out loud at the door, which is the only thing making it proof of delivery.
+        customer: r.customer_name || r.customer_phone
+          ? { name: r.customer_name ?? null, phone: r.customer_phone ?? null }
+          : null,
+        assignedAt: r.assigned_at ?? null, pickedUpAt: r.picked_up_at ?? null, deliveredAt: r.delivered_at ?? null,
+      }));
+    });
+  }
+
+  async fail(deliveryId: string, dto: FailDeliveryDto, actingDriverId?: string) {
     return this.tenantTx.run(async (m) => {
       const d = await this.loadHeader(m, deliveryId);
+      if (actingDriverId && d.driverId !== actingDriverId) throw new ForbiddenException('That run is not assigned to you');
       if (!canTransitionDelivery(d.status as DeliveryStatus, 'FAILED')) throw new UnprocessableEntityException(`Cannot fail a ${d.status} delivery`);
       await m.query(`UPDATE restaurant_delivery SET status='FAILED', updated_at=now() WHERE id=$1`, [deliveryId]);
+      // A failed run still frees the rider — the food may be coming back, but they are not out on it.
+      await this.drivers.syncDuty(m, d.driverId);
       return { deliveryId, status: 'FAILED', reason: dto.reason ?? null };
     });
   }
@@ -225,14 +302,20 @@ export class RestaurantDeliveryService {
         // The address rides along on the list because the board is what a rider reads before opening
         // anything — a run without a destination on it is a row they have to tap to understand.
         `SELECT d.id, d.delivery_no, d.order_id, o.order_no, d.branch_id, d.provider, d.driver_employee_id,
+                d.driver_id, dr.display_name AS driver_name, dr.phone AS driver_phone, dr.vehicle_type,
                 d.status, d.address, d.eta_minutes, d.assigned_at, d.delivered_at
-         FROM restaurant_delivery d JOIN restaurant_order o ON o.id = d.order_id
+         FROM restaurant_delivery d
+         JOIN restaurant_order o ON o.id = d.order_id
+         LEFT JOIN restaurant_driver dr ON dr.id = d.driver_id
          WHERE ${conds.join(' AND ')} ORDER BY d.created_at DESC LIMIT 200`,
         params,
       )) as Row[];
       return rows.map((r) => ({
         id: r.id, deliveryNo: r.delivery_no, orderId: r.order_id, orderNo: r.order_no, branchId: r.branch_id ?? null,
         provider: r.provider, driverEmployeeId: r.driver_employee_id ?? null, status: r.status, address: r.address ?? null,
+        driverId: r.driver_id ?? null,
+        // The rider as a person, so a board can say "Bilal Ahmed" where it used to print a UUID.
+        driver: r.driver_name ? { id: r.driver_id, name: r.driver_name, phone: r.driver_phone ?? null, vehicleType: r.vehicle_type } : null,
         etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes), assignedAt: r.assigned_at ?? null, deliveredAt: r.delivered_at ?? null,
       }));
     });
@@ -281,7 +364,7 @@ export class RestaurantDeliveryService {
 
   private async loadHeader(m: Mgr, deliveryId: string) {
     const rows = (await m.query(
-      `SELECT id, order_id, branch_id, delivery_no, provider, customer_id, status, otp_code, eta_minutes
+      `SELECT id, order_id, branch_id, delivery_no, provider, customer_id, driver_id, status, otp_code, eta_minutes
        FROM restaurant_delivery WHERE id=$1 AND deleted_at IS NULL`,
       [deliveryId],
     )) as Row[];
@@ -289,8 +372,9 @@ export class RestaurantDeliveryService {
     const r = rows[0];
     return {
       id: r.id as string, orderId: r.order_id as string, branchId: (r.branch_id as string) ?? null, deliveryNo: r.delivery_no as string,
-      provider: r.provider as string, customerId: (r.customer_id as string) ?? null, status: r.status as string,
-      otpCode: (r.otp_code as string) ?? null, etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes),
+      provider: r.provider as string, customerId: (r.customer_id as string) ?? null, driverId: (r.driver_id as string) ?? null,
+      status: r.status as string, otpCode: (r.otp_code as string) ?? null,
+      etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes),
     };
   }
 
@@ -298,9 +382,14 @@ export class RestaurantDeliveryService {
   private async getInTx(m: Mgr, deliveryId: string, includeOtp = false) {
     const rows = (await m.query(
       `SELECT d.id, d.delivery_no, d.order_id, o.order_no, d.branch_id, d.provider, d.driver_employee_id,
+              d.driver_id, dr.display_name AS driver_name, dr.phone AS driver_phone, dr.vehicle_type,
+              c.name AS customer_name, c.phone AS customer_phone,
               d.customer_id, d.address, d.geo_lat, d.geo_lng, d.otp_code, d.status, d.eta_minutes,
               d.assigned_at, d.picked_up_at, d.delivered_at, d.external_ref
-       FROM restaurant_delivery d JOIN restaurant_order o ON o.id = d.order_id
+       FROM restaurant_delivery d
+       JOIN restaurant_order o ON o.id = d.order_id
+       LEFT JOIN restaurant_driver dr ON dr.id = d.driver_id
+       LEFT JOIN restaurant_customer c ON c.id = d.customer_id
        WHERE d.id=$1 AND d.deleted_at IS NULL`,
       [deliveryId],
     )) as Row[];
@@ -309,6 +398,10 @@ export class RestaurantDeliveryService {
     return {
       id: r.id, deliveryNo: r.delivery_no, orderId: r.order_id, orderNo: r.order_no, branchId: r.branch_id ?? null,
       provider: r.provider, driverEmployeeId: r.driver_employee_id ?? null, customerId: r.customer_id ?? null,
+      driverId: r.driver_id ?? null,
+      driver: r.driver_name ? { id: r.driver_id, name: r.driver_name, phone: r.driver_phone ?? null, vehicleType: r.vehicle_type } : null,
+      // Who to call from the gate. The OTP is still not here — the customer says that at the door.
+      customer: r.customer_name || r.customer_phone ? { name: r.customer_name ?? null, phone: r.customer_phone ?? null } : null,
       address: r.address ?? null,
       location: r.geo_lat == null ? null : { lat: Number(r.geo_lat), lng: Number(r.geo_lng) },
       status: r.status, etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes),
