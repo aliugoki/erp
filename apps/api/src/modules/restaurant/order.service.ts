@@ -17,7 +17,8 @@ import type {
   SettleOrderDto,
   VoidOrderDto,
 } from './dto/restaurant.dto';
-import { DOC_PREFIX, type Row, computeMenuLine, formatDocNo, money, recipeConsumedMilli, rowsOf } from './restaurant.util';
+import { DOC_PREFIX, type Row, computeMenuLine, formatDocNo, money, opensDeliveryJob, recipeConsumedMilli, rowsOf } from './restaurant.util';
+import { RestaurantDeliveryService } from './delivery.service';
 import { RestaurantMenuService } from './menu.service';
 import { RestaurantPrintService } from './printing/print.service';
 
@@ -44,6 +45,7 @@ export class RestaurantOrderService {
     private readonly inventory: InventoryDocsService,
     private readonly menu: RestaurantMenuService,
     private readonly print: RestaurantPrintService,
+    private readonly delivery: RestaurantDeliveryService,
   ) {}
 
   private async nextDocNo(m: Mgr, docType: string, prefix: string): Promise<string> {
@@ -91,9 +93,13 @@ export class RestaurantOrderService {
       try {
         const rows = (await m.query(
           `INSERT INTO restaurant_order
-             (tenant_id, branch_id, order_no, channel, table_id, customer_id, waiter_employee_id, guest_count, status, currency, notes)
-           VALUES (${TENANT}, $1,$2,$3,$4,$5,$6, COALESCE($7,1), 'DRAFT', $8, $9) RETURNING id`,
-          [branchId, orderNo, channel, dto.tableId ?? null, dto.customerId ?? null, dto.waiterEmployeeId ?? null, dto.guestCount ?? null, cfg.currency, dto.notes ?? null],
+             (tenant_id, branch_id, order_no, channel, table_id, customer_id, waiter_employee_id, guest_count, status, currency, notes,
+              delivery_address, delivery_geo_lat, delivery_geo_lng)
+           VALUES (${TENANT}, $1,$2,$3,$4,$5,$6, COALESCE($7,1), 'DRAFT', $8, $9, $10,$11,$12) RETURNING id`,
+          [
+            branchId, orderNo, channel, dto.tableId ?? null, dto.customerId ?? null, dto.waiterEmployeeId ?? null, dto.guestCount ?? null,
+            cfg.currency, dto.notes ?? null, dto.address?.trim() || null, dto.geoLat ?? null, dto.geoLng ?? null,
+          ],
         )) as Row[];
         id = rows[0]!.id as string;
       } catch (err) {
@@ -203,6 +209,19 @@ export class RestaurantOrderService {
       )) as Row[];
       if (!autoFire[0] || Boolean(autoFire[0].auto_fire_kitchen)) {
         await this.confirmInTx(m, orderId);
+      }
+
+      // Hand a delivery order to dispatch the moment it is placed. Nothing opened this job before —
+      // `POST /restaurant/deliveries` existed but had no caller anywhere — so a DELIVERY order cooked,
+      // reached SERVED when the kitchen bumped its last ticket, and then stopped: no row in
+      // restaurant_delivery, nothing on the branch's delivery board, nothing on any rider's phone.
+      //
+      // Opened here rather than at SERVED so a dispatcher can put a rider's name against the job while
+      // the food is still cooking; the job sits PENDING until they do, and the rider cannot pick up
+      // before the kitchen has bumped it either way. Same transaction as the place, so an order and
+      // its run commit together or not at all.
+      if (opensDeliveryJob(order.channel)) {
+        await this.delivery.openForOrderInTx(m, { orderId });
       }
       return this.getInTx(m, orderId);
     });
@@ -361,6 +380,7 @@ export class RestaurantOrderService {
       `SELECT o.id, o.order_no, o.branch_id, o.channel, o.table_id, o.customer_id, o.waiter_employee_id,
               o.guest_count, o.status, o.currency, o.subtotal_minor, o.discount_minor, o.service_charge_minor,
               o.tax_minor, o.tip_minor, o.rounding_minor, o.total_minor, o.cogs_minor, o.paid_minor, o.notes,
+              o.delivery_address, o.delivery_geo_lat, o.delivery_geo_lng,
               o.placed_at, o.settled_at, t.code AS table_code
        FROM restaurant_order o LEFT JOIN restaurant_table t ON t.id = o.table_id
        WHERE o.id=$1 AND o.deleted_at IS NULL`,
@@ -396,6 +416,8 @@ export class RestaurantOrderService {
       id: o.id, orderNo: o.order_no, branchId: o.branch_id ?? null, channel: o.channel, tableId: o.table_id ?? null,
       table: o.table_code ?? null, customerId: o.customer_id ?? null, waiterEmployeeId: o.waiter_employee_id ?? null,
       guestCount: Number(o.guest_count), status: o.status, currency: cur, notes: o.notes ?? null,
+      address: o.delivery_address ?? null,
+      location: o.delivery_geo_lat == null ? null : { lat: Number(o.delivery_geo_lat), lng: Number(o.delivery_geo_lng) },
       totals: {
         subtotal: money(o.subtotal_minor, cur), discount: money(o.discount_minor, cur), serviceCharge: money(o.service_charge_minor, cur),
         tax: money(o.tax_minor, cur), tip: money(o.tip_minor, cur), rounding: money(o.rounding_minor, cur),

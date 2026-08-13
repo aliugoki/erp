@@ -6,6 +6,7 @@ import {
   computeMenuLine,
   formatDocNo,
   money,
+  opensDeliveryJob,
   recipeConsumedMilli,
   resolveMenuPrice,
   rowsOf,
@@ -112,6 +113,22 @@ describe('restaurant.util', () => {
     it('treats DELIVERED/FAILED/CANCELLED as terminal', () => {
       expect(canTransitionDelivery('DELIVERED', 'EN_ROUTE')).toBe(false);
       expect(canTransitionDelivery('CANCELLED', 'ASSIGNED')).toBe(false);
+    });
+  });
+
+  describe('opensDeliveryJob', () => {
+    it('opens a job for a delivery order', () => {
+      expect(opensDeliveryJob('DELIVERY')).toBe(true);
+    });
+    it('leaves aggregator orders to the aggregator', () => {
+      // Their rider, their job — created with the provider + externalRef their webhook carries. An
+      // OWN job here would be a phantom run on the board with an OTP nobody was told.
+      expect(opensDeliveryJob('AGGREGATOR')).toBe(false);
+    });
+    it('opens nothing for food that leaves with the guest', () => {
+      expect(opensDeliveryJob('DINE_IN')).toBe(false);
+      expect(opensDeliveryJob('TAKEAWAY')).toBe(false);
+      expect(opensDeliveryJob('DRIVE_THRU')).toBe(false);
     });
   });
 

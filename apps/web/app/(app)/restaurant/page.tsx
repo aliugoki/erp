@@ -703,6 +703,46 @@ function OrderDetail({ order, onBack }: { order?: OrderRow; onBack: () => void }
   );
 }
 
+/**
+ * The door code, revealed on request rather than rendered with the rest of the job.
+ *
+ * It is the one thing on this screen that proves the food reached the person who ordered it, and a
+ * delivery board is usually open on a counter monitor in front of whoever is standing there. Staff
+ * ask for it when they have the customer on the phone.
+ */
+function DeliveryOtpPanel({ deliveryId }: { deliveryId: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const reveal = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiGet<{ otp: string }>(`/restaurant/deliveries/${deliveryId}/otp`);
+      setCode(res.otp);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not read the code');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="border-t pt-3">
+      {code ? (
+        <div>
+          <div className="font-mono text-2xl font-bold tracking-[0.3em] tabular-nums">{code}</div>
+          <p className="mt-1 text-xs text-muted-foreground">Read this to the customer — the rider asks for it at the door.</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <Button size="sm" variant="outline" className="h-9" disabled={loading} onClick={reveal}>Show door code</Button>
+          {error ? <span className="text-xs text-rose-600">{error}</span> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void }) {
   const act = useRestAction();
   const [driver, setDriver] = useState('');
@@ -721,6 +761,7 @@ function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void
         <Field label="ETA" value={row.etaMinutes == null ? '—' : `${row.etaMinutes} min`} />
         <Field label="Assigned" value={fmtDateTime(row.assignedAt)} />
         <Field label="Delivered" value={fmtDateTime(row.deliveredAt)} />
+        <div className="col-span-2"><Field label="Address" value={row.address ?? 'Not given — phone the customer'} /></div>
       </dl>
       {!terminal && row.provider === 'OWN' ? (
         <div className="mt-6 max-w-md space-y-3 rounded-xl border p-4">
@@ -736,6 +777,7 @@ function DeliveryDetail({ row, onBack }: { row?: DeliveryRow; onBack: () => void
             {row.status === 'PICKED_UP' ? <Button size="sm" variant="outline" disabled={act.isPending} onClick={() => post('enroute', 'En route')}>En route</Button> : null}
             {!terminal ? <Button size="sm" variant="destructive" disabled={act.isPending} onClick={() => post('fail', 'Marked failed')}>Fail</Button> : null}
           </div>
+          <DeliveryOtpPanel deliveryId={row.id} />
           {canComplete ? (
             <div className="flex gap-2 border-t pt-3">
               <Input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="Delivery OTP" className="h-9 tracking-widest" />

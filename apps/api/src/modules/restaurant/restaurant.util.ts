@@ -88,6 +88,19 @@ export function canTransitionDelivery(from: DeliveryStatus, to: DeliveryStatus):
   return (DELIVERY_STATUS_TRANSITIONS[to] ?? []).includes(from);
 }
 
+/**
+ * True when placing an order of this channel should open an own-fleet delivery job.
+ *
+ * Only `DELIVERY`. `AGGREGATOR` is deliberately excluded even though that food also reaches a
+ * doorstep: the rider belongs to Foodpanda/Careem, the job is created carrying their provider and
+ * `externalRef` when their integration ingests it, and minting an `OWN` job alongside would put a
+ * phantom run on the branch's board with an OTP no customer will ever be told. `TAKEAWAY`,
+ * `DRIVE_THRU` and `DINE_IN` leave with the guest.
+ */
+export function opensDeliveryJob(channel: string): boolean {
+  return channel === 'DELIVERY';
+}
+
 export type ReservationStatus =
   | 'BOOKED'
   | 'WAITLIST'

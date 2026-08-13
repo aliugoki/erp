@@ -489,6 +489,18 @@ export class RestaurantController {
     return this.delivery.trail(id);
   }
 
+  /**
+   * The door code, for staff to read out to the customer. Guarded by dispatch **and** `order:write`:
+   * the rider holds dispatch (it is what gates pickup/enroute/complete), so a code readable with
+   * dispatch alone would let the rider satisfy their own door check. Counter and phone staff hold
+   * both.
+   */
+  @Get('deliveries/:id/otp')
+  @Permissions('restaurant:delivery:dispatch', 'restaurant:order:write')
+  getDeliveryOtp(@Param('id', ParseUUIDPipe) id: string) {
+    return this.delivery.otp(id);
+  }
+
   @Post('deliveries/:id/assign')
   @HttpCode(HttpStatus.OK)
   @Permissions('restaurant:delivery:dispatch')

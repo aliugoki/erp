@@ -10,6 +10,8 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -231,6 +233,13 @@ export class CreateOrderDto {
   @IsOptional() @IsUUID() waiterEmployeeId?: string;
   @IsOptional() @IsInt() @Min(1) guestCount?: number;
   @IsOptional() @IsString() notes?: string;
+  // Where a DELIVERY-channel order is going. Optional on every channel (a dine-in order has no
+  // destination), and carried onto the delivery job opened at place-time. Not validated as
+  // "required for DELIVERY" here: an address is often taken by phone after the order is opened,
+  // and refusing the order would lose the sale rather than the address.
+  @IsOptional() @IsString() @MaxLength(500) address?: string;
+  @IsOptional() @IsNumber() @Min(-90) @Max(90) geoLat?: number;
+  @IsOptional() @IsNumber() @Min(-180) @Max(180) geoLng?: number;
 }
 
 export class OrderItemModifierInputDto {

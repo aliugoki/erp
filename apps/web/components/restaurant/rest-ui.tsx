@@ -150,6 +150,7 @@ export interface DeliveryRow {
   provider: string;
   driverEmployeeId: string | null;
   status: string;
+  address: string | null;
   etaMinutes: number | null;
   assignedAt: string | null;
   deliveredAt: string | null;

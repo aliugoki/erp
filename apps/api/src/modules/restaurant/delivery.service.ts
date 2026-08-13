@@ -29,6 +29,10 @@ type Mgr = EntityManager;
 const isFk = (e: unknown) => (e as { code?: string })?.code === '23503';
 const TENANT = `current_setting('app.tenant_id')::uuid`;
 const ACTIVE = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
+const TERMINAL = ['DELIVERED', 'FAILED', 'CANCELLED'];
+
+/** `numeric` arrives from the pg driver as a string; `Number('')`/`Number(null)` would coerce to 0. */
+const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
 
 /**
  * Delivery dispatch + live tracking (ADR-011 §Online delivery). Own-fleet: create a job for an order,
@@ -54,34 +58,58 @@ export class RestaurantDeliveryService {
 
   async create(dto: CreateDeliveryDto) {
     return this.tenantTx.run(async (m) => {
-      const order = (await m.query(
-        `SELECT id, branch_id, customer_id, status FROM restaurant_order WHERE id=$1 AND deleted_at IS NULL`,
-        [dto.orderId],
-      )) as Row[];
-      if (!order[0]) throw new BadRequestException('Unknown order for this tenant');
-      if (['VOID', 'CLOSED'].includes(order[0].status as string)) throw new UnprocessableEntityException('Cannot create a delivery for a closed/void order');
-      const existing = (await m.query(`SELECT id FROM restaurant_delivery WHERE order_id=$1 AND status NOT IN ('CANCELLED','FAILED') AND deleted_at IS NULL`, [dto.orderId])) as Row[];
-      if (existing[0]) throw new UnprocessableEntityException('An active delivery already exists for this order');
-
-      const provider = dto.provider ?? 'OWN';
-      const deliveryNo = await this.nextDocNo(m);
-      const otp = provider === 'OWN' ? String(randomInt(100000, 1000000)) : null;
-      try {
-        const rows = (await m.query(
-          `INSERT INTO restaurant_delivery
-             (tenant_id, order_id, branch_id, delivery_no, provider, customer_id, address, geo_lat, geo_lng, otp_code, status, eta_minutes, external_ref)
-           VALUES (${TENANT}, $1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING',$10,$11) RETURNING id`,
-          [
-            dto.orderId, order[0].branch_id ?? null, deliveryNo, provider, order[0].customer_id ?? null,
-            dto.address ?? null, dto.geoLat ?? null, dto.geoLng ?? null, otp, dto.etaMinutes ?? null, dto.externalRef ?? null,
-          ],
-        )) as Row[];
-        return this.getInTx(m, rows[0]!.id as string, true);
-      } catch (err) {
-        if (isFk(err)) throw new BadRequestException('Unknown order for this tenant');
-        throw err;
-      }
+      const created = await this.openForOrderInTx(m, dto);
+      if (!created) throw new UnprocessableEntityException('An active delivery already exists for this order');
+      return created;
     });
+  }
+
+  /**
+   * Open a job for an order inside a caller's transaction, or return `null` when the order already
+   * has a live one.
+   *
+   * Split out of {@link create} so the order service can dispatch a DELIVERY-channel order in the
+   * same transaction that places it — a delivery committed separately from the order it belongs to
+   * can outlive a rolled-back place and leave a rider chasing a ticket the kitchen never saw.
+   *
+   * The duplicate case returns `null` rather than throwing because it means different things to the
+   * two callers: to the dispatch endpoint it is a user error worth a 422, to the automatic path it
+   * is just "already done" — an order placed, voided and re-placed must not fail on its second pass.
+   * The address falls back to the order's own, so an automatic dispatch inherits the destination the
+   * customer typed at checkout without the caller having to look it up.
+   */
+  async openForOrderInTx(m: Mgr, dto: CreateDeliveryDto) {
+    const order = (await m.query(
+      `SELECT id, branch_id, customer_id, status, delivery_address, delivery_geo_lat, delivery_geo_lng
+       FROM restaurant_order WHERE id=$1 AND deleted_at IS NULL`,
+      [dto.orderId],
+    )) as Row[];
+    if (!order[0]) throw new BadRequestException('Unknown order for this tenant');
+    if (['VOID', 'CLOSED'].includes(order[0].status as string)) throw new UnprocessableEntityException('Cannot create a delivery for a closed/void order');
+    const existing = (await m.query(`SELECT id FROM restaurant_delivery WHERE order_id=$1 AND status NOT IN ('CANCELLED','FAILED') AND deleted_at IS NULL`, [dto.orderId])) as Row[];
+    if (existing[0]) return null;
+
+    const provider = dto.provider ?? 'OWN';
+    const deliveryNo = await this.nextDocNo(m);
+    const otp = provider === 'OWN' ? String(randomInt(100000, 1000000)) : null;
+    const address = dto.address ?? (order[0].delivery_address as string | null) ?? null;
+    const geoLat = dto.geoLat ?? numOrNull(order[0].delivery_geo_lat);
+    const geoLng = dto.geoLng ?? numOrNull(order[0].delivery_geo_lng);
+    try {
+      const rows = (await m.query(
+        `INSERT INTO restaurant_delivery
+           (tenant_id, order_id, branch_id, delivery_no, provider, customer_id, address, geo_lat, geo_lng, otp_code, status, eta_minutes, external_ref)
+         VALUES (${TENANT}, $1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING',$10,$11) RETURNING id`,
+        [
+          dto.orderId, order[0].branch_id ?? null, deliveryNo, provider, order[0].customer_id ?? null,
+          address, geoLat, geoLng, otp, dto.etaMinutes ?? null, dto.externalRef ?? null,
+        ],
+      )) as Row[];
+      return this.getInTx(m, rows[0]!.id as string, true);
+    } catch (err) {
+      if (isFk(err)) throw new BadRequestException('Unknown order for this tenant');
+      throw err;
+    }
   }
 
   async assign(deliveryId: string, dto: AssignDriverDto) {
@@ -194,15 +222,17 @@ export class RestaurantDeliveryService {
       if (query.status) conds.push(`d.status = $${params.push(query.status)}`);
       if (query.driverEmployeeId) conds.push(`d.driver_employee_id = $${params.push(query.driverEmployeeId)}`);
       const rows = (await m.query(
+        // The address rides along on the list because the board is what a rider reads before opening
+        // anything — a run without a destination on it is a row they have to tap to understand.
         `SELECT d.id, d.delivery_no, d.order_id, o.order_no, d.branch_id, d.provider, d.driver_employee_id,
-                d.status, d.eta_minutes, d.assigned_at, d.delivered_at
+                d.status, d.address, d.eta_minutes, d.assigned_at, d.delivered_at
          FROM restaurant_delivery d JOIN restaurant_order o ON o.id = d.order_id
          WHERE ${conds.join(' AND ')} ORDER BY d.created_at DESC LIMIT 200`,
         params,
       )) as Row[];
       return rows.map((r) => ({
         id: r.id, deliveryNo: r.delivery_no, orderId: r.order_id, orderNo: r.order_no, branchId: r.branch_id ?? null,
-        provider: r.provider, driverEmployeeId: r.driver_employee_id ?? null, status: r.status,
+        provider: r.provider, driverEmployeeId: r.driver_employee_id ?? null, status: r.status, address: r.address ?? null,
         etaMinutes: r.eta_minutes == null ? null : Number(r.eta_minutes), assignedAt: r.assigned_at ?? null, deliveredAt: r.delivered_at ?? null,
       }));
     });
@@ -210,6 +240,31 @@ export class RestaurantDeliveryService {
 
   async get(deliveryId: string) {
     return this.tenantTx.run((m) => this.getInTx(m, deliveryId));
+  }
+
+  /**
+   * The door code for a live own-fleet job, so staff can read it to the customer.
+   *
+   * Deliberately its own endpoint rather than a field on {@link get}: every delivery route is guarded
+   * by `restaurant:delivery:dispatch`, which the rider necessarily holds in order to call
+   * pickup/enroute/complete — so a code returned by the detail read would land in the rider's app and
+   * the door check would be verifying the rider against themselves. The controller guards this one
+   * with `restaurant:order:write` as well, which a rider does not hold and anyone working a counter
+   * or a phone does.
+   *
+   * Terminal jobs refuse: the code has either done its work or belongs to a run that has ended, and a
+   * re-dispatch mints a new one.
+   */
+  async otp(deliveryId: string) {
+    return this.tenantTx.run(async (m) => {
+      const d = await this.loadHeader(m, deliveryId);
+      if (d.provider !== 'OWN') {
+        throw new UnprocessableEntityException(`A ${d.provider} run is completed in that provider's own app; there is no code to read out`);
+      }
+      if (TERMINAL.includes(d.status)) throw new UnprocessableEntityException(`Cannot read the code of a ${d.status} delivery`);
+      if (!d.otpCode) throw new NotFoundException('This delivery has no code');
+      return { deliveryId, deliveryNo: d.deliveryNo, orderId: d.orderId, otp: d.otpCode };
+    });
   }
 
   async trail(deliveryId: string) {
